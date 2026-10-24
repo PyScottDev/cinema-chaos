@@ -69,6 +69,10 @@
         UI.openBriefingModal(this.state.day);
         document.getElementById('languagePackJsonArea').value = JSON.stringify(LANGUAGE_PACK, null, 2);
         document.getElementById('saveNotice').textContent=this.startupMessage||'Progress saves between customers. Reloading starts this shift again.';
+        const day=document.getElementById('scheduleDayTag');day.tabIndex=0;day.setAttribute('role','button');day.classList.add('inspectable');day.onclick=()=>Game.handleInspectClick('today',Game.today(),'Today: '+Game.today(),day);
+        document.getElementById('customerStatementBox').tabIndex=0;document.getElementById('clockInspectBox').tabIndex=0;
+        UI.setDecisionButtons(true);
+        if(innerWidth<1024)UI.switchMobileTab('window');
       },
 
       formatMins(totalMins) {

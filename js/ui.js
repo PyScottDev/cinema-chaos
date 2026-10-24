@@ -179,16 +179,36 @@
 
 
 
+      getActiveRules() {
+        const day=Game.state.day;
+        const rules=[
+          {id:'ticket',title:'Tickets and bookings',text:'You need a ticket for today. Check the film, room, time and seats. A booking keeps your seats, even when there are no free seats.'},
+          {id:'plan',title:'The customer’s plan',text:'Ask when the plan is not clear. Personal likes and dislikes do not cancel a booking.'}
+        ];
+        rules.push(day===1
+          ? {id:'printer',title:'Printer closed',text:'Today: admit correct tickets. Refuse tickets with errors.'}
+          : {id:'printer',title:'Changes',text:'Standard tickets for today can be changed to a film the customer accepts. It must have enough seats. A changed ticket lets them enter.'});
+        if(day>=2)rules.push({id:'late',title:'Ten minutes',text:'No entry more than 10 minutes after the start. Use the arrival time on the booking record. You may help Mr Morris, but late entry still gets a warning.'});
+        if(day>=3)rules.push({id:'serial',title:'Used numbers and passes',text:'A ticket number can only be used once. PROMO and VIP passes cannot be changed. Tickets for another day cannot be changed.'});
+        if(day===3){const f=Game.screening('planet_x');if(f)rules.push({id:'move',title:'Room change',text:`${f.title} (${f.time}) is now in Screen 1. Change tickets with the old room.`});}
+        if(day>=4&&Game.state.tvSchedule.length)rules.push({id:'tv',title:'TV Lounge',text:'TV programmes need a TV Lounge pass. You can change a Standard ticket to a TV Lounge pass.'});
+        if(day>=5){
+          rules.push({id:'red',title:'Screen 2: red clothes',text:'After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule.'});
+          const f=Game.screening('happy_penguins_late');if(f)rules.push({id:'extra',title:'Extra show',text:`${f.title}: extra show at 19:15 in Screen 2. The earlier show stays at ${Game.screening('happy_penguins').time}.`});
+          const cancelled=Game.screening('love_in_paris');if(cancelled)rules.push({id:'cancel',title:'Cancelled',text:`${cancelled.title} (${cancelled.time}) is cancelled. Ask about another film.`});
+          rules.push({id:'vip',title:'VIP list',text:'VIP numbers must be on the list. A VIP still needs the right day, film, room, time and booking. Red clothes and the late rule still apply.'});
+        }
+        return rules;
+      },
+
       renderRulesBinder() {
-        const dayCfg = CAMPAIGN_DAYS[Game.state.day] || CAMPAIGN_DAYS[6];
-        const list = document.getElementById('activeRulesList');
-        list.innerHTML = dayCfg.rulesSummary.map(r => `
-          <div onclick="Game.handleInspectClick('rule', '${r.title.replace(/'/g, "\\'")}', '${r.title}', this)"
-               class="inspectable bg-white p-2.5 rounded-lg border border-amber-400 shadow-sm">
-            <div class="font-bold text-red-900 uppercase text-xs">${r.title}</div>
-            <p class="font-ticket text-slate-700 text-xs mt-0.5">${r.text}</p>
-          </div>
-        `).join('');
+        const list=document.getElementById('activeRulesList');list.replaceChildren();
+        this.getActiveRules().forEach(r=>{
+          const node=document.createElement('button');node.className='inspectable w-full text-left bg-white p-2.5 rounded-lg border border-amber-400 shadow-sm';
+          const title=document.createElement('strong');title.className='text-red-900 block';title.textContent=r.title;
+          const text=document.createElement('p');text.className='font-ticket text-slate-700 text-xs mt-1';text.textContent=r.text;node.append(title,text);
+          node.onclick=()=>Game.handleInspectClick('rule',r.id,r.title,node);list.append(node);
+        });
       },
 
       renderSerialsBinder() {
@@ -257,8 +277,17 @@
         });
       },
 
+      escapeHTML(text) {
+        return String(text).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      },
+
       openBriefingModal(dayNum) {
         const cfg = CAMPAIGN_DAYS[dayNum] || CAMPAIGN_DAYS[6];
+        const rules = this.getActiveRules();
+        cfg.memo = ['Welcome to the Grand Cinema.', 'Read the programme. Check the ticket. Ask the customer.', 'After each decision, press Next customer.'].join('\n');
+        if (dayNum === 2) cfg.memo += '\nThe ticket printer is ready today. The new late limit is ten minutes.';
+        cfg.checklist = rules.map(r => r.title + ': ' + r.text);
+
         document.getElementById('briefingDaySubtitle').textContent = `THE GRAND CINEMA — ${cfg.dayName} SHIFT`;
         document.getElementById('briefingDayTitle').textContent = cfg.title;
         document.getElementById('briefingMemoText').textContent = cfg.memo;
@@ -268,7 +297,7 @@
         ul.innerHTML = cfg.checklist.map(item => `
           <li class="flex items-start gap-2">
             <span class="text-emerald-700 font-bold">✔</span>
-            <span>${item}</span>
+            <span>${this.escapeHTML(item)}</span>
           </li>
         `).join('');
 
@@ -367,50 +396,6 @@
 
     };
 
-    const baseRules = () => {
-      const day=Game.state.day;
-      const rules=[{id:'ticket',title:'Tickets and bookings',text:'You need a ticket for today. Check the film, room, time and seats. A booking keeps your seats, even when there are no free seats.'},
-        {id:'plan',title:'The customer’s plan',text:'Ask when the plan is not clear. Personal likes and dislikes do not cancel a booking.'}];
-      rules.push(day===1?{id:'printer',title:'Printer closed',text:'Today: admit correct tickets. Refuse tickets with errors.'}:{id:'printer',title:'Changes',text:'Standard tickets for today can be changed to a film the customer accepts. It must have enough seats. A changed ticket lets them enter.'});
-      if(day>=2)rules.push({id:'late',title:'Ten minutes',text:'No entry more than 10 minutes after the start. Use the arrival time on the booking record. You may help Mr Morris, but late entry still gets a warning.'});
-      if(day>=3)rules.push({id:'serial',title:'Used numbers and passes',text:'A ticket number can only be used once. PROMO and VIP passes cannot be changed. Tickets for another day cannot be changed.'});
-      if(day===3){const f=Game.screening('planet_x');if(f)rules.push({id:'move',title:'Room change',text:`${f.title} (${f.time}) is now in Screen 1. Change tickets with the old room.`});}
-      if(day>=4&&Game.state.tvSchedule.length)rules.push({id:'tv',title:'TV Lounge',text:'TV programmes need a TV Lounge pass. You can change a Standard ticket to a TV Lounge pass.'});
-      if(day>=5){
-        rules.push({id:'red',title:'Screen 2: red clothes',text:'After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule.'});
-        const f=Game.screening('happy_penguins_late');if(f)rules.push({id:'extra',title:'Extra show',text:`${f.title}: extra show at 19:15 in Screen 2. The earlier show stays at ${Game.screening('happy_penguins').time}.`});
-        const cancelled=Game.screening('love_in_paris');if(cancelled)rules.push({id:'cancel',title:'Cancelled',text:`${cancelled.title} (${cancelled.time}) is cancelled. Ask about another film.`});
-        rules.push({id:'vip',title:'VIP list',text:'VIP numbers must be on the list. A VIP still needs the right day, film, room, time and booking. Red clothes and the late rule still apply.'});
-      }
-      return rules;
-    };
-    UI.renderRulesBinder=function(){
-      const list=document.getElementById('activeRulesList');list.replaceChildren();
-      baseRules().forEach(r=>{
-        const node=document.createElement('button');node.className='inspectable w-full text-left bg-white p-2.5 rounded-lg border border-amber-400 shadow-sm';
-        const title=document.createElement('strong');title.className='text-red-900 block';title.textContent=r.title;
-        const text=document.createElement('p');text.className='font-ticket text-slate-700 text-xs mt-1';text.textContent=r.text;node.append(title,text);
-        node.onclick=()=>Game.handleInspectClick('rule',r.id,r.title,node);list.append(node);
-      });
-    };
-    const originalBriefing=UI.openBriefingModal;
-    UI.openBriefingModal=function(day){
-      const cfg=CAMPAIGN_DAYS[day], rules=baseRules();
-      cfg.memo=['Welcome to the Grand Cinema.','Read the programme. Check the ticket. Ask the customer.','After each decision, press Next customer.'].join('\n');
-      if(day===2)cfg.memo+='\nThe ticket printer is ready today. The new late limit is ten minutes.';
-      cfg.checklist=rules.map(r=>r.title+': '+r.text);
-      // Original template escapes checklist data here because titles can come from teacher imports.
-      const saved=cfg.checklist;cfg.checklist=saved.map(escapeHTML);originalBriefing.call(this,day);cfg.checklist=saved;
-    };
-    function escapeHTML(text){return String(text).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-    const oldInit=Game.init;
-    Game.init=function(){
-      oldInit.call(this);
-      const day=document.getElementById('scheduleDayTag');day.tabIndex=0;day.setAttribute('role','button');day.classList.add('inspectable');day.onclick=()=>Game.handleInspectClick('today',Game.today(),'Today: '+Game.today(),day);
-      document.getElementById('customerStatementBox').tabIndex=0;document.getElementById('clockInspectBox').tabIndex=0;
-      UI.setDecisionButtons(true);
-      if(innerWidth<1024)UI.switchMobileTab('window');
-    };
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape') {if(UI.modalStack.has('compareModal'))UI.closeCompare();else if(UI.modalStack.has('guideModal'))UI.closeGuideModal();else if(UI.modalStack.has('teacherModal'))UI.closeTeacherModal();return;}
       if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey||e.repeat)return;
