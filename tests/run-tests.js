@@ -75,6 +75,7 @@ function createHarness(seed = 12345, customScripts = null) {
   vm.createContext(sandbox);
 
   const scripts = customScripts || [
+    "js/campaigns/registry.js",
     "js/campaigns/the-first-week.js",
     "js/sound.js",
     "js/characters.js",
@@ -293,6 +294,89 @@ test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, Screen
   const evNoRed = Game.evaluateCustomerCase(noRedCust);
   assert.ok(evNoRed.issues.some(i => i.code === "red"));
   assert.deepEqual(evNoRed.validActions, ["REFUSE"]);
+});
+
+test("7. CampaignRegistry registers 'the-first-week' with 7-day structure and validates schema", () => {
+  const { sandbox } = createHarness(707);
+  const reg = sandbox.window.CinemaChaos.CampaignRegistry;
+  assert.ok(reg, "CampaignRegistry should be defined on window.CinemaChaos");
+
+  const list = reg.list();
+  assert.strictEqual(list.length, 1);
+  const firstWeek = reg.get("the-first-week");
+  assert.ok(firstWeek);
+  assert.strictEqual(firstWeek.title, "The First Week");
+  assert.strictEqual(firstWeek.subtitle, "7 Days · Learn the Job");
+  assert.strictEqual(firstWeek.totalDays, 7);
+  assert.strictEqual(Object.keys(firstWeek.days).length, 7);
+  assert.ok(firstWeek.endlessDay, "Endless mode should be defined separately from the 7 campaign days");
+
+  // Verify Wednesday relocation, Friday cancellation + extra show, and scripted encounters are represented in data
+  assert.strictEqual(firstWeek.days[3].scheduleChanges[0].type, "relocate");
+  assert.strictEqual(firstWeek.days[3].scheduleChanges[0].screeningId, "planet_x");
+  assert.strictEqual(firstWeek.days[5].scheduleChanges[0].type, "cancel");
+  assert.strictEqual(firstWeek.days[5].scheduleChanges[0].screeningId, "love_in_paris");
+  assert.strictEqual(firstWeek.days[5].scheduleChanges[1].type, "add_extra");
+  assert.strictEqual(firstWeek.days[5].scheduleChanges[1].newId, "happy_penguins_late");
+  assert.strictEqual(firstWeek.days[5].policies.allowVipPasses, true);
+
+  // Verify schema validator rejects invalid campaign definitions with descriptive errors
+  assert.throws(() => reg.validate(null), /Campaign definition must be an object/);
+  assert.throws(() => reg.validate({ id: "INVALID ID" }), /must be lowercase alphanumeric/);
+  assert.throws(() => reg.validate({
+    id: "bad-campaign",
+    title: "Bad",
+    subtitle: "Sub",
+    description: "Desc",
+    languageModes: { elementary: {}, intermediate: {}, advanced: {} },
+    languagePack: { films: [] }
+  }), /languagePack\.films must be a non-empty array/);
+});
+
+test("8. Save and Load compatibility preserves V2 and V1 legacy progress", () => {
+  const { Game, sandbox } = createHarness(808);
+  Game.state.day = 4;
+  Game.state.difficulty = "chaos";
+  Game.state.money = 125;
+  Game.state.reputation = 92;
+  Game.state.ownedUpgrades = ["scanner", "printer"];
+  Game.state.completedDays = [1, 2, 3];
+  Game.state.highScore = 125;
+  Game.state.story = { morris: "kind", leo: "helped", sofia: "helped" };
+  Game.saveProgress();
+
+  // Reset in-memory state and reload from localStorage
+  Game.state.day = 1;
+  Game.state.difficulty = "normal";
+  Game.state.money = 0;
+  Game.state.ownedUpgrades = [];
+  Game.loadProgress();
+
+  assert.strictEqual(Game.state.day, 4);
+  assert.strictEqual(Game.state.difficulty, "chaos");
+  assert.strictEqual(Game.state.money, 125);
+  assert.strictEqual(Game.state.reputation, 92);
+  assert.deepEqual(Game.state.ownedUpgrades, ["scanner", "printer"]);
+  assert.deepEqual(Game.state.completedDays, [1, 2, 3]);
+  assert.strictEqual(Game.state.story.morris, "kind");
+
+  // Also test V1 legacy migration when V2 key is absent
+  sandbox.localStorage.removeItem("cinema_chaos_save_v2");
+  sandbox.localStorage.setItem("cinema_chaos_save_v1", JSON.stringify({
+    day: 3,
+    difficulty: "relaxed",
+    money: 60,
+    reputation: 85,
+    ownedUpgrades: ["seating"],
+    completedDays: [1, 2],
+    story: { sofia: "helped" }
+  }));
+  Game.loadProgress();
+  assert.strictEqual(Game.state.day, 3);
+  assert.strictEqual(Game.state.difficulty, "relaxed");
+  assert.strictEqual(Game.state.money, 60);
+  assert.deepEqual(Game.state.ownedUpgrades, ["seating"]);
+  assert.strictEqual(Game.state.story.sofia, "helped");
 });
 
 console.log(`\nAll ${passed} test suites passed!`);
