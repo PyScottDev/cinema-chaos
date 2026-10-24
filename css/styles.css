@@ -1,0 +1,220 @@
+    :root {
+      --velvet-dark: #24070a;
+      --velvet-mid: #3d0d13;
+      --velvet-light: #5c1620;
+      --brass-gold: #e2b857;
+      --brass-bright: #f7d983;
+      --brass-dark: #9c7623;
+      --paper-cream: #f8f1dc;
+      --paper-aged: #eadbb4;
+      --wood-desk: #2c1912;
+      --wood-grain: #3d231a;
+      --stamp-green: #15803d;
+      --stamp-amber: #b45309;
+      --stamp-red: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--velvet-dark);
+      background-image: 
+        radial-gradient(circle at 50% 10%, rgba(226, 184, 87, 0.12), transparent 60%),
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 18px, transparent 18px, transparent 36px);
+      color: #f9f5eb;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    .font-marquee {
+      font-family: 'Limelight', cursive, serif;
+      letter-spacing: 0.06em;
+    }
+
+    .font-ticket {
+      font-family: 'Courier Prime', monospace;
+    }
+
+    /* Custom Brass Border & Velvet Panels */
+    .brass-frame {
+      border: 2px solid var(--brass-gold);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55), inset 0 0 12px rgba(226, 184, 87, 0.15);
+    }
+
+    .velvet-panel {
+      background: linear-gradient(180deg, var(--velvet-mid) 0%, var(--velvet-dark) 100%);
+      border: 2px solid var(--brass-dark);
+      border-radius: 0.75rem;
+    }
+
+    .desk-surface {
+      background-color: var(--wood-desk);
+      background-image: 
+        radial-gradient(circle at 50% 35%, rgba(255, 224, 150, 0.08), rgba(0, 0, 0, 0.5)),
+        repeating-linear-gradient(180deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 2px, transparent 10px);
+      border: 2px solid var(--brass-dark);
+      border-radius: 0.75rem;
+      box-shadow: inset 0 8px 28px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Perforated Vintage Ticket Styling */
+    .cinema-ticket {
+      background: linear-gradient(135deg, var(--paper-cream) 0%, var(--paper-aged) 100%);
+      color: #1e1b18;
+      border-radius: 0.5rem;
+      position: relative;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.3);
+      border: 2px dashed #b59e6b;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .cinema-ticket::before,
+    .cinema-ticket::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 20px;
+      height: 20px;
+      background-color: var(--wood-desk);
+      border-radius: 50%;
+      transform: translateY(-50%);
+    }
+    .cinema-ticket::before { left: -12px; border-right: 2px solid #b59e6b; }
+    .cinema-ticket::after { right: -12px; border-left: 2px solid #b59e6b; }
+
+    .ticket-lounge {
+      background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+      border-color: #0284c7;
+    }
+
+    .ticket-corrected {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-color: #d97706;
+    }
+
+    .ticket-vip {
+      background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%);
+      border-color: #9333ea;
+    }
+
+    /* Inspectable elements highlight */
+    .inspectable {
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border-radius: 0.35rem;
+      position: relative;
+    }
+
+    .inspectable:hover {
+      outline: 2px dashed #f59e0b;
+      background-color: rgba(245, 158, 11, 0.15);
+    }
+
+    .inspect-selected {
+      outline: 3px solid #facc15 !important;
+      background-color: rgba(250, 204, 21, 0.28) !important;
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
+    }
+
+    .inspect-match {
+      outline: 3px solid #22c55e !important;
+      background-color: rgba(34, 197, 94, 0.25) !important;
+    }
+
+    .inspect-mismatch {
+      outline: 3px solid #ef4444 !important;
+      background-color: rgba(239, 68, 68, 0.25) !important;
+    }
+
+    /* Rubber Stamp Overlay */
+    @keyframes stampSlam {
+      0% { transform: scale(2.6) rotate(-18deg); opacity: 0; }
+      60% { transform: scale(0.92) rotate(-8deg); opacity: 1; }
+      80% { transform: scale(1.04) rotate(-8deg); opacity: 1; }
+      100% { transform: scale(1) rotate(-8deg); opacity: 0.95; }
+    }
+
+    .stamp-mark {
+      animation: stampSlam 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      border: 5px double currentColor;
+      padding: 0.35rem 1.1rem;
+      font-family: 'Courier Prime', monospace;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border-radius: 0.35rem;
+      pointer-events: none;
+      box-shadow: inset 0 0 8px currentColor;
+      background-color: rgba(255, 255, 255, 0.86);
+    }
+
+    /* Customer animations */
+    @keyframes customerWalkIn {
+      0% { transform: translateY(25px) scale(0.94); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .customer-enter {
+      animation: customerWalkIn 0.35s ease-out forwards;
+    }
+
+    @keyframes ticketSlideIn {
+      0% { transform: translateY(-30px) rotate(-4deg); opacity: 0; }
+      100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    }
+
+    .ticket-slide {
+      animation: ticketSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Tactile Stamp Buttons */
+    .btn-stamp {
+      transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.5), 0 8px 15px rgba(0,0,0,0.35);
+    }
+    .btn-stamp:active:not(:disabled) {
+      transform: translateY(4px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 3px 6px rgba(0,0,0,0.35);
+    }
+    .btn-stamp:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--brass-dark);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--brass-gold);
+    }
+
+    textarea,input { user-select:text; }
+    button:focus-visible,.inspectable:focus-visible { outline:3px solid #38bdf8; outline-offset:3px; }
+    #compareModal .cinema-ticket { font-size:1.1rem; }
+    #compareModal #deskDocumentArea { max-width:none; }
+    main > section { min-width:0; }
+    #correctionScreeningSelect { min-width:0; max-width:100%; }
+    #customerFollowUpBox p + p { margin-top:6px; }
+    @media(max-width:1023px) {
+      body > header { position:relative !important; }
+      body > nav { top:0 !important; }
+      #colDesk > div:last-child { position:sticky; bottom:0; z-index:25; }
+      #teacherModal .flex { flex-wrap:wrap; }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
