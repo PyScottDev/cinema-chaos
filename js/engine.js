@@ -439,6 +439,50 @@
       allScreenings() { return [...this.state.schedule, ...this.state.tvSchedule]; },
       screening(id) { return this.allScreenings().find(f => f.id === id); },
       today() { return this.dayConfig().dayName; },
+      currentDateISO(day = this.state.day) { return this.policies(day).currentDate || '2026-05-05'; },
+      parseCalendarDate(str) {
+        if (typeof str !== 'string') return null;
+        let year, month, day;
+        const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str.trim());
+        const dmyMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(str.trim());
+        if (isoMatch) {
+          [, year, month, day] = isoMatch.map(Number);
+        } else if (dmyMatch) {
+          [, day, month, year] = dmyMatch.map(Number);
+        } else {
+          return null;
+        }
+        if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1) return null;
+        const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+        const daysInMonths = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        if (day > daysInMonths[month - 1]) return null;
+        const iso = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return { year, month, day, iso };
+      },
+      isValidCalendarDate(str) { return Boolean(this.parseCalendarDate(str)); },
+      calculateAge(dobStr, refDateStr = this.currentDateISO()) {
+        const dob = this.parseCalendarDate(dobStr);
+        const ref = this.parseCalendarDate(refDateStr);
+        if (!dob || !ref) return null;
+        let age = ref.year - dob.year;
+        if (ref.month < dob.month || (ref.month === dob.month && ref.day < dob.day)) {
+          age -= 1;
+        }
+        return age;
+      },
+      matchesStoryCondition(cond) {
+        if (!cond) return true;
+        const reqs = Array.isArray(cond) ? cond : [cond];
+        for (const r of reqs) {
+          const actual = this.state.story[r.key];
+          if (r.value !== undefined && actual !== r.value) return false;
+          if (Array.isArray(r.in) && !r.in.includes(actual)) return false;
+          if (Array.isArray(r.notIn) && r.notIn.includes(actual)) return false;
+          if (r.min !== undefined && (Number(actual) || 0) < r.min) return false;
+          if (r.max !== undefined && (Number(actual) || 0) > r.max) return false;
+        }
+        return true;
+      },
       arrival(c) { return c.arrivalTime ?? this.state.clockMins; },
       booking(c) { return this.state.bookings[c.ticket?.serial]; },
       freeSeats(f) {
@@ -458,6 +502,17 @@
             }
           }
         }
+        if (pol.checkAgeRestrictions && (f.minAge || 0) > 0) {
+          if (c.person?.obviousDisguise) return false;
+          if (!c.idCard || !c.idCard.exists) return false;
+          if (!this.isValidCalendarDate(c.idCard.dob)) return false;
+          if (c.idCard.photoMismatch || c.idCard.photoAltered) return false;
+          if (c.idCard.holderName && c.person?.name && c.idCard.holderName !== c.person.name) return false;
+          const age = this.calculateAge(c.idCard.dob, pol.currentDate);
+          if (age === null || age < f.minAge) return false;
+          if (c.idCard.statedAge !== undefined && c.idCard.statedAge !== age) return false;
+          if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== age) return false;
+        }
         return true;
       },
       accepts(c, f, requirements = c.known.preference) {
@@ -468,7 +523,7 @@
       correctionOptions(c) {
         const t = c.ticket, b = this.booking(c), pol = this.policies();
         if (!pol.allowCorrections || !t?.exists || t.date !== this.today() || this.state.usedSerials.includes(t.serial)
-          || !b || b.status !== 'reserved' || (!pol.allowPromoChanges && t.ticketType.includes('PROMO')) || t.ticketType.includes('VIP') || !c.known.preference) return [];
+          || !b || b.status !== 'reserved' || (!pol.allowPromoChanges && t.ticketType.includes('PROMO')) || t.ticketType.includes('VIP') || t.ticketType === 'STAFF PASS' || !c.known.preference) return [];
         return this.allScreenings().filter(f => this.canEnter(f,c) && this.accepts(c,f)
           && this.freeSeats(f)+(b.screeningId===f.id ? b.seats:0) >= c.groupSize);
       },
@@ -480,7 +535,8 @@
           if(t.date!==this.today()) add('date',`Ticket: ${t.date}. Today: ${this.today()}.`,true);
           if(this.state.usedSerials.includes(t.serial)) add('duplicate','This ticket number is already used.',true);
           if(t.ticketType.includes('VIP') && (!pol.allowVipPasses || !this.state.authorizedVips.includes(t.serial))) add('vip','This VIP number is not on the list.',true);
-          if(!['STANDARD','PROMO (NO CHANGE)','MANAGER VIP PASS','TV LOUNGE PASS','REPLACEMENT PRINTED'].includes(t.ticketType)) add('authenticity','This ticket type is not valid.',true);
+          if(t.ticketType==='STAFF PASS' && (!pol.allowStaffPasses || !(this.state.authorizedStaff || this.state.authorizedVips || []).includes(t.serial))) add('staff','This staff pass number is not on the authorised list.',true);
+          if(!['STANDARD','PROMO (NO CHANGE)','MANAGER VIP PASS','TV LOUNGE PASS','REPLACEMENT PRINTED','STAFF PASS'].includes(t.ticketType)) add('authenticity','This ticket type is not valid.',true);
           if(!b || b.status!=='reserved') add('booking','There is no unused booking for this ticket.',true);
           if(!f) add('film','This film is not on the programme.',true);
           if(f) {
@@ -495,6 +551,37 @@
             for (const rule of (pol.conditionalScreenRules || [])) {
               if (String(f.screen) === String(rule.screen) && this.arrival(c) > rule.afterMins && !c.person?.[rule.requiredPersonProp]) {
                 add(rule.id || 'conditional', rule.issueText || `Screen ${rule.screen} conditional rule not met.`);
+              }
+            }
+            if (pol.checkAgeRestrictions) {
+              if (c.person?.obviousDisguise) {
+                add('disguise', c.person.disguiseIssueText || 'Customer is wearing an obvious disguise.', true);
+              }
+              if (c.idCard?.exists) {
+                if (!this.isValidCalendarDate(c.idCard.dob)) {
+                  add('id_forged', 'The birth date on the ID card is not a real calendar date.', true);
+                } else {
+                  const idAge = this.calculateAge(c.idCard.dob, pol.currentDate);
+                  if (c.idCard.statedAge !== undefined && c.idCard.statedAge !== idAge) {
+                    add('id_forged', `ID card states age ${c.idCard.statedAge}, which contradicts birth date ${c.idCard.dob} (age ${idAge}).`, true);
+                  }
+                  if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== idAge) {
+                    add('age_mismatch', `Customer claims to be ${c.claimedAge}, but ID birth date shows age ${idAge}.`, true);
+                  }
+                  if (c.idCard.photoMismatch || c.idCard.photoAltered) {
+                    add('id_forged', c.idCard.photoMismatchText || 'The ID card photograph has been altered.', true);
+                  }
+                  if (t.holderName && c.idCard.holderName && t.holderName !== c.idCard.holderName) {
+                    add('id_name', `Ticket name (${t.holderName}) does not match ID card (${c.idCard.holderName}).`, true);
+                  } else if (c.idCard.holderName && c.person?.name && c.idCard.holderName !== c.person.name) {
+                    add('id_name', `ID card name (${c.idCard.holderName}) does not match customer (${c.person.name}).`, true);
+                  }
+                  if ((f.minAge || 0) > 0 && idAge !== null && idAge < f.minAge) {
+                    add('underage', `Customer is ${idAge} years old. ${f.title} requires minimum age ${f.minAge} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
+                  }
+                }
+              } else if ((f.minAge || 0) > 0) {
+                add('missing_id', `No valid ID card presented for ${f.title} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
               }
             }
             if(b && (b.screeningId!==f.id || b.seats!==t.seats || t.seats<c.groupSize)) add('seats',`Booking: ${b.seats} seat(s). People: ${c.groupSize}.`);
@@ -523,7 +610,8 @@
         const pack = this.languagePack();
         this.state.bookings={}; this.state.serialCounter=400;
         this.state.authorizedVips = [...(camp.authorizedVips || [])];
-        this.state.schedule=(pack.films||[]).map(f=>({...f, status:'ON TIME',originalScreen:f.screen,unallocatedSeats:f.capacity}));
+        this.state.authorizedStaff = [...(camp.authorizedStaff || [])];
+        this.state.schedule=(pack.films||[]).map(f=>({...f, ...(dayCfg.capacityOverrides?.[f.id] ? { capacity: dayCfg.capacityOverrides[f.id] } : {}), status:'ON TIME',originalScreen:f.screen,unallocatedSeats:dayCfg.capacityOverrides?.[f.id] ?? f.capacity}));
         this.state.tvSchedule=pol.tvLoungeOpen && this.state.enableTVContent ? (pack.tvLoungeSchedule||[]).map(f=>({...f,status:'ON TIME',unallocatedSeats:f.capacity})):[];
         for (const ch of (dayCfg.scheduleChanges || [])) {
           if (ch.type === 'relocate') {
@@ -551,9 +639,20 @@
             }
           }
         }
+        for (const boost of (dayCfg.storyScheduleBoosts || [])) {
+          const cond = { key: boost.requireStoryKey, value: boost.requireStoryValue, in: boost.requireStoryIn };
+          if (this.matchesStoryCondition(cond)) {
+            const target = this.screening(boost.screeningId);
+            if (target && Number.isInteger(boost.capacityDelta)) {
+              target.capacity += boost.capacityDelta;
+              target.unallocatedSeats += boost.capacityDelta;
+              if (boost.statusLabel) target.status = boost.statusLabel;
+            }
+          }
+        }
         this.state.schedule.sort((a,b)=>a.timeMins-b.timeMins);this.state.tvSchedule.sort((a,b)=>a.timeMins-b.timeMins);
         this.state.usedSerials=[...(pol.initialUsedSerials || [])];
-        this.state.scriptedDone={}; this.state.noticesSeen={};
+        this.state.scriptedDone={}; this.state.encounterGroupsDone={}; this.state.noticesSeen={};
         this.state.clockEndMins=Math.max(...this.allScreenings().map(f=>f.timeMins))+10;
         this.state.scheduleSnapshot=this.allScreenings().map(f=>[f.id,f.time,f.timeMins,f.screen,f.status]);
       },
@@ -562,29 +661,53 @@
         this.state.queue.push({person:CHARACTERS.createRandomPerson(()=>this.rng()),patience:100}); UI.renderQueue();
       },
       generateCustomerScenario(forcedType=null, person=null) {
-        const s=this.state, now=s.clockMins, camp=this.campaign(), dayCfg=this.dayConfig(), pol=this.policies();
-        const shell={person:person||CHARACTERS.createRandomPerson(()=>this.rng()),arrivalTime:now};
-        const open=this.allScreenings().filter(f=>this.canEnter(f,shell) && this.freeSeats(f)>=1);
+        const s=this.state, camp=this.campaign(), dayCfg=this.dayConfig(), pol=this.policies();
+        let now=s.clockMins;
+        const adultDobs=['1984-03-15','1991-07-22','1979-11-04','1996-01-29','2001-08-12','1988-05-19'];
+        const shellPerson=person||CHARACTERS.createRandomPerson(()=>this.rng());
+        const defaultDob=pol.checkAgeRestrictions ? (this.pick(adultDobs)||'1988-05-19') : '1988-05-19';
+        const defaultAge=pol.checkAgeRestrictions ? this.calculateAge(defaultDob,pol.currentDate) : 25;
+        const shell={
+          person:shellPerson,
+          arrivalTime:now,
+          ...(pol.checkAgeRestrictions ? {
+            claimedAge:defaultAge,
+            trueAge:defaultAge,
+            idCard:{exists:true,presented:true,holderName:shellPerson.name,dob:defaultDob}
+          } : {})
+        };
         const lateTol = pol.lateToleranceMins ?? 10;
-        const late=this.allScreenings().filter(f=>f.status!=='CANCELLED' && now>f.timeMins+lateTol && this.freeSeats(f)>=1);
+        let open=this.allScreenings().filter(f=>this.canEnter(f,shell) && this.freeSeats(f)>=1);
+        let late=this.allScreenings().filter(f=>f.status!=='CANCELLED' && now>f.timeMins+lateTol && this.freeSeats(f)>=1);
         const pickId=(id)=>open.find(f=>f.id===id);
 
         const findScriptedEncounter = () => {
           for (const enc of (dayCfg.scriptedEncounters || [])) {
-            if (enc.oncePerShift && s.scriptedDone[enc.id]) continue;
+            if (enc.oncePerShift !== false && s.scriptedDone[enc.id]) continue;
+            if (enc.encounterGroup && s.encounterGroupsDone?.[enc.encounterGroup]) continue;
             const tr = enc.trigger || {};
-            if (tr.minClockMins !== undefined && now < tr.minClockMins) continue;
-            if (tr.maxClockMins !== undefined && now > tr.maxClockMins) continue;
+            const effNow = (enc.advanceClockToMins && now < enc.advanceClockToMins) ? enc.advanceClockToMins : now;
+            if (tr.minClockMins !== undefined && effNow < tr.minClockMins) continue;
+            if (tr.maxClockMins !== undefined && effNow > tr.maxClockMins) continue;
             if (tr.caseIndex !== undefined && s.casesGeneratedCount !== tr.caseIndex) continue;
-            if (tr.requireOpenScreeningId && !pickId(tr.requireOpenScreeningId)) continue;
-            if (tr.requireLateScreeningId && !late.find(f => f.id === tr.requireLateScreeningId)) continue;
+            if (tr.minCaseIndex !== undefined && s.casesGeneratedCount < tr.minCaseIndex) continue;
+            if (tr.requireOpenScreeningId && !this.screening(tr.requireOpenScreeningId)) continue;
+            if (tr.requireLateScreeningId && !this.allScreenings().find(f => f.id === tr.requireLateScreeningId && f.status !== 'CANCELLED' && effNow > f.timeMins + lateTol)) continue;
             if (tr.requireOpenRoom && !open.some(f => f.screen === tr.requireOpenRoom)) continue;
             if (tr.requireStoryFlag && !s.story[tr.requireStoryFlag]) continue;
+            if (tr.requireStoryValue && !this.matchesStoryCondition(tr.requireStoryValue)) continue;
             if (tr.requireUnusedSerial && s.usedSerials.includes(tr.requireUnusedSerial)) continue;
             return enc;
           }
           return null;
         };
+
+        const proceduralTypes = new Set([
+          'valid', 'subjective', 'wrong_film', 'screen', 'time', 'date', 'missing', 'hidden_ticket',
+          'incomplete', 'cancelled', 'group', 'duplicate', 'promo', 'late', 'move', 'combined',
+          'tv', 'tv_wrong', 'red', 'no_red',
+          'age_valid', 'underage', 'missing_id', 'fake_id', 'false_identity', 'disguise', 'staff_impostor'
+        ]);
 
         let type = forcedType;
         let scripted = null;
@@ -593,7 +716,7 @@
           if (scripted) {
             type = scripted.caseType;
           } else if (this.rng() < 0.40) {
-            type = this.pick(['valid', 'valid', 'subjective']);
+            type = this.pick(pol.checkAgeRestrictions ? ['valid', 'valid', 'age_valid', 'subjective'] : ['valid', 'valid', 'subjective']);
           } else {
             const basePool = dayCfg.casePool || ['wrong_film', 'screen', 'time', 'date', 'missing'];
             const types = [];
@@ -602,14 +725,48 @@
               if (candidate === 'tv_wrong' && !open.some(f => f.screen === 'TV Lounge')) continue;
               if (candidate === 'cancelled' && !this.state.schedule.some(f => f.status === 'CANCELLED')) continue;
               if ((candidate === 'red' || candidate === 'no_red') && !(pol.conditionalScreenRules || []).some(r => now > r.afterMins && now <= r.afterMins + 15)) continue;
+              if (['underage', 'missing_id', 'fake_id'].includes(candidate) && (!pol.checkAgeRestrictions || !open.some(f => (f.minAge || 0) >= 12))) continue;
               types.push(candidate);
             }
-            type = this.pick(types);
+            type = this.pick(types) || 'screen';
           }
         } else {
-          scripted = (dayCfg.scriptedEncounters || []).find(e => e.caseType === type || e.id === type)
-            || Object.values(camp.days || {}).flatMap(d => d.scriptedEncounters || []).find(e => e.caseType === type || e.id === type)
-            || null;
+          const dayById = (dayCfg.scriptedEncounters || []).filter(e => e.id === type);
+          if (dayById.length) {
+            scripted = dayById.find(e => !e.trigger?.requireStoryValue || this.matchesStoryCondition(e.trigger.requireStoryValue)) || dayById[0];
+            type = scripted.caseType;
+          } else if (!proceduralTypes.has(type)) {
+            const dayMatches = (dayCfg.scriptedEncounters || []).filter(e =>
+              e.caseType === type || e.characterId === type || e.characterId === 'mr_' + type || e.id.startsWith(type)
+            );
+            scripted = dayMatches.find(e => !e.trigger?.requireStoryValue || this.matchesStoryCondition(e.trigger.requireStoryValue))
+              || dayMatches[0]
+              || Object.values(camp.days || {}).flatMap(d => d.scriptedEncounters || []).find(e => e.id === type || e.caseType === type || e.characterId === type || e.characterId === 'mr_' + type)
+              || null;
+            if (scripted) type = scripted.caseType;
+          }
+        }
+
+        if (scripted?.advanceClockToMins && s.clockMins < scripted.advanceClockToMins) {
+          s.clockMins = scripted.advanceClockToMins;
+          s.clockFormatted = this.formatMins(s.clockMins);
+          now = s.clockMins;
+          shell.arrivalTime = now;
+          UI.updateClockDisplay();
+          open = this.allScreenings().filter(f => this.canEnter(f, shell) && this.freeSeats(f) >= 1);
+          late = this.allScreenings().filter(f => f.status !== 'CANCELLED' && now > f.timeMins + lateTol && this.freeSeats(f) >= 1);
+        }
+
+        if (scripted?.targetScreeningId && type !== 'overbooked_group') {
+          const targetScr = this.screening(scripted.targetScreeningId);
+          const neededSeats = scripted.ticketSeats ?? scripted.groupSize ?? 1;
+          if (targetScr && this.freeSeats(targetScr) < neededSeats) {
+            const delta = neededSeats - this.freeSeats(targetScr);
+            targetScr.capacity += delta;
+            targetScr.unallocatedSeats = this.freeSeats(targetScr);
+            open = this.allScreenings().filter(f => this.canEnter(f, shell) && this.freeSeats(f) >= 1);
+            late = this.allScreenings().filter(f => f.status !== 'CANCELLED' && now > f.timeMins + lateTol && this.freeSeats(f) >= 1);
+          }
         }
 
         const isLateScripted = Boolean(scripted?.trigger?.requireLateScreeningId || scripted?.dilemma);
@@ -620,11 +777,11 @@
 
         let f = this.pick(open) || this.allScreenings()[0], desired = f;
         if (scripted && scripted.targetScreeningId && !scripted.wrongFilmTicket && !isLateScripted && type !== 'move' && type !== 'red' && type !== 'no_red') {
-          f = desired = pickId(scripted.targetScreeningId) || f;
+          f = desired = pickId(scripted.targetScreeningId) || this.screening(scripted.targetScreeningId) || f;
         }
         if (type === 'move') {
           const relocId = scripted?.targetScreeningId || (dayCfg.scheduleChanges || []).find(ch => ch.type === 'relocate')?.screeningId;
-          f = desired = (relocId ? pickId(relocId) : null) || open.find(x => x.originalScreen !== undefined && x.originalScreen !== x.screen);
+          f = desired = (relocId ? (pickId(relocId) || this.screening(relocId)) : null) || open.find(x => x.originalScreen !== undefined && x.originalScreen !== x.screen);
           if (!f) return this.generateCustomerScenario('screen', person);
         }
         if (type.startsWith('tv')) {
@@ -633,7 +790,7 @@
         }
         if (type === 'late' || isLateScripted) {
           const targetLateId = scripted?.targetScreeningId || scripted?.trigger?.requireLateScreeningId;
-          f = desired = targetLateId ? late.find(x => x.id === targetLateId) : this.pick(late);
+          f = desired = targetLateId ? (late.find(x => x.id === targetLateId) || this.screening(targetLateId)) : this.pick(late);
           if (!f) return this.generateCustomerScenario('screen', person);
         }
         if (type === 'red' || type === 'no_red') {
@@ -651,14 +808,20 @@
           if (!f || f.status !== 'CANCELLED' || !desired || this.freeSeats(f) < 1) return this.generateCustomerScenario('screen', person);
         }
         if (['wrong_film', 'promo', 'incomplete', 'change'].includes(type) || scripted?.wrongFilmTicket) {
-          desired = scripted?.targetScreeningId ? pickId(scripted.targetScreeningId) : this.pick(open);
+          desired = scripted?.targetScreeningId ? (pickId(scripted.targetScreeningId) || this.screening(scripted.targetScreeningId)) : this.pick(open);
           const other = this.pick(open.filter(x => x.genre !== desired?.genre));
           if (!desired || !other) return this.generateCustomerScenario('screen', person);
           f = other;
         }
-        if (type === 'group' && this.freeSeats(f) < 3) return this.generateCustomerScenario('screen', person);
+        if (['age_valid', 'underage', 'missing_id', 'fake_id', 'false_identity', 'disguise'].includes(type) && !scripted) {
+          const ageRestrictedOpen = open.filter(x => (x.minAge || 0) >= 12);
+          if (!ageRestrictedOpen.length) return this.generateCustomerScenario('valid', person);
+          f = desired = this.pick(ageRestrictedOpen);
+        }
+        if (type === 'group' && !scripted && this.freeSeats(f) < 3) return this.generateCustomerScenario('screen', person);
 
-        const group = type === 'group' ? 3 : 1;
+        const group = scripted?.groupSize ?? ((type === 'group' || type === 'overbooked_group') ? 3 : 1);
+        const ticketSeats = scripted?.ticketSeats ?? (type === 'group' || type === 'overbooked_group' ? 1 : group);
         const singleDescriptions = (f.descriptions || [f.statement]).filter(text => !/^We|^We're/.test(text) && !/\bfamily|partner\b/.test(text));
         const purposeText = `I'm here ${f.purposePhrases?.[0] || 'to have fun'}.`;
         const statementChoices = [
@@ -689,7 +852,7 @@
             screen: f.screen,
             time: f.time,
             date: this.today(),
-            seats: 1,
+            seats: ticketSeats,
             ticketType: f.screen === 'TV Lounge' ? 'TV LOUNGE PASS' : 'STANDARD'
           }
         };
@@ -730,7 +893,7 @@
           c.requiredQuestion = true;
           c.statement = `I'm going to see ${f.title}. Can I watch another film?`;
         }
-        if (type === 'group') { c.statement = `We're going to see ${f.title}. There are three of us.`; c.known.publicPlan = true; }
+        if (type === 'group' || type === 'overbooked_group') { c.statement = `We're going to see ${f.title}. There are ${group === 3 ? 'three' : group} of us.`; c.known.publicPlan = true; }
         if (type === 'duplicate') c.ticket.serial = this.pick(s.usedSerials);
         if (type === 'promo') c.ticket.ticketType = 'PROMO (NO CHANGE)';
         if (type === 'late') { c.statement = `I'm late. I only want to see ${f.title}.`; c.known.publicPlan = true; }
@@ -741,13 +904,98 @@
           c.known.publicPlan = true;
         }
 
+        if (!scripted) {
+          if (type === 'age_valid') {
+            const validDob = '1995-06-15';
+            const validAge = this.calculateAge(validDob, pol.currentDate);
+            c.claimedAge = validAge;
+            c.trueAge = validAge;
+            c.idCard = { exists: true, presented: true, holderName: c.person.name, dob: validDob };
+            c.statement = `I'm going to see ${f.title}. Here is my ticket and ID.`;
+            c.known.publicPlan = true;
+          } else if (type === 'underage') {
+            const underageDob = (f.minAge || 12) >= 16 ? '2012-06-15' : '2016-06-15';
+            const uAge = this.calculateAge(underageDob, pol.currentDate);
+            c.claimedAge = uAge;
+            c.trueAge = uAge;
+            c.allowAgeCorrection = false;
+            c.idCard = { exists: true, presented: true, holderName: c.person.name, dob: underageDob };
+            c.statement = `I'm going to see ${f.title}. I really want to watch it!`;
+            c.known.publicPlan = true;
+          } else if (type === 'missing_id') {
+            c.claimedAge = (f.minAge || 12) + 1;
+            c.trueAge = (f.minAge || 12) - 2;
+            c.allowAgeCorrection = false;
+            c.idCard = { exists: false, presented: false, reason: 'No ID card presented.' };
+            c.statement = `I'm going to see ${f.title}. I'm ${c.claimedAge}, I promise, but I left my ID at home.`;
+            c.known.publicPlan = true;
+          } else if (type === 'fake_id') {
+            const fakeDob = '2012-08-20';
+            const realAge = this.calculateAge(fakeDob, pol.currentDate);
+            c.claimedAge = (f.minAge || 16) + 1;
+            c.trueAge = realAge;
+            c.allowAgeCorrection = false;
+            c.idCard = { exists: true, presented: true, holderName: c.person.name, dob: fakeDob, statedAge: c.claimedAge, photoAltered: true };
+            c.statement = `I'm going to see ${f.title}. Check my ID card—it says I'm ${c.claimedAge}!`;
+            c.known.publicPlan = true;
+          } else if (type === 'false_identity') {
+            c.ticket.holderName = c.person.name;
+            c.allowAgeCorrection = false;
+            c.idCard = { exists: true, presented: true, holderName: 'Dr Alex Sterling', dob: '1982-11-03', photoMismatch: true };
+            c.statement = `I'm going to see ${f.title}. This is definitely my ID card.`;
+            c.known.publicPlan = true;
+          } else if (type === 'disguise') {
+            c.person = { ...c.person, fakeBeard: true, obviousDisguise: true, disguiseIssueText: 'Customer is wearing a glued-on fake beard.' };
+            c.claimedAge = 24;
+            c.trueAge = 13;
+            c.allowAgeCorrection = false;
+            c.idCard = { exists: false, presented: false, reason: 'No ID card.' };
+            c.statement = `Good evening! I am ${c.claimedAge} years old and I am going to see ${f.title}.`;
+            c.known.publicPlan = true;
+          } else if (type === 'staff_impostor') {
+            c.person = { ...c.person, staffHat: true, staffBadge: true, obviousDisguise: true, disguiseIssueText: 'Customer is wearing a homemade staff badge.' };
+            c.ticket.ticketType = 'STAFF PASS';
+            c.ticket.serial = 'STAFF-00-FAKE';
+            c.claimedAge = 19;
+            c.trueAge = 14;
+            c.allowAgeCorrection = false;
+            c.idCard = { exists: false, presented: false, reason: 'No staff ID.' };
+            c.statement = `I work here! I need to inspect ${f.title} right away.`;
+            c.known.publicPlan = true;
+          }
+        }
+
         if (scripted) {
+          c.scriptedId = scripted.id;
           if (scripted.characterId && camp.characters?.[scripted.characterId]) {
             c.person = { ...camp.characters[scripted.characterId] };
             if (scripted.personTagOverride) c.person.tag = scripted.personTagOverride;
           }
+          if (scripted.personOverrides) {
+            c.person = { ...c.person, ...scripted.personOverrides };
+          }
+          if (c.idCard && !scripted.idCard) {
+            c.idCard.holderName = c.person.name;
+          }
+          if (scripted.ticketOverrides) {
+            Object.assign(c.ticket, scripted.ticketOverrides);
+          }
+          if (scripted.idCard) {
+            c.idCard = structuredClone(scripted.idCard);
+          }
+          if (scripted.claimedAge !== undefined) c.claimedAge = scripted.claimedAge;
+          if (scripted.trueAge !== undefined) c.trueAge = scripted.trueAge;
+          if (scripted.allowAgeCorrection !== undefined) c.allowAgeCorrection = scripted.allowAgeCorrection;
+          if (scripted.managerDirective) c.managerDirective = true;
+          if (scripted.managerBonusCash !== undefined) c.managerBonusCash = scripted.managerBonusCash;
+          if (scripted.managerComplyRepDelta !== undefined) c.managerComplyRepDelta = scripted.managerComplyRepDelta;
+          if (scripted.managerRefuseRepDelta !== undefined) c.managerRefuseRepDelta = scripted.managerRefuseRepDelta;
+          if (scripted.expectedAction) c.expectedAction = scripted.expectedAction;
+          if (scripted.storyEffects) c.storyEffects = structuredClone(scripted.storyEffects);
+          if (scripted.customFeedback) c.customFeedback = structuredClone(scripted.customFeedback);
           if (scripted.storyKey) c.storyKey = scripted.storyKey;
           if (scripted.dilemma) c.dilemma = true;
+          if (scripted.discretionaryIssueCode) c.discretionaryIssueCode = scripted.discretionaryIssueCode;
           if (scripted.requiredQuestion) {
             c.known.preference = null;
             c.known.publicPlan = false;
@@ -765,20 +1013,37 @@
             .replace(/\{title\}/g, f.title)
             .replace(/\{time\}/g, f.time)
             .replace(/\{lateMins\}/g, String(now - f.timeMins));
-          if (scripted.statementTemplate) {
+          const packOverride = this.languagePack()?.dialogueOverrides?.[scripted.id];
+          if (packOverride?.statementTemplate) {
+            c.statement = formatTpl(packOverride.statementTemplate);
+            if (!scripted.requiredQuestion) c.known.publicPlan = true;
+          } else if (Array.isArray(scripted.statementByStory)) {
+            const matchedBranch = scripted.statementByStory.find(b => !b.condition || this.matchesStoryCondition(b.condition));
+            if (matchedBranch?.text) {
+              c.statement = formatTpl(matchedBranch.text);
+              if (!scripted.requiredQuestion) c.known.publicPlan = true;
+            }
+          } else if (scripted.statementByStory && typeof scripted.statementByStory === 'object') {
+            const storyState = s.story[scripted.storyKey];
+            const tpl = scripted.statementByStory[storyState] || scripted.statementByStory.default || scripted.statementTemplate || `Today I'm going to see {title}.`;
+            c.statement = formatTpl(tpl);
+            if (!scripted.requiredQuestion) c.known.publicPlan = true;
+          } else if (scripted.statementTemplate) {
             c.statement = formatTpl(scripted.statementTemplate);
             if (!scripted.requiredQuestion) c.known.publicPlan = true;
-          } else if (scripted.statementByStory) {
-            const storyState = s.story[scripted.storyKey];
-            const tpl = scripted.statementByStory[storyState] || scripted.statementByStory.default || `Today I'm going to see {title}.`;
-            c.statement = formatTpl(tpl);
-            c.known.publicPlan = true;
           }
-          c.isScriptedAdmit = Boolean(!scripted.dilemma && !scripted.wrongFilmTicket && type !== 'move');
+          const nonAdmitCases = ['move', 'underage', 'missing_id', 'fake_id', 'false_identity', 'disguise', 'staff_impostor', 'manager_pressure', 'overbooked_group', 'screen', 'wrong_film', 'duplicate', 'promo', 'cancelled', 'late', 'dilemma_late'];
+          c.isScriptedAdmit = scripted.expectedAction
+            ? scripted.expectedAction === 'ADMIT'
+            : Boolean(!scripted.dilemma && !scripted.wrongFilmTicket && !nonAdmitCases.includes(type));
         }
 
         c.statementSummary = c.statement;
         const requiresPlanConfirmation = ['incomplete', 'wrong_film', 'promo', 'change'].includes(type) || Boolean(scripted?.wrongFilmTicket);
+        const calcIdAge = (c.idCard?.exists && this.isValidCalendarDate(c.idCard.dob))
+          ? this.calculateAge(c.idCard.dob, pol.currentDate)
+          : null;
+        const spokenAge = c.claimedAge ?? calcIdAge ?? 25;
         c.qaResponses = {
           which_film: c.intent.genres ? `I want a ${c.intent.genres.join(' or ')}. Any one is fine.` : `I'm going to see ${desired.title}.`,
           why_see: `I'm here ${desired.purposePhrases?.[0] || 'to have fun'}.`,
@@ -786,10 +1051,26 @@
           how_many: `There ${group === 1 ? 'is one person' : 'are ' + group + ' people'}.`,
           friends_coming: group > 1 ? "Yes, they are. We're going to watch together." : "No. He isn't going to come today.",
           other_ticket: type === 'hidden_ticket' ? "Here it is! It was in my coat." : "No. I don't have another ticket.",
-          alternative: c.intent.genres ? `A ${c.intent.genres.join(' or ')} is OK.` : `Only ${desired.title}, please.`
+          alternative: c.intent.genres ? `A ${c.intent.genres.join(' or ')} is OK.` : `Only ${desired.title}, please.`,
+          ask_age: `I am ${spokenAge} years old.`,
+          ask_id: c.idCard?.exists
+            ? `Here is my ID card. My date of birth is ${c.idCard.dob}.`
+            : "I haven't got my ID card with me today."
         };
         if (scripted?.qaOverrides) {
           Object.assign(c.qaResponses, scripted.qaOverrides);
+        }
+        if (Array.isArray(scripted?.qaByStory)) {
+          for (const branch of scripted.qaByStory) {
+            if (!branch.condition || this.matchesStoryCondition(branch.condition)) {
+              if (branch.responses) Object.assign(c.qaResponses, branch.responses);
+              break;
+            }
+          }
+        }
+        const packQaOverride = scripted ? this.languagePack()?.dialogueOverrides?.[scripted.id]?.qaOverrides : null;
+        if (packQaOverride) {
+          Object.assign(c.qaResponses, packQaOverride);
         }
         if (type === 'cancelled') c.qaResponses.are_you_sure = c.qaResponses.alternative;
 
@@ -799,7 +1080,11 @@
           : null;
         if (!this.validateGeneratedCase(c)) return this.generateCustomerScenario('missing', person);
         s.casesGeneratedCount++;
-        if (scripted?.oncePerShift) s.scriptedDone[scripted.id] = true;
+        if (scripted && scripted.oncePerShift !== false) s.scriptedDone[scripted.id] = true;
+        if (scripted?.encounterGroup) {
+          if (!s.encounterGroupsDone) s.encounterGroupsDone = {};
+          s.encounterGroupsDone[scripted.encounterGroup] = true;
+        }
         return c;
       },
       validateGeneratedCase(c) {
@@ -816,8 +1101,18 @@
         if(test.requiredQuestion)test.known.preference=structuredClone(test.intent);
         const ev=draft.evaluateCustomerCase(test);
         if(!ev.validActions.length||ev.needsQuestion)return false;
-        if((['valid','subjective','red','vip','tv'].includes(c.caseType) || c.isScriptedAdmit)&&!ev.validActions.includes('ADMIT'))return false;
-        const expected={screen:'screen',time:'time',date:'date',duplicate:'duplicate',late:'late',no_red:'red',group:'seats',promo:'preference',wrong_film:'preference',incomplete:'preference',cancelled:'cancelled',combined:'screen',move:'screen',tv_wrong:'screen'}[c.caseType];
+        if (c.expectedAction) {
+          if (!ev.validActions.includes(c.expectedAction)) return false;
+        } else if ((['valid','age_valid','subjective','red','vip','tv'].includes(c.caseType) || c.isScriptedAdmit) && !ev.validActions.includes('ADMIT')) {
+          return false;
+        }
+        const expected={
+          screen:'screen',time:'time',date:'date',duplicate:'duplicate',late:'late',no_red:'red',
+          group:'seats',overbooked_group:'seats',promo:'preference',wrong_film:'preference',
+          incomplete:'preference',cancelled:'cancelled',combined:'screen',move:'screen',tv_wrong:'screen',
+          underage:'underage',missing_id:'missing_id',fake_id:'id_forged',false_identity:'id_name',
+          disguise:'disguise',staff_impostor:'staff',manager_pressure:'vip'
+        }[c.caseType];
         if(expected&&!ev.issues.some(i=>i.code===expected))return false;
         return true;
       },
@@ -849,6 +1144,14 @@
         SoundFX.click();c.questionedYet=true;
         if(['which_film','are_you_sure','alternative'].includes(key)) {c.known.preference=structuredClone(c.intent);c.known.publicPlan=true;}
         if(key==='other_ticket' && c.backupTicket) {c.ticket=c.backupTicket;delete c.backupTicket;c.requiredTicketQuestion=false;UI.renderTicketOnDesk(c);}
+        if(key==='ask_id') {
+          c.idRequested=true;
+          if(c.idCard) c.idCard.presented=true;
+          UI.renderTicketOnDesk(c);
+        }
+        if(key==='ask_age') {
+          c.ageRequested=true;
+        }
         if(!c.asked.includes(key)) c.asked.push(key);
         const reply=c.qaResponses[key]||"I'm here to watch a film.";
         c.dialogue.push({question:label,reply});
@@ -863,16 +1166,18 @@
         const c=this.state.currentCustomer, pol=this.policies();
         if(!pol.allowCorrections) return UI.showDeskFeedback('warn', pol.printerClosedMessage || this.campaign()?.printerClosedMessage || 'The ticket printer is closed today.');
         if(!c.ticket.exists) return UI.showDeskFeedback('warn','You need a ticket to use the printer.');
-        if((!pol.allowPromoChanges && c.ticket.ticketType.includes('PROMO')) || c.ticket.ticketType.includes('VIP')) return UI.showDeskFeedback('warn','This pass cannot be changed.');
+        if((!pol.allowPromoChanges && c.ticket.ticketType.includes('PROMO')) || c.ticket.ticketType.includes('VIP') || c.ticket.ticketType === 'STAFF PASS') return UI.showDeskFeedback('warn','This pass cannot be changed.');
         if(!c.known.preference) return UI.showDeskFeedback('warn','Ask which film the customer wants first.');
         const select=document.getElementById('correctionScreeningSelect');select.replaceChildren();
         const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a screening…';select.append(placeholder);
         this.allScreenings().forEach(f=>{
           const opt=document.createElement('option');opt.value=f.id;
           const b=this.booking(c), available=this.freeSeats(f)+(b?.screeningId===f.id?b.seats:0);
-          opt.textContent=`${f.title} · ${f.genreLabel} · ${f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen} · ${f.time} · ${available} seats${f.status==='CANCELLED'?' · CANCELLED':''}`;
+          const ratingTag = f.ageRating ? ` [${f.ageRating}]` : '';
+          opt.textContent=`${f.title}${ratingTag} · ${f.genreLabel} · ${f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen} · ${f.time} · ${available} seats${f.status==='CANCELLED'?' · CANCELLED':''}`;
           const isLate = pol.lateToleranceMins !== null && pol.lateToleranceMins !== undefined && this.arrival(c) > f.timeMins + pol.lateToleranceMins;
-          opt.disabled=f.status==='CANCELLED'||available<c.groupSize||isLate;
+          const canEnterScreening = this.canEnter(f, c);
+          opt.disabled=f.status==='CANCELLED'||available<c.groupSize||isLate||!canEnterScreening;
           select.append(opt);
         });
         // Printer only uses information already spoken, never hidden intent.
@@ -905,21 +1210,49 @@
         let message;
         if(result.accepted && result.compliant) {
           s.shiftStats.correct++;
-          const earn=(action==='ADMIT'?10:action==='CORRECT'?12:8)+(action==='CORRECT'&&s.ownedUpgrades.includes('printer')?3:0);
-          s.money+=earn;s.shiftStats.cashEarned+=earn;this.adjustReputation(s.ownedUpgrades.includes('handbook')?4:3);
-          message=`✓ ${action}. +€${earn}. ${ev.reason}`;SoundFX.cash();
+          if (result.managerComplied) {
+            const earn = 10 + (c.managerBonusCash || 0);
+            s.money += earn; s.shiftStats.cashEarned += earn;
+            this.adjustReputation(c.managerComplyRepDelta ?? -2);
+            s.story.manager_compliance = Number(s.story.manager_compliance || 0) + 1;
+            s.story.inspection_violations = Number(s.story.inspection_violations || 0) + 1;
+            message = c.customFeedback?.ADMIT || `✓ ADMIT (Manager Directive). +€${earn}. You followed the manager's order despite the official rulebook.`;
+            SoundFX.cash();
+          } else if (result.managerChallenged) {
+            const earn = 8;
+            s.money += earn; s.shiftStats.cashEarned += earn;
+            this.adjustReputation(c.managerRefuseRepDelta ?? 3);
+            s.story.manager_conflict = Number(s.story.manager_conflict || 0) + 1;
+            if (c.questionedYet || s.story.sofia_evidence === 'yes') {
+              s.story.whistleblower_identified = 'yes';
+            }
+            message = c.customFeedback?.REFUSE || `✓ REFUSE. +€${earn}. ${ev.reason}`;
+            SoundFX.cash();
+          } else {
+            const earn=(action==='ADMIT'?10:action==='CORRECT'?12:8)+(action==='CORRECT'&&s.ownedUpgrades.includes('printer')?3:0);
+            s.money+=earn;s.shiftStats.cashEarned+=earn;this.adjustReputation(s.ownedUpgrades.includes('handbook')?4:3);
+            const customMsg = c.customFeedback?.[action];
+            message = customMsg ? `✓ ${action}. +€${earn}. ${customMsg}` : `✓ ${action}. +€${earn}. ${ev.reason}`;
+            SoundFX.cash();
+          }
         } else if(result.exception) {
           s.shiftStats.exceptions = (s.shiftStats.exceptions || 0) + 1;
+          s.story.total_exceptions = Number(s.story.total_exceptions || 0) + 1;
           s.money+=6;s.shiftStats.cashEarned+=6;this.adjustReputation(4);
           const warnRes = this.issueWarning('Discretionary admission');
-          const baseExc = dm.exceptionFeedback || `${c.person.name} is admitted as an exception. +€6.`;
+          const baseExc = c.customFeedback?.ADMIT || dm.exceptionFeedback || `${c.person.name} is admitted as an exception. +€6.`;
           const warnNote = warnRes.issued
             ? `Discretionary admission — Management warning issued (${warnRes.warnings} / ${warnRes.maxWarnings}).`
             : `Discretionary admission — Warning forgiven by Manager's Handbook (${warnRes.warnings} / ${warnRes.maxWarnings}).`;
           message = `⚖️ ${warnNote} ${baseExc} (Cash +€6, Reputation +4)`;
-          s.shiftStats.dilemmaNotes.push(dm.exceptionNote||`${c.person.name} was admitted as a discretionary exception.`);
+          s.shiftStats.dilemmaNotes.push(c.storyEffects?.dilemmaNoteByAction?.ADMIT || dm.exceptionNote || `${c.person.name} was admitted as a discretionary exception.`);
         } else {
-          s.shiftStats.mistakes++;const penalty=s.difficulty==='chaos'?8:5;s.money=Math.max(0,s.money-penalty);this.adjustReputation(-7);
+          s.shiftStats.mistakes++;
+          s.story.total_mistakes = Number(s.story.total_mistakes || 0) + 1;
+          if (action === 'ADMIT' && ev.issues.some(i => ['underage', 'missing_id', 'id_forged', 'age_mismatch', 'id_name', 'disguise', 'staff', 'vip', 'duplicate'].includes(i.code))) {
+            s.story.inspection_violations = Number(s.story.inspection_violations || 0) + 1;
+          }
+          const penalty=s.difficulty==='chaos'?8:5;s.money=Math.max(0,s.money-penalty);this.adjustReputation(-7);
           const warnRes = this.issueWarning(this.getWarningActionLabel(action, false));
           const errDetail = action==='CORRECT'?'That replacement does not meet all the rules or the customer’s plan.':ev.reason;
           message=`✕ Inspection mistake: ${errDetail} Use ${ev.validActions.join(' or ')}. ${warnRes.summaryText} (Cash −€${penalty}, Reputation −7)`;
@@ -929,7 +1262,29 @@
         if(c.storyKey) {
           s.story[c.storyKey]=outcome;
         }
-        if(c.dilemma) {
+        if (c.storyEffects) {
+          const effMap = result.accepted ? (c.storyEffects.onAction?.[action] || {}) : (c.storyEffects.onMistake || {});
+          for (const [k, v] of Object.entries(effMap)) {
+            s.story[k] = v;
+          }
+          const incMap = result.accepted ? (c.storyEffects.incrementOnAction?.[action] || {}) : (c.storyEffects.incrementOnMistake || {});
+          for (const [k, delta] of Object.entries(incMap)) {
+            s.story[k] = Number(s.story[k] || 0) + Number(delta);
+          }
+          if (c.questionedYet && c.storyEffects.onQuestioned) {
+            for (const [k, v] of Object.entries(c.storyEffects.onQuestioned)) {
+              s.story[k] = v;
+            }
+          }
+          if (result.accepted && c.storyEffects.repDeltaByAction?.[action]) {
+            this.adjustReputation(Number(c.storyEffects.repDeltaByAction[action]));
+          }
+          const note = result.accepted ? c.storyEffects.dilemmaNoteByAction?.[action] : c.storyEffects.dilemmaNoteOnMistake;
+          if (note && !result.exception) {
+            s.shiftStats.dilemmaNotes.push(note);
+          }
+        }
+        if(c.dilemma && !c.storyEffects?.dilemmaNoteByAction?.[action]) {
           if(action==='REFUSE'&&result.accepted) {this.adjustReputation(-2);s.shiftStats.dilemmaNotes.push(dm.refusedNote||`${c.person.name} could not enter. The manager accepted your decision.`);}
           if(action==='CORRECT'&&result.accepted) s.shiftStats.dilemmaNotes.push(dm.correctedNote||`${c.person.name} accepted another film.`);
         }
@@ -954,8 +1309,10 @@
         const ev=this.evaluateCustomerCase(c);
         if(ev.needsQuestion || (c.requiredTicketQuestion && !c.ticket.exists)) return {accepted:false,blocked:true,evaluation:ev};
         const exception=action==='ADMIT'&&ev.discretionary;
+        const managerComplied=Boolean(c.managerDirective && action==='ADMIT' && !ev.validActions.includes('ADMIT'));
+        const managerChallenged=Boolean(c.managerDirective && action==='REFUSE' && ev.validActions.includes('REFUSE'));
         const valid=ev.validActions.includes(action) && (action!=='CORRECT'||ev.options.some(f=>f.id===targetId));
-        if(!valid && !exception) return {accepted:false,evaluation:ev};
+        if(!valid && !exception && !managerComplied) return {accepted:false,evaluation:ev};
         const bookings=structuredClone(this.state.bookings),used=[...this.state.usedSerials];
         const t=c.ticket, b=bookings[t?.serial]; let replacement=null;
         if(action==='ADMIT' || action==='CORRECT') {
@@ -972,7 +1329,7 @@
         this.state.bookings=bookings;this.state.usedSerials=[...new Set(used)];
         if(replacement) c.ticket=replacement;
         this.syncSeats();
-        return {accepted:true,compliant:!exception,exception,evaluation:ev};
+        return {accepted:true,compliant:!exception,exception,managerComplied,managerChallenged,evaluation:ev};
       },
 
       giveWarning(reasonLabel = 'Rule violation') {
@@ -1000,7 +1357,9 @@
         const p=structuredClone(input);if(p.version!==undefined && p.version!==2)throw new Error('This pack needs version 2.');p.version=2;
         const str=(x,path)=>{if(typeof x!=='string'||!x.trim()||x.length>300)throw new Error(path+' must be text (1–300 characters).');};
         const list=(x,path)=>{if(!Array.isArray(x)||!x.length||x.length>100)throw new Error(path+' must be a non-empty array (up to 100 items).');x.forEach((v,i)=>str(v,path+'['+i+']'));};
-        str(p.unitTitle,'unitTitle');['filmGenres','tvProgrammes','adjectives'].forEach(k=>list(p[k],k));
+        str(p.unitTitle,'unitTitle');['filmGenres','adjectives'].forEach(k=>list(p[k],k));
+        if (Array.isArray(p.tvProgrammes) && p.tvProgrammes.length) list(p.tvProgrammes, 'tvProgrammes');
+        else p.tvProgrammes = [];
         const reservedIds = new Set();
         const camp = this.campaign();
         if (camp) {
@@ -1009,7 +1368,10 @@
           });
         }
         const ids=new Set();
-        ['films','tvLoungeSchedule'].forEach(key=>{
+        const scheduleKeys = ['films'];
+        if (Array.isArray(p.tvLoungeSchedule) && p.tvLoungeSchedule.length) scheduleKeys.push('tvLoungeSchedule');
+        else p.tvLoungeSchedule = [];
+        scheduleKeys.forEach(key=>{
           if(!Array.isArray(p[key])||!p[key].length||p[key].length>50)throw new Error(key+' needs 1–50 entries.');
           p[key].forEach((f,i)=>{
             const where=key+'['+i+']';if(!f||typeof f!=='object')throw new Error(where+' must be an object.');
@@ -1063,7 +1425,7 @@
         });
         const status = document.getElementById('inspectStatusText');
         if (status) {
-          status.innerHTML = "🔍 Click any two fields (Ticket, Statement, Schedule, Clock, Rules) to compare them!";
+          status.innerHTML = "🔍 Click any two fields (Ticket, ID Card, Statement, Schedule, Clock, Rules) to compare them!";
         }
       },
 
@@ -1111,11 +1473,47 @@
           const time=this.parseTime(field('ticket_time').value),diff=this.arrival(c)-time,tol=this.policies().lateToleranceMins;
           return match(tol===null||tol===undefined||diff<=tol,`Arrival: ${this.formatMins(this.arrival(c))}. Printed start: ${field('ticket_time').value}. ${diff>0?diff+' minutes after start.':'Before the start.'}`);
         }
+        if(pair('id_dob','schedule_row') || pair('id_dob','ticket_film') || pair('id_dob','rule') || pair('id_dob','today')) {
+          const dob = field('id_dob').value;
+          if (!this.isValidCalendarDate(dob)) return match(false, `ID birth date (${dob}) is not a valid calendar date.`);
+          const age = this.calculateAge(dob, this.currentDateISO());
+          const f = pair('id_dob','schedule_row') ? this.screening(field('schedule_row').value) : this.screening(c.ticket?.filmId);
+          const minAge = f?.minAge || 0;
+          const rating = f?.ageRating || 'G';
+          return match(age >= minAge, `ID birth date: ${dob} (Age ${age} on ${this.policies().dateDisplay || this.currentDateISO()}). ${f ? `${f.title} is rated ${rating} (minimum age ${minAge}).` : ''}`);
+        }
+        if(pair('id_dob','statement') || pair('id_age','statement') || pair('id_dob','id_age')) {
+          const dob = c.idCard?.dob || field('id_dob')?.value;
+          if (!this.isValidCalendarDate(dob)) return match(false, `ID birth date (${dob}) is not a valid calendar date.`);
+          const age = this.calculateAge(dob, this.currentDateISO());
+          const claimed = pair('id_dob','id_age') ? (c.idCard?.statedAge ?? age) : (c.claimedAge ?? c.idCard?.statedAge ?? age);
+          return match(age === Number(claimed), `Claimed/stated age: ${claimed}. Birth date ${dob} calculates to age ${age}.`);
+        }
+        if(pair('id_name','ticket_holder')) {
+          const idName = field('id_name').value;
+          const holder = field('ticket_holder').value;
+          return match(idName === holder, `ID Card Name: ${idName}. Ticket Holder: ${holder}.`);
+        }
+        if(pair('id_name','portrait')) {
+          const idName = field('id_name').value;
+          return match(idName === c.person.name, `ID Card Name: ${idName}. Customer: ${c.person.name}.`);
+        }
+        if(pair('ticket_holder','portrait')) {
+          const holder = field('ticket_holder').value;
+          return match(holder === c.person.name, `Ticket Holder: ${holder}. Customer: ${c.person.name}.`);
+        }
+        if(pair('id_photo','portrait')) {
+          const ok = !(c.idCard?.photoMismatch || c.idCard?.photoAltered);
+          return match(ok, ok ? 'ID card photograph matches the customer.' : (c.idCard?.photoMismatchText || 'ID card photograph does not match the customer or has been altered.'));
+        }
         if(pair('portrait','rule')) {
           const ruleField = field('rule');
           const condRules = this.policies().conditionalScreenRules || [];
           const condRule = condRules.find(r => r.id === ruleField.value) || condRules[0];
           if (!condRule) {
+            if (c.person?.obviousDisguise) {
+              return match(false, c.person.disguiseIssueText || `${c.person.name} is wearing an obvious disguise.`);
+            }
             return neutral(`Customer: ${c.person.name}. Active rule: ${ruleField.label}. No conditional appearance rule is active for this shift.`);
           }
           const prop = condRule.requiredPersonProp;
@@ -1148,8 +1546,48 @@
       },
 
       /*************************************************************************
-       * END OF SHIFT, UPGRADES & LOCALSTORAGE SAVE SYSTEM
+       * CAMPAIGN ENDING EVALUATION, END OF SHIFT, UPGRADES & SAVE SYSTEM
        *************************************************************************/
+      matchesEndingConditions(cond, dismissed = false) {
+        if (!cond) return true;
+        const s = this.state;
+        if (cond.requireDismissed === true && !dismissed) return false;
+        if (cond.forbidDismissed === true && dismissed) return false;
+        if (cond.minReputation !== undefined && s.reputation < cond.minReputation) return false;
+        if (cond.maxReputation !== undefined && s.reputation > cond.maxReputation) return false;
+        if (cond.minMoney !== undefined && s.money < cond.minMoney) return false;
+        if (cond.storyMin) {
+          for (const [k, v] of Object.entries(cond.storyMin)) {
+            if (Number(s.story[k] || 0) < v) return false;
+          }
+        }
+        if (cond.storyMax) {
+          for (const [k, v] of Object.entries(cond.storyMax)) {
+            if (Number(s.story[k] || 0) > v) return false;
+          }
+        }
+        if (cond.storyEquals) {
+          for (const [k, v] of Object.entries(cond.storyEquals)) {
+            const actual = s.story[k];
+            if (Array.isArray(v) ? !v.includes(actual) : actual !== v) return false;
+          }
+        }
+        if (Array.isArray(cond.anyOf) && cond.anyOf.length) {
+          if (!cond.anyOf.some(sub => this.matchesEndingConditions(sub, dismissed))) return false;
+        }
+        return true;
+      },
+
+      evaluateCampaignEnding(dismissed = this.state.lastShiftDismissed) {
+        const camp = this.campaign();
+        if (!camp || !Array.isArray(camp.endings) || !camp.endings.length) return null;
+        const matched = camp.endings.find(e => this.matchesEndingConditions(e.conditions, dismissed)) || camp.endings[camp.endings.length - 1];
+        const callbacks = (camp.endingCallbacks || [])
+          .filter(cb => this.matchesEndingConditions(cb.conditions, dismissed))
+          .map(cb => ({ characterName: cb.characterName, role: cb.role || '', text: cb.text }));
+        return { ...matched, callbacks };
+      },
+
       endShift(customHeadline = null) {
         this.state.shiftActive = false;
         UI.setDecisionButtons(true);
@@ -1168,6 +1606,16 @@
         }
         if (this.state.money > this.state.highScore) {
           this.state.highScore = this.state.money;
+        }
+        const playableMax = this.campaign()?.playableDaysCount || 5;
+        if (this.state.day === playableMax) {
+          const ending = this.evaluateCampaignEnding(dismissed);
+          if (ending) {
+            this.state.lastCampaignEnding = ending;
+            this.state.story.campaign_ending = ending.id;
+          }
+        } else {
+          this.state.lastCampaignEnding = null;
         }
         const headline = dismissed
           ? 'SHIFT FAILED — MANAGEMENT DISMISSED YOU'
@@ -1398,7 +1846,9 @@
             s.story = {};
             if (d.story && typeof d.story === 'object') {
               for (const [k, v] of Object.entries(d.story)) {
-                if (['kind','helped','refused','mistake'].includes(v)) s.story[k] = v;
+                if (typeof v === 'string' && v.length <= 100) s.story[k] = v;
+                else if (typeof v === 'number' && Number.isFinite(v)) s.story[k] = v;
+                else if (typeof v === 'boolean') s.story[k] = v;
               }
             }
           }
@@ -1410,7 +1860,7 @@
 
       resetCampaignConfirm() {
         this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;UI.clearDepartureBanner();
-        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,lastShiftDismissed:false,forgivenWarningUsed:false,ownedUpgrades:[],completedDays:[],totalCustomersLost:0,story:{},outcomes:[]});
+        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,lastShiftDismissed:false,forgivenWarningUsed:false,ownedUpgrades:[],completedDays:[],totalCustomersLost:0,story:{},outcomes:[],lastCampaignEnding:null});
         this.prepareDaySchedule(1);this.saveProgress();UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.openBriefingModal(1);
       },
     };

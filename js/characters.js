@@ -61,6 +61,62 @@
           <path d="M 38 41 Q 50 39 62 41" stroke="#8d5524" stroke-width="1" fill="none" opacity="0.6"/>
         ` : "";
 
+        const oversizedSuitSVG = person.oversizedSuit ? `
+          <g class="accessory-oversized-suit">
+            <path d="M 8 103 L 12 71 L 34 73 L 50 94 L 66 73 L 88 71 L 92 103 Z"
+                  fill="#1e293b" stroke="#0f172a" stroke-width="2.5" />
+            <polygon points="34,73 43,75 48,93 38,91" fill="#334155" stroke="#0f172a" stroke-width="1"/>
+            <polygon points="66,73 57,75 52,93 62,91" fill="#334155" stroke="#0f172a" stroke-width="1"/>
+            <polygon points="48,76 53,76 55,98 46,96" fill="#dc2626" />
+          </g>
+        ` : "";
+
+        const staffBadgeSVG = person.staffBadge ? `
+          <g class="accessory-staff-badge">
+            <rect x="57" y="82" width="16" height="10" rx="2" fill="#facc15" stroke="#78350f" stroke-width="1.2"/>
+            <line x1="60" y1="86" x2="70" y2="86" stroke="#7f1d1d" stroke-width="1.5"/>
+            <line x1="60" y1="89" x2="68" y2="89" stroke="#1e293b" stroke-width="1"/>
+          </g>
+        ` : "";
+
+        const sunglassesSVG = person.sunglasses ? `
+          <g class="accessory-sunglasses">
+            <rect x="32" y="44" width="16" height="11" rx="2.5" fill="#090d16" stroke="#e2b857" stroke-width="1.6"/>
+            <rect x="52" y="44" width="16" height="11" rx="2.5" fill="#090d16" stroke="#e2b857" stroke-width="1.6"/>
+            <line x1="48" y1="48" x2="52" y2="48" stroke="#e2b857" stroke-width="2"/>
+            <line x1="31" y1="47" x2="32" y2="47" stroke="#e2b857" stroke-width="2"/>
+            <line x1="68" y1="47" x2="69" y2="47" stroke="#e2b857" stroke-width="2"/>
+            <line x1="35" y1="46" x2="39" y2="52" stroke="#ffffff" stroke-width="1.2" opacity="0.55"/>
+            <line x1="55" y1="46" x2="59" y2="52" stroke="#ffffff" stroke-width="1.2" opacity="0.55"/>
+          </g>
+        ` : "";
+
+        const editedMoustacheSVG = person.editedMoustache ? `
+          <g class="accessory-edited-moustache">
+            <path d="M 35 63 Q 43 57 50 62 Q 57 57 65 64 Q 68 65 67 61"
+                  stroke="#090d16" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+          </g>
+        ` : "";
+
+        const fakeBeardSVG = person.fakeBeard ? `
+          <g class="accessory-fake-beard" transform="rotate(-5 50 68)">
+            <line x1="31" y1="51" x2="35" y2="62" stroke="#d6d3d1" stroke-width="1.3" stroke-dasharray="2,1"/>
+            <line x1="69" y1="51" x2="65" y2="62" stroke="#d6d3d1" stroke-width="1.3" stroke-dasharray="2,1"/>
+            <path d="M 32 60 Q 50 56 68 60 C 73 74, 65 92, 50 94 C 35 92, 27 74, 32 60 Z"
+                  fill="#5c2d0c" stroke="#271203" stroke-width="2"/>
+            <ellipse cx="50" cy="67" rx="6" ry="2.8" fill="#3b1b06"/>
+            <path d="M 38 72 Q 50 80 62 72" stroke="#3b1b06" stroke-width="1.5" fill="none"/>
+          </g>
+        ` : "";
+
+        const staffHatSVG = person.staffHat ? `
+          <g class="accessory-staff-hat">
+            <path d="M 27 31 L 31 15 L 69 15 L 73 31 Z" fill="#7f1d1d" stroke="#facc15" stroke-width="1.8"/>
+            <ellipse cx="50" cy="31" rx="25" ry="4.5" fill="#1e293b" stroke="#facc15" stroke-width="1.5"/>
+            <circle cx="50" cy="23" r="3.5" fill="#facc15"/>
+          </g>
+        ` : "";
+
         return `
           <svg viewBox="0 0 100 105" class="w-full h-full drop-shadow-lg customer-enter">
             <!-- Shoulders / Coat -->
@@ -68,6 +124,8 @@
                   fill="${person.coatColor}" stroke="#111827" stroke-width="2.5" />
             <!-- Shirt Collar -->
             <polygon points="41,75 59,75 50,92" fill="${person.shirtColor}" />
+            ${oversizedSuitSVG}
+            ${staffBadgeSVG}
             <!-- Neck -->
             <rect x="44" y="66" width="12" height="12" rx="3" fill="${person.skinColor}" />
             <!-- Hair Back -->
@@ -81,11 +139,15 @@
             <circle cx="41" cy="50" r="2.4" fill="#111827" />
             <circle cx="59" cy="50" r="2.4" fill="#111827" />
             ${glassesSVG}
+            ${sunglassesSVG}
             <!-- Nose -->
             <path d="M 50 52 L 48 59 L 52 59" stroke="#78350f" stroke-width="1.6" fill="none" stroke-linecap="round"/>
             <!-- Mouth -->
             <path d="${mouthPath}" stroke="#7f1d1d" stroke-width="2.2" fill="none" stroke-linecap="round" />
+            ${editedMoustacheSVG}
+            ${fakeBeardSVG}
             ${hatSVG}
+            ${staffHatSVG}
           </svg>
         `;
       }

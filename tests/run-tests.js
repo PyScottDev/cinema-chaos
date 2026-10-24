@@ -115,11 +115,11 @@ function test(name, fn) {
 
 console.log("=== Cinema Chaos Regression Test Suite ===");
 
-test("1. Consolidated monkey-patches match original HEAD simulation trace across Days 1-6 (60 encounters)", () => {
+test("1. Deterministic simulation trace across Days 1-7 and Endless Mode Day 8 (80 encounters)", () => {
   function captureTrace(h) {
     const { Game, sandbox } = h;
     const trace = [];
-    for (let day = 1; day <= 6; day++) {
+    for (let day = 1; day <= 8; day++) {
       sandbox.CinemaDebug.setSeed(12345 + day * 100);
       sandbox.document.getElementById("teacherDaySelect").value = String(day);
       Game.teacherJumpToDay();
@@ -158,17 +158,13 @@ test("1. Consolidated monkey-patches match original HEAD simulation trace across
     return trace;
   }
 
-  const origHtml = execSync("git show 0a1a9eb:index.html", { cwd: ROOT, encoding: "utf8" });
-  const origScript = origHtml.slice(origHtml.lastIndexOf("<script>") + 8, origHtml.lastIndexOf("</script>"));
-  const hOrig = createHarness(12345, [origScript]);
-  const hCurrent = createHarness(12345);
-
-  const tOrig = captureTrace(hOrig);
-  const tCurrent = captureTrace(hCurrent);
-  for (let i = 0; i < tOrig.length; i++) {
-    const { rulesCount: _a, ...origItem } = tOrig[i];
-    const { rulesCount: _b, ...currItem } = tCurrent[i];
-    assert.strictEqual(JSON.stringify(currItem), JSON.stringify(origItem), `Mismatch at step ${i}`);
+  const hA = createHarness(12345);
+  const hB = createHarness(12345);
+  const tA = captureTrace(hA);
+  const tB = captureTrace(hB);
+  assert.strictEqual(tA.length, 80);
+  for (let i = 0; i < tA.length; i++) {
+    assert.strictEqual(JSON.stringify(tA[i]), JSON.stringify(tB[i]), `Mismatch at step ${i}`);
   }
 });
 
@@ -189,38 +185,35 @@ test("2. Day 1 rules: valid tickets admitted, errors refused because printer is 
   assert.ok(evWrongScreen.issues.some(i => i.code === "screen"));
 });
 
-test("3. Day 2 rules: printer unlocked for corrections, 10-minute late limit enforced, Mr Morris dilemma", () => {
+test("3. Day 2 rules: film age classifications (G, 12, 16) enforced, Leo underage without ID refused, valid adult horror admitted", () => {
   const { Game } = createHarness(202);
   Game.state.day = 2;
   Game.startShift();
 
-  // Fixable wrong-screen ticket on Day 2 should require CORRECT
-  const screenCust = Game.generateCustomerScenario("screen");
-  Game.finalizeCustomerAtWindow(screenCust);
-  const evScreen = Game.evaluateCustomerCase(screenCust);
-  assert.deepEqual(evScreen.validActions, ["CORRECT"]);
-  assert.ok(evScreen.options.length >= 1);
+  // First scripted encounter on Day 2 is 14-year-old Leo claiming to be 16 without ID for The Dark House [16]
+  const leo = Game.state.currentCustomer;
+  assert.strictEqual(leo.person.id, "leo");
+  assert.strictEqual(leo.ticket.filmId, "the_dark_house");
+  const evLeo = Game.evaluateCustomerCase(leo);
+  assert.deepEqual(evLeo.validActions, ["REFUSE"]);
+  assert.ok(evLeo.issues.some(i => i.code === "missing_id"));
 
-  // Advance clock past 18:25 so 18:15 Happy Penguins is >10 mins late (18:26 = 1106 mins)
-  Game.state.clockMins = 1108;
-  const morris = Game.generateCustomerScenario("morris");
-  Game.finalizeCustomerAtWindow(morris);
-  assert.strictEqual(morris.person.id, "mr_morris");
-  const evBeforeQ = Game.evaluateCustomerCase(morris);
-  assert.deepEqual(evBeforeQ.validActions, ["QUESTION"]);
+  // Ordinary adult horror customer with valid ID card must be admitted
+  const adultHorror = Game.generateCustomerScenario("adult_horror_day2");
+  Game.finalizeCustomerAtWindow(adultHorror);
+  assert.strictEqual(adultHorror.ticket.filmId, "the_dark_house");
+  const evAdult = Game.evaluateCustomerCase(adultHorror);
+  assert.deepEqual(evAdult.validActions, ["ADMIT"]);
 
-  Game.state.currentCustomer = morris;
-  Game.askCustomerQuestion("which_film", "Which film are you going to see?");
-  const evAfterQ = Game.evaluateCustomerCase(morris);
-  assert.deepEqual(evAfterQ.validActions, ["REFUSE"]);
-  assert.strictEqual(evAfterQ.discretionary, true, "Mr Morris late dilemma allows discretionary admission with warning");
-  const admitRes = Game.applyDecision(morris, "ADMIT");
-  assert.strictEqual(admitRes.accepted, true);
-  assert.strictEqual(admitRes.exception, true);
-  assert.strictEqual(admitRes.compliant, false);
+  // Procedural underage customer for a [12] or [16] film must be refused
+  const underageCust = Game.generateCustomerScenario("underage");
+  Game.finalizeCustomerAtWindow(underageCust);
+  const evUnderage = Game.evaluateCustomerCase(underageCust);
+  assert.deepEqual(evUnderage.validActions, ["REFUSE"]);
+  assert.ok(evUnderage.issues.some(i => i.code === "underage"));
 });
 
-test("4. Day 3 rules: Planet X moved to Screen 1, duplicate serials refused, Promo tickets cannot be corrected", () => {
+test("4. Day 3 & Day 4 rules: Day 3 unlocks printer and relocates Planet X to Screen 1; Day 4 enforces duplicates, Promo, and 10-minute late limit", () => {
   const { Game } = createHarness(303);
   Game.state.day = 3;
   Game.startShift();
@@ -229,11 +222,17 @@ test("4. Day 3 rules: Planet X moved to Screen 1, duplicate serials refused, Pro
   assert.strictEqual(planetX.screen, 1);
   assert.strictEqual(planetX.status, "MOVED TO SCR 1");
 
-  const moveCust = Game.generateCustomerScenario("move");
-  Game.finalizeCustomerAtWindow(moveCust);
-  const evMove = Game.evaluateCustomerCase(moveCust);
-  assert.deepEqual(evMove.validActions, ["CORRECT"]);
-  assert.ok(evMove.issues.some(i => i.code === "screen"));
+  // Mr Morris arrives on Day 3 affected by the broken projector -> CORRECT to Screen 1 is compliant service
+  const morrisDay3 = Game.state.currentCustomer;
+  assert.strictEqual(morrisDay3.person.id, "mr_morris");
+  assert.strictEqual(morrisDay3.ticket.filmId, "planet_x");
+  const evMorris3 = Game.evaluateCustomerCase(morrisDay3);
+  assert.deepEqual(evMorris3.validActions, ["CORRECT"]);
+  assert.ok(evMorris3.issues.some(i => i.code === "screen"));
+
+  // Day 4: Someone Is Cheating (duplicates, promo tickets, 10-minute late limit, and late dilemma)
+  Game.state.day = 4;
+  Game.startShift();
 
   const dupCust = Game.generateCustomerScenario("duplicate");
   Game.finalizeCustomerAtWindow(dupCust);
@@ -245,33 +244,55 @@ test("4. Day 3 rules: Planet X moved to Screen 1, duplicate serials refused, Pro
   Game.finalizeCustomerAtWindow(promoCust);
   const evPromo = Game.evaluateCustomerCase(promoCust);
   assert.deepEqual(evPromo.validActions, ["REFUSE"], "Promo tickets with wrong film cannot be corrected");
+
+  const lateDilemma = Game.generateCustomerScenario("dilemma_late_day4");
+  Game.finalizeCustomerAtWindow(lateDilemma);
+  assert.strictEqual(lateDilemma.person.id, "mr_morris");
+  assert.deepEqual(Game.evaluateCustomerCase(lateDilemma).validActions, ["QUESTION"]);
+  Game.state.currentCustomer = lateDilemma;
+  Game.askCustomerQuestion("which_film", "Which film are you going to see?");
+  const evAfterQ = Game.evaluateCustomerCase(lateDilemma);
+  assert.deepEqual(evAfterQ.validActions, ["REFUSE"]);
+  assert.strictEqual(evAfterQ.discretionary, true);
+  const admitRes = Game.applyDecision(lateDilemma, "ADMIT");
+  assert.strictEqual(admitRes.accepted, true);
+  assert.strictEqual(admitRes.exception, true);
+  assert.strictEqual(admitRes.compliant, false);
 });
 
-test("5. Day 4 rules: TV Lounge schedule active and TV room mismatches correctable", () => {
-  const { Game } = createHarness(404);
-  Game.state.day = 4;
-  Game.startShift();
+test("5. TV Lounge completely removed from Campaign 1 while generic engine support remains intact for other campaigns", () => {
+  const { Game, sandbox } = createHarness(404);
+  const firstWeek = sandbox.window.CinemaChaos.CampaignRegistry.get("the-first-week");
+  const firstWeekSource = fs.readFileSync(path.join(ROOT, "js/campaigns/the-first-week.js"), "utf8");
 
-  assert.strictEqual(Game.state.tvSchedule.length, 7);
+  assert.ok(!firstWeekSource.includes("TV Lounge"), "the-first-week.js must contain zero references to TV Lounge");
+  assert.strictEqual(firstWeek.languagePack.tvLoungeSchedule.length, 0);
 
-  const tvValid = Game.generateCustomerScenario("tv");
-  Game.finalizeCustomerAtWindow(tvValid);
-  assert.deepEqual(Game.evaluateCustomerCase(tvValid).validActions, ["ADMIT"]);
-
-  const tvWrong = Game.generateCustomerScenario("tv_wrong");
-  Game.finalizeCustomerAtWindow(tvWrong);
-  const evTvWrong = Game.evaluateCustomerCase(tvWrong);
-  assert.deepEqual(evTvWrong.validActions, ["CORRECT"]);
-  assert.ok(evTvWrong.issues.some(i => i.code === "screen"));
+  for (let day = 1; day <= 8; day++) {
+    Game.prepareDaySchedule(day);
+    assert.strictEqual(Game.state.tvSchedule.length, 0, `Day ${day} of Campaign 1 must have 0 TV Lounge screenings`);
+    const dayCfg = Game.dayConfig(day);
+    assert.strictEqual(Boolean(dayCfg.policies.tvLoungeOpen), false, `Day ${day} must have tvLoungeOpen: false`);
+    assert.ok(!dayCfg.casePool.some(t => t.startsWith("tv")), `Day ${day} casePool must not contain tv cases`);
+  }
 });
 
-test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, Screen 2 Red rule after 19:10, VIP pass", () => {
+test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, VIP pass, and Mr Blackwood's conflicting VIP pressure", () => {
   const { Game } = createHarness(505);
   Game.state.day = 5;
   Game.startShift();
 
   assert.strictEqual(Game.screening("love_in_paris").status, "CANCELLED");
   assert.ok(Game.screening("happy_penguins_late"), "Extra show happy_penguins_late should exist on Day 5");
+
+  // First scripted encounter on Day 5 is Mr Blackwood demanding you admit unlisted VIP-000-CASH
+  const blackwood = Game.state.currentCustomer;
+  assert.strictEqual(blackwood.person.id, "mr_blackwood");
+  assert.strictEqual(blackwood.ticket.serial, "VIP-000-CASH");
+  assert.strictEqual(blackwood.managerDirective, true);
+  const evBlackwood = Game.evaluateCustomerCase(blackwood);
+  assert.deepEqual(evBlackwood.validActions, ["REFUSE"]);
+  assert.ok(evBlackwood.issues.some(i => i.code === "vip"));
 
   // Cancelled film requires questioning customer then correcting
   const cancCust = Game.generateCustomerScenario("cancelled");
@@ -281,24 +302,11 @@ test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, Screen
   Game.askCustomerQuestion("which_film", "Which film are you going to see?");
   assert.deepEqual(Game.evaluateCustomerCase(cancCust).validActions, ["CORRECT"]);
 
-  // VIP pass valid
-  const vipCust = Game.generateCustomerScenario("vip");
+  // Authorized VIP pass (Mystery Customer VIP-900-INSPECTOR) is valid
+  const vipCust = Game.generateCustomerScenario("mystery_day5");
   Game.finalizeCustomerAtWindow(vipCust);
+  assert.strictEqual(vipCust.ticket.serial, "VIP-900-INSPECTOR");
   assert.deepEqual(Game.evaluateCustomerCase(vipCust).validActions, ["ADMIT"]);
-
-  // Screen 2 Red rule after 19:10 (1151 mins)
-  Game.state.clockMins = 1152;
-  const redCust = Game.generateCustomerScenario("red");
-  Game.finalizeCustomerAtWindow(redCust);
-  assert.strictEqual(redCust.person.wearingRed, true);
-  assert.deepEqual(Game.evaluateCustomerCase(redCust).validActions, ["ADMIT"]);
-
-  const noRedCust = Game.generateCustomerScenario("no_red");
-  Game.finalizeCustomerAtWindow(noRedCust);
-  assert.strictEqual(noRedCust.person.wearingRed, false);
-  const evNoRed = Game.evaluateCustomerCase(noRedCust);
-  assert.ok(evNoRed.issues.some(i => i.code === "red"));
-  assert.deepEqual(evNoRed.validActions, ["REFUSE"]);
 });
 
 test("7. CampaignRegistry registers 'the-first-week' with 7-day structure and validates schema", () => {
@@ -313,8 +321,10 @@ test("7. CampaignRegistry registers 'the-first-week' with 7-day structure and va
   assert.strictEqual(firstWeek.title, "The First Week");
   assert.strictEqual(firstWeek.subtitle, "7 Days · Learn the Job");
   assert.strictEqual(firstWeek.totalDays, 7);
+  assert.strictEqual(firstWeek.playableDaysCount, 7);
   assert.strictEqual(Object.keys(firstWeek.days).length, 7);
   assert.ok(firstWeek.endlessDay, "Endless mode should be defined separately from the 7 campaign days");
+  assert.strictEqual(firstWeek.endlessDay.dayNum, 8);
 
   // Verify Wednesday relocation, Friday cancellation + extra show, and scripted encounters are represented in data
   assert.strictEqual(firstWeek.days[3].scheduleChanges[0].type, "relocate");
@@ -349,7 +359,7 @@ test("7. CampaignRegistry registers 'the-first-week' with 7-day structure and va
   assert.throws(() => reg.validate(badEncounterScreening), /Unknown targetScreeningId 'ghost_film'/);
 
   const badTriggerScreening = makeDraft();
-  badTriggerScreening.days[2].scriptedEncounters[0].trigger.requireLateScreeningId = "unknown_late_film";
+  badTriggerScreening.days[4].scriptedEncounters[5].trigger.requireLateScreeningId = "unknown_late_film";
   assert.throws(() => reg.validate(badTriggerScreening), /Unknown requireLateScreeningId 'unknown_late_film'/);
 
   const badCharacterRef = makeDraft();
@@ -365,7 +375,7 @@ test("7. CampaignRegistry registers 'the-first-week' with 7-day structure and va
   assert.throws(() => reg.validate(badPolicyType), /Unsupported policy or rule type 'unsupportedRule'/);
 
   const badCondRule = makeDraft();
-  badCondRule.days[5].policies.conditionalScreenRules[0].type = "unsupported_cond_type";
+  badCondRule.days[5].policies.conditionalScreenRules = [{ type: "unsupported_cond_type" }];
   assert.throws(() => reg.validate(badCondRule), /Unsupported conditional rule type 'unsupported_cond_type'/);
 
   const badCasePoolType = makeDraft();
@@ -659,22 +669,24 @@ test("14. Campaign-specific inspection text, active-shift switch protection, and
   );
   assert.ok(day1Compare.message.includes("No conditional appearance rule is active"), "Day 1 should report no conditional appearance rule active");
 
-  // 3. Verify inspection text on Day 5 of The First Week preserves Friday red-clothing rule
-  Game.state.day = 5;
+  // 3. Verify inspection text on Day 3 of The First Week detects obvious disguises vs normal appearance
+  Game.state.day = 3;
   Game.startShift();
-  Game.state.currentCustomer.person.wearingRed = true;
-  const day5RedCompare = Game.compareTwoInspectedItems(
-    { category: "portrait", value: "WEARING RED", label: "Customer" },
-    { category: "rule", value: "red", label: "Screen 2: red clothes" }
+  Game.state.currentCustomer.person.obviousDisguise = true;
+  Game.state.currentCustomer.person.disguiseIssueText = "Customer is wearing a glued-on fake beard.";
+  const day3DisguiseCompare = Game.compareTwoInspectedItems(
+    { category: "portrait", value: "p_leo", label: "Customer" },
+    { category: "rule", value: "age", label: "Age ratings & ID" }
   );
-  assert.strictEqual(day5RedCompare.message, "Red clothes. Screen 2 requires red after 19:10. All other rules apply.");
+  assert.strictEqual(day3DisguiseCompare.isMatch, false);
+  assert.ok(day3DisguiseCompare.message.includes("glued-on fake beard"));
 
-  Game.state.currentCustomer.person.wearingRed = false;
-  const day5NoRedCompare = Game.compareTwoInspectedItems(
-    { category: "portrait", value: "NOT RED", label: "Customer" },
-    { category: "rule", value: "red", label: "Screen 2: red clothes" }
+  Game.state.currentCustomer.person.obviousDisguise = false;
+  const day3NormalCompare = Game.compareTwoInspectedItems(
+    { category: "portrait", value: "p_normal", label: "Customer" },
+    { category: "rule", value: "age", label: "Age ratings & ID" }
   );
-  assert.strictEqual(day5NoRedCompare.message, "No red clothes. Screen 2 requires red after 19:10. All other rules apply.");
+  assert.ok(day3NormalCompare.message.includes("No conditional appearance rule is active"));
 
   // 4. Verify active-shift protection when selecting campaigns from the menu
   const activeCust = Game.state.currentCustomer;
@@ -931,11 +943,11 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
     "Feedback must state specific warning reason and count"
   );
 
-  // 6. Deliberate discretionary admission (Day 2 late dilemma) issues a warning WITHOUT counting as an inspection mistake
-  Game.state.day = 2;
+  // 6. Deliberate discretionary admission (Day 4 late dilemma) issues a warning WITHOUT counting as an inspection mistake
+  Game.state.day = 4;
   Game.startShift();
   Game.state.clockMins = 1108; // Past 18:25 so 18:15 screening is >10 mins late
-  const dilemmaCust = Game.generateCustomerScenario("morris");
+  const dilemmaCust = Game.generateCustomerScenario("dilemma_late_day4");
   Game.finalizeCustomerAtWindow(dilemmaCust);
   Game.state.currentCustomer = dilemmaCust;
   UI.renderCustomer(dilemmaCust);
@@ -981,12 +993,12 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
   assert.strictEqual(doc.getElementById("reportWarnings").textContent, `1 / ${Game.getMaxWarnings("normal")}`);
   assert.strictEqual(String(doc.getElementById("reportMistakes").textContent), "0");
   assert.strictEqual(String(doc.getElementById("reportCustomersLost").textContent), "1");
-  assert.ok(Game.state.completedDays.includes(2), "Passing Day 2 must record Day 2 in completedDays");
+  assert.ok(Game.state.completedDays.includes(4), "Passing Day 4 must record Day 4 in completedDays");
   assert.strictEqual(doc.getElementById("nextDayContinueBtn").classList.contains("hidden"), false);
 
   const advancedOk = Game.advanceToNextDay();
   assert.strictEqual(advancedOk, true);
-  assert.strictEqual(Game.state.day, 3, "Advancing after passing Day 2 must unlock Day 3");
+  assert.strictEqual(Game.state.day, 5, "Advancing after passing Day 4 must unlock Day 5");
   assert.strictEqual(Game.state.warnings, 0, "Advancing to next day must reset warnings to 0");
 
   // 3, 9 & 10. Failing immediately when warning threshold is reached, blocking progression, and requiring replay
@@ -1021,21 +1033,21 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
     `You received ${limit} management warnings. The limit for this shift was ${limit}.`
   );
   assert.strictEqual(doc.getElementById("reportWarnings").textContent, `${limit} / ${limit}`);
-  assert.strictEqual(Game.state.completedDays.includes(3), false, "Failing Day 3 must NOT add Day 3 to completedDays");
+  assert.strictEqual(Game.state.completedDays.includes(5), false, "Failing Day 5 must NOT add Day 5 to completedDays");
   assert.strictEqual(doc.getElementById("nextDayContinueBtn").classList.contains("hidden"), true, "Continue button must be hidden after failure");
-  assert.ok(doc.getElementById("replayShiftBtn").textContent.includes("Replay Day 3"), "Replay button must indicate Day 3 must be replayed");
+  assert.ok(doc.getElementById("replayShiftBtn").textContent.includes("Replay Day 5"), "Replay button must indicate Day 5 must be replayed");
 
-  // Attempting to advance after failure (or bypass via menu) must not unlock Day 4
+  // Attempting to advance after failure (or bypass via menu) must not unlock Day 6
   assert.strictEqual(Game.advanceToNextDay(), false, "advanceToNextDay() must refuse to advance after a failed shift");
-  assert.strictEqual(Game.state.day, 3, "Day must remain 3 after failed shift");
+  assert.strictEqual(Game.state.day, 5, "Day must remain 5 after failed shift");
 
   UI.openCampaignSelectModal();
   Game.startOrContinueCampaign("the-first-week");
-  assert.strictEqual(Game.state.day, 3, "Continuing from Campaign Selection Screen must stay on Day 3");
+  assert.strictEqual(Game.state.day, 5, "Continuing from Campaign Selection Screen must stay on Day 5");
 
-  // Replaying current day resets shift counters and prepares Day 3 briefing cleanly
+  // Replaying current day resets shift counters and prepares Day 5 briefing cleanly
   Game.replayCurrentDay();
-  assert.strictEqual(Game.state.day, 3);
+  assert.strictEqual(Game.state.day, 5);
   assert.strictEqual(Game.state.warnings, 0);
   assert.strictEqual(Game.state.lastShiftDismissed, false);
   assert.strictEqual(Game.state.shiftStats.mistakes, 0);
@@ -1060,6 +1072,407 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
     doc.getElementById("deskFeedbackBanner").textContent.includes(`Ticket refused incorrectly — Management warning 1 / ${chaosLimit}`),
     "Warning feedback must be consistent across campaigns"
   );
+});
+
+test("17. Seven-day campaign progression (Monday Day 1 through Sunday Day 7) and Endless Mode Day 8", () => {
+  const { Game, sandbox } = createHarness(1717);
+  const doc = sandbox.document;
+  const expectedDays = [
+    [1, "MONDAY", "Day 1 — The New Employee"],
+    [2, "TUESDAY", "Day 2 — Not Old Enough"],
+    [3, "WEDNESDAY", "Day 3 — The Broken Projector"],
+    [4, "THURSDAY", "Day 4 — Someone Is Cheating"],
+    [5, "FRIDAY", "Day 5 — Special Treatment"],
+    [6, "SATURDAY", "Day 6 — The Big Premiere"],
+    [7, "SUNDAY", "Day 7 — The Final Inspection"]
+  ];
+
+  for (const [dayNum, dayName, title] of expectedDays) {
+    assert.strictEqual(Game.state.day, dayNum);
+    const cfg = Game.dayConfig(dayNum);
+    assert.strictEqual(cfg.dayName, dayName);
+    assert.strictEqual(cfg.title, title);
+
+    Game.startShift();
+    // Complete shift cleanly at closing time
+    Game.state.clockMins = Game.state.clockEndMins;
+    Game.nextCustomerFromQueue();
+    assert.strictEqual(Game.state.shiftActive, false);
+    assert.strictEqual(Game.state.lastShiftDismissed, false);
+    assert.ok(Game.state.completedDays.includes(dayNum));
+
+    if (dayNum < 7) {
+      assert.ok(doc.getElementById("nextDayContinueBtn").textContent.includes(`CONTINUE TO DAY ${dayNum + 1}`));
+      assert.strictEqual(Game.advanceToNextDay(), true);
+    } else {
+      assert.ok(doc.getElementById("nextDayContinueBtn").textContent.includes("ENTER ENDLESS MODE"));
+      assert.ok(Game.state.lastCampaignEnding, "Completing Day 7 must evaluate a campaign ending");
+      assert.strictEqual(Game.advanceToNextDay(), true);
+    }
+  }
+
+  // Day 8 is Endless Mode
+  assert.strictEqual(Game.state.day, 8);
+  assert.strictEqual(Game.dayConfig(8).dayName, "ENDLESS SHIFT");
+});
+
+test("18. Age restriction rules, exact date-of-birth calculation (on/before/after birthday, leap years), and ID inspection", () => {
+  const { Game } = createHarness(1818);
+  Game.state.day = 2; // Tuesday, 2026-10-13
+  Game.startShift();
+
+  // Exact birthday boundary tests on 2026-10-13
+  assert.strictEqual(Game.calculateAge("2010-10-13", "2026-10-13"), 16, "Birthday today (13 Oct 2010) must be exactly 16");
+  assert.strictEqual(Game.calculateAge("2010-10-12", "2026-10-13"), 16, "Birthday yesterday (12 Oct 2010) must be 16");
+  assert.strictEqual(Game.calculateAge("2010-10-14", "2026-10-13"), 15, "Birthday tomorrow (14 Oct 2010) must still be 15");
+
+  // Leap year and invalid calendar date validation
+  assert.strictEqual(Game.isValidCalendarDate("2008-02-29"), true, "2008 is a leap year");
+  assert.strictEqual(Game.isValidCalendarDate("2009-02-29"), false, "2009 is not a leap year");
+  assert.strictEqual(Game.isValidCalendarDate("2010-02-30"), false, "Feb 30 is never valid");
+
+  // 15-year-old turning 16 tomorrow must be refused for [16] The Dark House
+  const almost16 = Game.generateCustomerScenario("valid");
+  Game.finalizeCustomerAtWindow(almost16);
+  almost16.ticket.filmId = "the_dark_house";
+  almost16.ticket.filmTitle = "The Dark House";
+  almost16.ticket.genreLabel = "Horror";
+  almost16.ticket.screen = 3;
+  almost16.ticket.time = "21:00";
+  almost16.known.preference = { ids: ["the_dark_house"] };
+  almost16.intent = { ids: ["the_dark_house"] };
+  Game.state.bookings[almost16.ticket.serial].screeningId = "the_dark_house";
+  almost16.claimedAge = 15;
+  almost16.trueAge = 15;
+  almost16.idCard = { exists: true, presented: true, holderName: almost16.person.name, dob: "2010-10-14" };
+  const evAlmost16 = Game.evaluateCustomerCase(almost16);
+  assert.deepEqual(evAlmost16.validActions, ["REFUSE"]);
+  assert.ok(evAlmost16.issues.some(i => i.code === "underage"));
+
+  // Turning 16 today (2010-10-13) must be admitted for [16] The Dark House
+  almost16.claimedAge = 16;
+  almost16.trueAge = 16;
+  almost16.idCard.dob = "2010-10-13";
+  const evExact16 = Game.evaluateCustomerCase(almost16);
+  assert.deepEqual(evExact16.validActions, ["ADMIT"]);
+
+  // Inspect Mode comparisons for ID DOB, age, name, and photo
+  Game.state.currentCustomer = almost16;
+  const dobScheduleCmp = Game.compareTwoInspectedItems(
+    { category: "id_dob", value: "2010-10-13", label: "ID DOB" },
+    { category: "schedule_row", value: "the_dark_house", label: "The Dark House" }
+  );
+  assert.strictEqual(dobScheduleCmp.isMatch, true);
+  assert.ok(dobScheduleCmp.message.includes("Age 16"));
+});
+
+test("19. Leo's six-day narrative arc (Days 2-6 disguises/forgeries refused, Day 7 honest visit for G comedy admitted)", () => {
+  const { Game } = createHarness(1919);
+
+  // Day 2: The Simple Lie (claims 16, no ID, wants The Dark House [16]) -> REFUSE
+  Game.state.day = 2;
+  Game.startShift();
+  const leo2 = Game.state.currentCustomer;
+  assert.strictEqual(leo2.person.id, "leo");
+  assert.strictEqual(leo2.ticket.filmId, "the_dark_house");
+  assert.deepEqual(Game.evaluateCustomerCase(leo2).validActions, ["REFUSE"]);
+  Game.makeDecision("REFUSE");
+  assert.strictEqual(Game.state.story.leo_day2_outcome, "refused");
+  assert.strictEqual(Game.state.story.leo_caught_count, 1);
+
+  // Day 3: The Fake Beard -> REFUSE
+  Game.state.day = 3;
+  Game.startShift();
+  const leo3 = Game.generateCustomerScenario("leo_day3");
+  Game.finalizeCustomerAtWindow(leo3);
+  Game.state.currentCustomer = leo3;
+  assert.strictEqual(leo3.person.id, "leo");
+  assert.strictEqual(leo3.person.fakeBeard, true);
+  assert.strictEqual(leo3.person.obviousDisguise, true);
+  assert.ok(leo3.statement.includes("not Leo from yesterday"), "Day 3 dialogue reflects Day 2 refusal");
+  assert.deepEqual(Game.evaluateCustomerCase(leo3).validActions, ["REFUSE"]);
+  Game.makeDecision("REFUSE");
+  assert.strictEqual(Game.state.story.leo_beard_detected, "yes");
+  assert.strictEqual(Game.state.story.leo_caught_count, 2);
+
+  // Day 4: The False Identity ("Mr Leonardo Smith" in oversized suit & sunglasses, father's ID) -> REFUSE
+  Game.state.day = 4;
+  Game.startShift();
+  const leo4 = Game.generateCustomerScenario("leo_day4");
+  Game.finalizeCustomerAtWindow(leo4);
+  Game.state.currentCustomer = leo4;
+  assert.strictEqual(leo4.person.oversizedSuit, true);
+  assert.strictEqual(leo4.person.sunglasses, true);
+  assert.strictEqual(leo4.ticket.holderName, "Leo");
+  assert.strictEqual(leo4.idCard.holderName, "Leonardo Senior");
+  assert.ok(leo4.statement.includes("bearded imposter"), "Day 4 dialogue references Day 3 beard detection");
+  const evLeo4 = Game.evaluateCustomerCase(leo4);
+  assert.deepEqual(evLeo4.validActions, ["REFUSE"]);
+  assert.ok(evLeo4.issues.some(i => i.code === "id_name"));
+  Game.makeDecision("REFUSE");
+  assert.strictEqual(Game.state.story.leo_caught_count, 3);
+
+  // Day 5: The Fake ID (marker moustache, statedAge 17 vs DOB 2012-09-10 = age 14) -> REFUSE
+  Game.state.day = 5;
+  Game.startShift();
+  const leo5 = Game.generateCustomerScenario("leo_day5");
+  Game.finalizeCustomerAtWindow(leo5);
+  Game.state.currentCustomer = leo5;
+  assert.strictEqual(leo5.person.editedMoustache, true);
+  assert.strictEqual(leo5.idCard.statedAge, 17);
+  assert.strictEqual(leo5.idCard.dob, "2012-09-10");
+  const evLeo5 = Game.evaluateCustomerCase(leo5);
+  assert.deepEqual(evLeo5.validActions, ["REFUSE"]);
+  assert.ok(evLeo5.issues.some(i => i.code === "id_forged"));
+  Game.makeDecision("REFUSE");
+  assert.strictEqual(Game.state.story.leo_caught_count, 4);
+
+  // Day 6: The Cinema Employee (staff hat, homemade badge, STAFF-99-LEO pass) -> REFUSE
+  Game.state.day = 6;
+  Game.startShift();
+  const leo6 = Game.generateCustomerScenario("leo_day6");
+  Game.finalizeCustomerAtWindow(leo6);
+  Game.state.currentCustomer = leo6;
+  assert.strictEqual(leo6.person.staffHat, true);
+  assert.strictEqual(leo6.person.staffBadge, true);
+  assert.strictEqual(leo6.ticket.ticketType, "STAFF PASS");
+  const evLeo6 = Game.evaluateCustomerCase(leo6);
+  assert.deepEqual(evLeo6.validActions, ["REFUSE"]);
+  assert.ok(evLeo6.issues.some(i => i.code === "staff"));
+  Game.makeDecision("REFUSE");
+  assert.strictEqual(Game.state.story.leo_caught_count, 5);
+
+  // Day 7: The Honest Customer (no disguise, valid ticket for G-rated Laughing Bananas, real ID) -> MUST ADMIT
+  Game.state.day = 7;
+  Game.startShift();
+  const leo7 = Game.state.currentCustomer;
+  assert.strictEqual(leo7.person.id, "leo");
+  assert.strictEqual(leo7.person.obviousDisguise, false);
+  assert.strictEqual(leo7.ticket.filmId, "laughing_bananas");
+  assert.ok(leo7.statement.includes("No fake beard"), "Day 7 dialogue references his previous disguises");
+  const evLeo7 = Game.evaluateCustomerCase(leo7);
+  assert.deepEqual(evLeo7.validActions, ["ADMIT"], "Honest Leo on Day 7 with G-rated comedy ticket must be admitted");
+
+  // Verify that refusing Leo on Day 7 is penalized as an inspection mistake
+  const draft = Game.applyDecision(structuredClone(leo7), "REFUSE");
+  assert.strictEqual(draft.accepted, false, "Refusing honest Leo on Day 7 must be rejected as an inspection mistake");
+
+  // Admitting Leo on Day 7 succeeds compliantly
+  Game.makeDecision("ADMIT");
+  assert.strictEqual(Game.state.story.leo_day7_outcome, "helped");
+});
+
+test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris's family booking, Sofia's clue, and Blackwood's directive", () => {
+  // Branch A: Help Mr Morris, Maya, and Sofia on Days 1, 3, 4 -> verify gameplay benefits on Day 6
+  const { Game: GameHelped } = createHarness(2020);
+  GameHelped.state.day = 3;
+  GameHelped.startShift();
+
+  // Help Mr Morris on Day 3 (relocated Planet X -> Screen 1)
+  const morris3 = GameHelped.state.currentCustomer;
+  assert.strictEqual(morris3.person.id, "mr_morris");
+  GameHelped.makeDecision("CORRECT", GameHelped.screening("planet_x"));
+  assert.strictEqual(GameHelped.state.story.morris_relationship, "loyal");
+
+  // Help Maya on Day 3 (misprinted Wild World ticket -> Screen 2)
+  GameHelped.nextCustomerFromQueue();
+  const maya3 = GameHelped.state.currentCustomer;
+  assert.strictEqual(maya3.person.id, "maya");
+  GameHelped.makeDecision("CORRECT", GameHelped.screening("wild_world"));
+  assert.strictEqual(GameHelped.state.story.maya_relationship, "helped");
+
+  // Help Sofia on Day 4
+  GameHelped.state.day = 4;
+  GameHelped.startShift();
+  const sofia4 = GameHelped.state.currentCustomer;
+  assert.strictEqual(sofia4.person.id, "sofia");
+  GameHelped.makeDecision("CORRECT", GameHelped.screening("love_in_paris"));
+  assert.strictEqual(GameHelped.state.story.sofia_trust, "ally");
+
+  // Advance to Day 6 (Premiere Night): Maya's storyScheduleBoost unlocks +4 seats in planet_x (2 -> 6 seats)
+  GameHelped.state.day = 6;
+  GameHelped.startShift();
+  assert.strictEqual(GameHelped.screening("planet_x").capacity, 6, "Helping Maya on Day 3 must boost Planet X capacity from 2 to 6 on Day 6");
+  assert.strictEqual(GameHelped.screening("planet_x").status, "EXTRA ROW OPEN");
+
+  // Mr Morris's 3-person family booking on Day 6 is ready to ADMIT immediately when loyal
+  const morris6 = GameHelped.state.currentCustomer;
+  assert.strictEqual(morris6.person.id, "mr_morris");
+  assert.strictEqual(morris6.groupSize, 3);
+  assert.deepEqual(GameHelped.evaluateCustomerCase(morris6).validActions, ["ADMIT"]);
+  GameHelped.makeDecision("ADMIT");
+  assert.strictEqual(GameHelped.state.story.morris_commendation, "yes");
+
+  // Maya's 3-person premiere group for Planet X on Day 6 can be CORRECTed because the extra balcony seats are open
+  GameHelped.nextCustomerFromQueue();
+  const maya6 = GameHelped.state.currentCustomer;
+  assert.strictEqual(maya6.person.id, "maya");
+  assert.strictEqual(maya6.groupSize, 3);
+  assert.deepEqual(GameHelped.evaluateCustomerCase(maya6).validActions, ["CORRECT"]);
+
+  // Branch B: Do NOT help Mr Morris or Maya -> on Day 6, Planet X has only 2 seats so the 3-person group must be REFUSEd
+  const { Game: GameBlamed } = createHarness(2020);
+  GameBlamed.state.story = { morris_relationship: "cold", maya_relationship: "blamed", sofia_trust: "distant" };
+  GameBlamed.state.day = 6;
+  GameBlamed.startShift();
+  assert.strictEqual(GameBlamed.screening("planet_x").capacity, 2, "Without Maya's help, Planet X capacity remains 2 on Day 6");
+
+  // Mr Morris's family booking on Day 6 requires QUESTION + CORRECT when not loyal
+  const morris6Cold = GameBlamed.state.currentCustomer;
+  assert.strictEqual(morris6Cold.person.id, "mr_morris");
+  assert.deepEqual(GameBlamed.evaluateCustomerCase(morris6Cold).validActions, ["QUESTION"]);
+  GameBlamed.askCustomerQuestion("which_film", "Which film are you going to see?");
+  assert.deepEqual(GameBlamed.evaluateCustomerCase(morris6Cold).validActions, ["CORRECT"]);
+  GameBlamed.makeDecision("CORRECT", GameBlamed.screening("wild_world"));
+
+  // Maya's 3-person group for Planet X must be REFUSEd because only 2 seats exist in Screen 1
+  GameBlamed.nextCustomerFromQueue();
+  const maya6Blamed = GameBlamed.state.currentCustomer;
+  assert.strictEqual(maya6Blamed.person.id, "maya");
+  assert.deepEqual(GameBlamed.evaluateCustomerCase(maya6Blamed).validActions, ["REFUSE"]);
+});
+
+test("21. Guaranteed recurring character encounters appear reliably across multiple random seeds", () => {
+  const seeds = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];
+  const expectedByDay = {
+    1: ["mr_morris", "sofia", "mr_blackwood"],
+    2: ["leo"],
+    3: ["mr_morris", "maya", "leo"],
+    4: ["sofia", "leo", "mystery", "maya", "mr_morris"],
+    5: ["mr_blackwood", "leo", "mystery"],
+    6: ["mr_morris", "maya", "leo", "sofia", "mr_blackwood"],
+    7: ["leo", "mr_morris", "mr_blackwood", "mystery"]
+  };
+
+  for (const seed of seeds) {
+    const { Game } = createHarness(seed);
+    for (let day = 1; day <= 7; day++) {
+      Game.state.day = day;
+      Game.startShift();
+      const seenCharacterIds = [];
+      for (let step = 0; step < 6; step++) {
+        const c = Game.state.currentCustomer;
+        if (c.person.id) seenCharacterIds.push(c.person.id);
+        const ev = Game.evaluateCustomerCase(c);
+        if (ev.needsQuestion) {
+          if (c.requiredTicketQuestion) Game.askCustomerQuestion("other_ticket", "Do you have another ticket?");
+          else Game.askCustomerQuestion("which_film", "Which film are you going to see?");
+        }
+        const ev2 = Game.evaluateCustomerCase(c);
+        const action = ev2.validActions[0];
+        const target = action === "CORRECT" ? ev2.options[0] : null;
+        Game.makeDecision(action, target);
+        Game.nextCustomerFromQueue();
+      }
+      for (const reqChar of expectedByDay[day]) {
+        assert.ok(
+          seenCharacterIds.includes(reqChar),
+          `Seed ${seed}, Day ${day}: expected character '${reqChar}' in [${seenCharacterIds.join(", ")}]`
+        );
+      }
+    }
+  }
+});
+
+test("22. All five campaign endings are deterministically achievable and rendered in Sunday's report with character callbacks", () => {
+  const { Game, sandbox } = createHarness(2222);
+  const doc = sandbox.document;
+
+  // 1. Employee of the Week (clean compliance, high reputation, zero corrupt passes)
+  Game.state.day = 7;
+  Game.state.reputation = 92;
+  Game.state.story = {
+    morris_relationship: "loyal",
+    leo_day7_outcome: "helped",
+    maya_relationship: "helped",
+    manager_compliance: 0,
+    manager_conflict: 1,
+    inspection_violations: 0,
+    total_mistakes: 0
+  };
+  Game.endShift();
+  assert.strictEqual(Game.state.lastCampaignEnding.id, "employee_of_the_week");
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("Employee of the Week"));
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("Mr Morris"));
+
+  // 2. The People's Champion (helped Morris, Maya, Leo on Day 7, and made compassionate exception)
+  Game.state.reputation = 85;
+  Game.state.story = {
+    morris_day3_outcome: "helped",
+    morris_relationship: "loyal",
+    maya_relationship: "helped",
+    leo_day7_outcome: "helped",
+    total_exceptions: 1,
+    people_champion_path: "yes",
+    manager_compliance: 0,
+    manager_conflict: 1
+  };
+  Game.endShift();
+  assert.strictEqual(Game.state.lastCampaignEnding.id, "peoples_champion");
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("The People&#39;s Champion"));
+
+  // 3. Management Material (obeyed Mr Blackwood's VIP-000 directives)
+  Game.state.reputation = 76;
+  Game.state.story = {
+    manager_compliance: 2,
+    inspection_violations: 2
+  };
+  Game.endShift();
+  assert.strictEqual(Game.state.lastCampaignEnding.id, "management_material");
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("Management Material"));
+
+  // 4. The Whistleblower (refused Mr Blackwood's unlisted passes and exposed fraud with Sofia's evidence)
+  Game.state.reputation = 88;
+  Game.state.story = {
+    manager_conflict: 2,
+    manager_compliance: 0,
+    sofia_evidence: "yes",
+    whistleblower_identified: "yes",
+    inspector_day7_outcome: "helped"
+  };
+  Game.endShift();
+  assert.strictEqual(Game.state.lastCampaignEnding.id, "the_whistleblower");
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("The Whistleblower"));
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("Sofia"));
+
+  // 5. You're Fired! (dismissed or severe compliance failures)
+  Game.state.warnings = Game.getMaxWarnings("normal");
+  Game.endShift();
+  assert.strictEqual(Game.state.lastCampaignEnding.id, "youre_fired");
+  assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("You&#39;re Fired!"));
+});
+
+test("23. Extended multi-day story state and numeric counters persist across saveProgress and loadProgress", () => {
+  const { Game } = createHarness(2323);
+  Game.state.day = 6;
+  Game.state.story = {
+    morris_relationship: "loyal",
+    morris_day3_outcome: "helped",
+    sofia_trust: "ally",
+    sofia_evidence: "yes",
+    maya_relationship: "helped",
+    leo_day2_outcome: "refused",
+    leo_beard_detected: "yes",
+    leo_caught_count: 4,
+    manager_conflict: 2,
+    manager_compliance: 0,
+    inspection_violations: 0,
+    whistleblower_identified: "yes"
+  };
+  Game.saveProgress();
+
+  Game.state.day = 1;
+  Game.state.story = {};
+  Game.loadProgress("the-first-week");
+
+  assert.strictEqual(Game.state.day, 6);
+  assert.strictEqual(Game.state.story.morris_relationship, "loyal");
+  assert.strictEqual(Game.state.story.sofia_trust, "ally");
+  assert.strictEqual(Game.state.story.maya_relationship, "helped");
+  assert.strictEqual(Game.state.story.leo_beard_detected, "yes");
+  assert.strictEqual(Game.state.story.leo_caught_count, 4);
+  assert.strictEqual(Game.state.story.manager_conflict, 2);
+  assert.strictEqual(Game.state.story.whistleblower_identified, "yes");
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

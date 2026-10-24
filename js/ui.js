@@ -19,7 +19,7 @@
         c.dialogue.slice(-3).forEach(t=>{const p=document.createElement('p');p.textContent=`${t.question} — ${t.reply}`;follow.append(p);});
         follow.classList.toggle('hidden',!c.dialogue.length);
         const hint=document.getElementById('languageHintBar');hint.textContent=c.languageHint;hint.classList.toggle('hidden',!Game.state.showLanguageHints);
-        const defaultQuestions=[['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?']];
+        const defaultQuestions=[['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?'],['ask_age','How old are you?'],['ask_id','Can I see your ID, please?']];
         const questions=Game.campaign()?.playerQuestions||defaultQuestions;
         const grid=document.getElementById('questionButtonsGrid');grid.replaceChildren();
         questions.forEach(([key,label])=>{const button=document.createElement('button');button.className='bg-[#3d0d13] hover:bg-[#5c1620] text-amber-100 border border-amber-600/60 rounded-lg px-2.5 py-2 text-left text-xs font-medium';button.textContent=(c.asked.includes(key)?'✓ ':'▸ ')+label;button.onclick=()=>{Game.askCustomerQuestion(key,label);button.textContent='✓ '+label;};grid.append(button);});
@@ -28,12 +28,17 @@
       renderTicketOnDesk(c) {
         const area=document.getElementById('deskDocumentArea'),t=c.ticket;area.replaceChildren();
         if(!t.exists) {const card=document.createElement('div');card.className='ticket-slide bg-rose-950 border-2 border-dashed border-rose-400 rounded-xl p-5 text-center';card.textContent='🎟 No ticket on the desk.';area.append(card);return;}
+        const fProg=Game.screening(t.filmId);
+        const ratingSuffix=fProg?.ageRating?` · Rated ${fProg.ageRating}`:'';
         const card=document.createElement('div');
         card.className='cinema-ticket '+(t.ticketType.includes('VIP')?'ticket-vip':t.ticketType.includes('LOUNGE')?'ticket-lounge':t.ticketType==='REPLACEMENT PRINTED'?'ticket-corrected':'')+' ticket-slide p-4 font-ticket';
         card.innerHTML='<div class="border-b-2 border-slate-800 pb-2 mb-3"><div class="font-marquee text-base text-red-950">THE GRAND CINEMA</div><div class="text-xs text-slate-600">Ticket · Check all fields</div></div><div class="ticket-fields grid grid-cols-2 gap-2.5"></div>';
-        const fields=[['serial',t.serial,'Ticket number',t.serial],['ticket_film',t.filmId,`Film / Programme · ${t.genreLabel}`,t.filmTitle],['ticket_screen',t.screen,'Screen / Room',t.screen==='TV Lounge'?'TV Lounge':'Screen '+t.screen],['ticket_time',t.time,'Start time',t.time],['ticket_date',t.date,'Day',t.date],['ticket_seats',t.seats,'Booked seats',t.seats],['ticket_type',t.ticketType,'Ticket type',t.ticketType]];
+        const fields=[['serial',t.serial,'Ticket number',t.serial],['ticket_film',t.filmId,`Film / Programme · ${t.genreLabel}${ratingSuffix}`,t.filmTitle],['ticket_screen',t.screen,'Screen / Room',t.screen==='TV Lounge'?'TV Lounge':'Screen '+t.screen],['ticket_time',t.time,'Start time',t.time],['ticket_date',t.date,'Day',t.date],['ticket_seats',t.seats,'Booked seats',t.seats],['ticket_type',t.ticketType,'Ticket type',t.ticketType]];
+        if (t.holderName) {
+          fields.push(['ticket_holder', t.holderName, 'Ticket holder name', t.holderName]);
+        }
         fields.forEach(([kind,value,label,display])=>{
-          const node=document.createElement('button');node.type='button';node.className='inspectable text-left bg-white/70 border border-slate-400/80 p-2 rounded '+(['serial','ticket_film','ticket_type'].includes(kind)?'col-span-2':'');
+          const node=document.createElement('button');node.type='button';node.className='inspectable text-left bg-white/70 border border-slate-400/80 p-2 rounded '+(['serial','ticket_film','ticket_type','ticket_holder'].includes(kind)?'col-span-2':'');
           const name=document.createElement('span');name.className='text-[10px] uppercase text-slate-600 block font-sans font-bold';name.textContent=label;
           const text=document.createElement('span');text.className='font-bold text-sm text-slate-950';text.textContent=display;
           node.append(name,text);node.onclick=()=>Game.handleInspectClick(kind,value,label+': '+display,node);
@@ -48,19 +53,91 @@
           dilemmaNote.textContent='⚖️ Discretionary dilemma: Management may issue a warning if you make an exception.';
           card.append(dilemmaNote);
         }
+        if(c.managerDirective) {
+          const mgrNote=document.createElement('div');
+          mgrNote.className='text-xs mt-2 p-2 rounded bg-purple-100/95 border border-purple-700 text-purple-950 font-sans font-semibold';
+          mgrNote.textContent='👔 Manager Instruction: Your manager demands you ADMIT this pass despite the official rules.';
+          card.append(mgrNote);
+        }
         if(Game.state.ownedUpgrades.includes('computer')) {const note=document.createElement('div');note.className='text-xs mt-2 font-bold';note.textContent=Game.state.usedSerials.includes(t.serial)?'💻 USED ticket number':'💻 Ticket number not used';card.append(note);}
         if(Game.state.ownedUpgrades.includes('scanner')) {const f=Game.screening(t.filmId);const scan=document.createElement('button');scan.className='mt-2 text-xs font-bold border border-amber-700 rounded p-2';scan.textContent='🔍 Scan printed fields';scan.onclick=()=>{
           const fields=f?['filmTitle','screen','time'].filter(k=>String(t[k])!==String(f[k==='filmTitle'?'title':k])):[];
           document.getElementById('inspectStatusText').textContent=!f?'No programme entry.':fields.length?'Printed fields differ: '+fields.join(', '):'Printed film, room and time match the programme.';
         };card.append(scan);}
         area.append(card);
+
+        if (Game.policies().checkAgeRestrictions || c.idCard) {
+          if (c.idCard?.exists && c.idCard.presented !== false) {
+            const idBox = document.createElement('div');
+            idBox.className = 'mt-2.5 bg-slate-100 border-2 border-slate-500 rounded-xl p-3 text-slate-900 font-ticket shadow-md';
+            const header = document.createElement('div');
+            header.className = 'flex items-center justify-between border-b border-slate-400 pb-1 mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-700';
+            header.textContent = `🪪 Identity Card · Today: ${Game.policies().dateDisplay || Game.currentDateISO()}`;
+            idBox.append(header);
+
+            const body = document.createElement('div');
+            body.className = 'grid grid-cols-3 gap-2 items-center';
+
+            const photoBtn = document.createElement('button');
+            photoBtn.type = 'button';
+            photoBtn.className = 'inspectable bg-slate-800 border border-slate-500 rounded p-1 flex flex-col items-center justify-center';
+            const portraitTarget = c.idCard.portraitPerson || (c.idCard.photoAltered ? { ...c.person, editedMoustache: true } : c.person);
+            photoBtn.innerHTML = `<div class="w-10 h-12 overflow-hidden">${CHARACTERS.renderPortraitSVG(portraitTarget, 'neutral')}</div><span class="text-[9px] text-amber-200 mt-0.5">${c.idCard.photoAltered || c.idCard.photoMismatch ? 'Photo (Edited?)' : 'ID Photo'}</span>`;
+            photoBtn.onclick = () => Game.handleInspectClick('id_photo', (c.idCard.photoMismatch || c.idCard.photoAltered) ? 'ALTERED' : (c.person.id || c.person.name), 'ID Card Photo', photoBtn);
+            body.append(photoBtn);
+
+            const infoCol = document.createElement('div');
+            infoCol.className = 'col-span-2 space-y-1.5';
+
+            const nameBtn = document.createElement('button');
+            nameBtn.type = 'button';
+            nameBtn.className = 'inspectable w-full text-left bg-white border border-slate-400 px-2 py-1 rounded text-xs';
+            nameBtn.textContent = `Name: ${c.idCard.holderName || c.person.name}`;
+            nameBtn.onclick = () => Game.handleInspectClick('id_name', c.idCard.holderName || c.person.name, `ID Name: ${c.idCard.holderName || c.person.name}`, nameBtn);
+            infoCol.append(nameBtn);
+
+            const dobBtn = document.createElement('button');
+            dobBtn.type = 'button';
+            dobBtn.className = 'inspectable w-full text-left bg-white border border-slate-400 px-2 py-1 rounded text-xs font-bold';
+            dobBtn.textContent = `DOB: ${c.idCard.dob}`;
+            dobBtn.onclick = () => Game.handleInspectClick('id_dob', c.idCard.dob, `ID Date of Birth: ${c.idCard.dob}`, dobBtn);
+            infoCol.append(dobBtn);
+
+            if (c.idCard.statedAge !== undefined) {
+              const ageBtn = document.createElement('button');
+              ageBtn.type = 'button';
+              ageBtn.className = 'inspectable w-full text-left bg-amber-50 border border-amber-500 px-2 py-1 rounded text-xs font-bold text-amber-950';
+              ageBtn.textContent = `Printed Age: ${c.idCard.statedAge}`;
+              ageBtn.onclick = () => Game.handleInspectClick('id_age', c.idCard.statedAge, `ID Printed Age: ${c.idCard.statedAge}`, ageBtn);
+              infoCol.append(ageBtn);
+            }
+
+            body.append(infoCol);
+            idBox.append(body);
+            area.append(idBox);
+          } else if (c.idCard?.exists && c.idCard.presented === false) {
+            const reqBtn = document.createElement('button');
+            reqBtn.type = 'button';
+            reqBtn.className = 'mt-2 w-full bg-amber-800 hover:bg-amber-700 text-amber-100 border border-amber-400 rounded-lg px-3 py-2 text-xs font-bold shadow';
+            reqBtn.textContent = '🪪 Ask Customer for ID Card';
+            reqBtn.onclick = () => Game.askCustomerQuestion('ask_id', 'Can I see your ID, please?');
+            area.append(reqBtn);
+          } else if (!c.idCard?.exists && (c.idRequested || c.asked?.includes('ask_id'))) {
+            const noId = document.createElement('div');
+            noId.className = 'mt-2 bg-rose-950/90 border border-rose-400 rounded-lg px-3 py-2 text-xs text-rose-100 font-ticket';
+            noId.textContent = `🪪 No ID Card: ${c.idCard?.reason || 'Customer cannot present valid identification.'}`;
+            area.append(noId);
+          }
+        }
       },
       renderScheduleBinder() {
-        const s=Game.state;document.getElementById('scheduleDayTag').textContent=Game.today();
+        const s=Game.state, pol=Game.policies();
+        document.getElementById('scheduleDayTag').textContent=pol.dateDisplay?`${Game.today()} · ${pol.dateDisplay}`:Game.today();
         const render=(id,items)=>{const list=document.getElementById(id);list.replaceChildren();items.forEach(f=>{
           const node=document.createElement('button');node.type='button';node.className='inspectable w-full text-left p-2 rounded-lg border '+(f.status==='CANCELLED'?'bg-red-100 border-red-400':'bg-amber-50 border-amber-300');
           node.innerHTML='<div class="flex justify-between gap-2"><strong class="text-xs text-slate-900"></strong><span class="room text-[10px] bg-red-900 text-amber-100 rounded px-1"></span></div><div class="details font-ticket text-[11px] text-slate-700"></div>';
-          node.querySelector('strong').textContent=f.title+' · '+f.genreLabel;
+          const ratingBadge = f.ageRating ? ` [${f.ageRating}]` : '';
+          node.querySelector('strong').textContent=f.title+ratingBadge+' · '+f.genreLabel;
           node.querySelector('.room').textContent=f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen;
           node.querySelector('.details').textContent=`${f.time} · ${Game.freeSeats(f)} free / ${f.capacity} total${f.status!=='ON TIME'?' · '+f.status:''}`;
           node.onclick=()=>Game.handleInspectClick('schedule_row',f.id,`${f.title} · ${f.time}`,node);list.append(node);
@@ -85,7 +162,30 @@
         const langSelect = document.getElementById('teacherLangSelect');
         if (langSelect) langSelect.value = Game.state.selectedLanguageMode || Game.state.languageMode || 'elementary';
         document.getElementById('teacherDiffSelect').value=Game.state.difficulty;
-        document.getElementById('teacherDaySelect').value=Game.state.day;
+        const daySelect = document.getElementById('teacherDaySelect');
+        const camp = Game.campaign();
+        if (daySelect && camp && typeof daySelect.replaceChildren === 'function') {
+          const totalDays = camp.playableDaysCount || camp.totalDays || 7;
+          const opts = [];
+          for (let d = 1; d <= totalDays; d++) {
+            const cfg = camp.days?.[d];
+            if (cfg) {
+              const opt = document.createElement('option');
+              opt.value = String(d);
+              opt.textContent = `Day ${d}: ${cfg.dayName} — ${cfg.title.replace(/^Day\s+\d+\s+[—-]\s+/i, '')}`;
+              opts.push(opt);
+            }
+          }
+          if (camp.endlessDay) {
+            const endlessNum = camp.endlessDay.dayNum || (totalDays + 1);
+            const opt = document.createElement('option');
+            opt.value = String(endlessNum);
+            opt.textContent = `Endless Mode (Day ${endlessNum})`;
+            opts.push(opt);
+          }
+          if (opts.length) daySelect.replaceChildren(...opts);
+        }
+        daySelect.value=String(Game.state.day);
         document.getElementById('teacherToggleHints').checked=Game.state.showLanguageHints;
         document.getElementById('teacherToggleTV').checked=Game.state.enableTVContent;
         document.getElementById('teacherToggleTimer').checked=Game.state.disableQueueWalkouts;
@@ -599,6 +699,13 @@
         rules.push(!pol.allowCorrections
           ? {id:'printer',title:'Printer closed',text:'Today: admit correct tickets. Refuse tickets with errors.'}
           : {id:'printer',title:'Changes',text:'Standard tickets for today can be changed to a film the customer accepts. It must have enough seats. A changed ticket lets them enter.'});
+        if (pol.checkAgeRestrictions) {
+          rules.push({
+            id:'age',
+            title: pol.ageRuleTitle || 'Age classifications & ID',
+            text: pol.ageRuleText || camp.ageRuleText || `Check film age ratings (G: all ages, 12: min age 12, 16: min age 16). Customers for 12 or 16 films must present a valid ID card matching their name, photo and date of birth${pol.dateDisplay ? ' (Today: ' + pol.dateDisplay + ')' : ''}.`
+          });
+        }
         if (pol.lateToleranceMins !== null && pol.lateToleranceMins !== undefined) {
           rules.push({
             id:'late',
@@ -694,12 +801,19 @@
         `).join('');
 
         const vContainer = document.getElementById('vipListContainer');
-        vContainer.innerHTML = Game.state.authorizedVips.map(vip => `
+        const vipHtml = (Game.state.authorizedVips || []).map(vip => `
           <div onclick="Game.handleInspectClick('vip_log', '${vip}', 'Authorized VIP: ${vip}', this)"
                class="inspectable p-1.5 rounded bg-purple-50 border border-purple-300 text-purple-950 font-bold">
             ✅ ${vip} — Signed by The Manager
           </div>
         `).join('');
+        const staffHtml = (Game.state.authorizedStaff || []).map(st => `
+          <div onclick="Game.handleInspectClick('vip_log', '${st}', 'Authorized Staff: ${st}', this)"
+               class="inspectable p-1.5 rounded bg-emerald-50 border border-emerald-300 text-emerald-950 font-bold">
+            🪪 ${st} — Authorised Cinema Staff
+          </div>
+        `).join('');
+        vContainer.innerHTML = vipHtml + staffHtml;
       },
 
       renderUpgradesStrip() {
@@ -869,8 +983,16 @@
           }
         }
 
+        const ending = s.day === playableMax && Game.evaluateCampaignEnding ? Game.evaluateCampaignEnding(dismissed) : null;
+        if (ending) {
+          s.lastCampaignEnding = ending;
+          s.story.campaign_ending = ending.id;
+        }
+
         let comment = `"Acceptable work. You stayed below the warning limit (${warningsCount} / ${maxWarnings}). Please remember all rules tomorrow."`;
-        if (dismissed) {
+        if (ending && ending.managerQuote) {
+          comment = ending.managerQuote;
+        } else if (dismissed) {
           comment = `"You received ${warningsCount} of ${maxWarnings} permitted management warnings, so your shift was ended early. Replay Day ${s.day} and check the rules carefully to advance."`;
         } else if (st.mistakes === 0 && exceptions === 0 && warningsCount === 0 && lost === 0 && st.correct >= 4) {
           comment = `"Magnificent! Zero mistakes and zero warnings! Even the Corporate Inspector is impressed. Have a cup of tea before tomorrow's shift."`;
@@ -879,12 +1001,30 @@
         } else if (st.mistakes === 0 && lost > 0) {
           comment = `"Zero inspection mistakes, well done — though ${lost} waiting ${lost === 1 ? 'customer' : 'customers'} lost patience and left the queue. Try to keep the line moving tomorrow!"`;
         } else if (s.day === playableMax) {
-          comment = `"You survived all five days at The Grand Cinema! Thanks to your ticket inspections, the cinema is saved from bankruptcy!"`;
+          comment = `"You survived all ${playableMax} days at The Grand Cinema! Thanks to your ticket inspections, the cinema's future is decided!"`;
         }
         document.getElementById('reportManagerComment').textContent = comment;
 
         const storyBox = document.getElementById('reportStoryNotes');
-        if (st.dilemmaNotes.length > 0) {
+        if (ending) {
+          const callbacksHtml = (ending.callbacks || []).map(cb =>
+            `<div class="mt-1.5 text-xs bg-white/80 border border-amber-400/80 rounded p-2"><strong>${this.escapeHTML(cb.characterName)}${cb.role ? ' (' + this.escapeHTML(cb.role) + ')' : ''}:</strong> ${this.escapeHTML(cb.text)}</div>`
+          ).join('');
+          const notesHtml = st.dilemmaNotes.length > 0
+            ? `<div class="mt-2 pt-2 border-t border-amber-400/60 text-xs"><strong>📖 Final Shift Notes:</strong><br/>${st.dilemmaNotes.join('<br/>')}</div>`
+            : '';
+          storyBox.innerHTML = `
+            <div class="mb-2">
+              <span class="inline-block text-[10px] font-extrabold uppercase tracking-widest bg-amber-900 text-amber-100 px-2 py-0.5 rounded">${this.escapeHTML(ending.badge || 'CAMPAIGN CONCLUSION')}</span>
+              <div class="text-base font-extrabold text-red-950 mt-1">🎬 ENDING: ${this.escapeHTML(ending.title)}</div>
+              <p class="text-xs text-slate-800 mt-1 leading-relaxed">${this.escapeHTML(ending.summary)}</p>
+              ${ending.inspectorQuote ? `<p class="text-xs italic text-indigo-950 bg-indigo-50 border border-indigo-300 rounded p-2 mt-1.5"><strong>🕵️ Corporate Inspector:</strong> ${this.escapeHTML(ending.inspectorQuote)}</p>` : ''}
+            </div>
+            ${callbacksHtml ? `<div class="mt-2"><strong>🎭 Recurring Characters — Where They Stand:</strong>${callbacksHtml}</div>` : ''}
+            ${notesHtml}
+          `;
+          storyBox.classList.remove('hidden');
+        } else if (st.dilemmaNotes.length > 0) {
           storyBox.innerHTML = `<strong>📖 Shift Story Notes:</strong><br/>` + st.dilemmaNotes.join('<br/>');
           storyBox.classList.remove('hidden');
         } else {

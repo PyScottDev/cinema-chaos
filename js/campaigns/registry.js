@@ -16,6 +16,12 @@
         "allowPromoChanges",
         "tvLoungeOpen",
         "allowVipPasses",
+        "allowStaffPasses",
+        "checkAgeRestrictions",
+        "currentDate",
+        "dateDisplay",
+        "ageRuleTitle",
+        "ageRuleText",
         "initialUsedSerials",
         "conditionalScreenRules",
         "printerClosedMessage"
@@ -43,17 +49,28 @@
         "red",
         "no_red",
         "move",
-        "vip"
+        "vip",
+        "age_valid",
+        "underage",
+        "missing_id",
+        "fake_id",
+        "false_identity",
+        "disguise",
+        "staff_impostor",
+        "manager_pressure",
+        "overbooked_group"
       ]),
 
       SUPPORTED_TRIGGER_KEYS: new Set([
         "caseIndex",
+        "minCaseIndex",
         "minClockMins",
         "maxClockMins",
         "requireOpenScreeningId",
         "requireLateScreeningId",
         "requireOpenRoom",
         "requireStoryFlag",
+        "requireStoryValue",
         "requireUnusedSerial"
       ]),
 
@@ -142,6 +159,12 @@
           f.timeMins = mins;
           if (!Number.isInteger(f.capacity) || f.capacity < 1) {
             throw new Error(`Invalid capacity at languagePack.films[${idx}].capacity.`);
+          }
+          if (f.ageRating !== undefined) {
+            reqStr(f.ageRating, `languagePack.films[${idx}].ageRating`);
+          }
+          if (f.minAge !== undefined && (!Number.isInteger(f.minAge) || f.minAge < 0)) {
+            throw new Error(`Invalid minAge at languagePack.films[${idx}].minAge.`);
           }
           baseScreeningIds.add(f.id);
         }
@@ -251,6 +274,20 @@
             }
           }
 
+          if (Array.isArray(dayCfg.storyScheduleBoosts)) {
+            for (const [bIdx, boost] of dayCfg.storyScheduleBoosts.entries()) {
+              const bPath = `${label}.storyScheduleBoosts[${bIdx}]`;
+              reqStr(boost.requireStoryKey, `${bPath}.requireStoryKey`);
+              reqStr(boost.screeningId, `${bPath}.screeningId`);
+              if (!dayScreeningIds.has(boost.screeningId)) {
+                throw new Error(`Unknown screeningId '${boost.screeningId}' at ${bPath}.`);
+              }
+              if (!Number.isInteger(boost.capacityDelta)) {
+                throw new Error(`Invalid capacityDelta at ${bPath}.`);
+              }
+            }
+          }
+
           const dayScriptedCaseTypes = new Set();
           if (dayCfg.scriptedEncounters !== undefined) {
             if (!Array.isArray(dayCfg.scriptedEncounters)) {
@@ -313,6 +350,20 @@
         }
         if (c.endlessDay) {
           checkDay(c.endlessDay, "endlessDay");
+        }
+        if (c.endings !== undefined) {
+          if (!Array.isArray(c.endings) || c.endings.length === 0) {
+            throw new Error(`Campaign '${c.id}' endings must be a non-empty array.`);
+          }
+          for (const [eIdx, endDef] of c.endings.entries()) {
+            const ePath = `endings[${eIdx}]`;
+            if (!endDef || typeof endDef !== "object") {
+              throw new Error(`Invalid ending definition at ${ePath}.`);
+            }
+            reqStr(endDef.id, `${ePath}.id`);
+            reqStr(endDef.title, `${ePath}.title`);
+            reqStr(endDef.summary, `${ePath}.summary`);
+          }
         }
 
         return c;
