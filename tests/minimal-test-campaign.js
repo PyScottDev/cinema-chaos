@@ -191,7 +191,24 @@ const MINIMAL_TEST_CAMPAIGN = {
         tvLoungeOpen: false,
         allowVipPasses: true,
         initialUsedSerials: ["FS-001"],
-        conditionalScreenRules: []
+        conditionalScreenRules: [
+          {
+            id: "gala_glasses",
+            screen: 1,
+            afterMins: 1200,
+            requiredPersonProp: "glasses",
+            issueText: "Screen 1: after 20:00, festival guests need glasses.",
+            ruleTitle: "Screen 1: festival glasses",
+            ruleText: "After 20:00, only guests wearing glasses can enter Screen 1.",
+            portraitInspectMatchValue: "WEARING GLASSES",
+            portraitInspectMismatchValue: "NO GLASSES",
+            portraitInspectMatchLabel: "Wearing Festival Glasses",
+            portraitInspectMismatchLabel: "No glasses",
+            inspectMatchPrefix: "Glasses worn.",
+            inspectMismatchPrefix: "No glasses worn.",
+            inspectSummary: "Screen 1 requires festival glasses after 20:00. All other rules apply."
+          }
+        ]
       },
       scheduleChanges: [
         {

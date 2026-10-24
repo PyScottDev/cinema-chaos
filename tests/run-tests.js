@@ -331,6 +331,41 @@ test("7. CampaignRegistry registers 'the-first-week' with 7-day structure and va
     languageModes: { elementary: {}, intermediate: {}, advanced: {} },
     languagePack: { films: [] }
   }), /languagePack\.films must be a non-empty array/);
+
+  // Verify validation catches invalid references to screenings, characters, and unsupported rule types
+  const makeDraft = () => structuredClone(firstWeek);
+
+  const badScreeningRef = makeDraft();
+  badScreeningRef.days[3].scheduleChanges[0].screeningId = "nonexistent_film";
+  assert.throws(() => reg.validate(badScreeningRef), /Unknown screeningId 'nonexistent_film'/);
+
+  const badEncounterScreening = makeDraft();
+  badEncounterScreening.days[1].scriptedEncounters[0].targetScreeningId = "ghost_film";
+  assert.throws(() => reg.validate(badEncounterScreening), /Unknown targetScreeningId 'ghost_film'/);
+
+  const badTriggerScreening = makeDraft();
+  badTriggerScreening.days[2].scriptedEncounters[0].trigger.requireLateScreeningId = "unknown_late_film";
+  assert.throws(() => reg.validate(badTriggerScreening), /Unknown requireLateScreeningId 'unknown_late_film'/);
+
+  const badCharacterRef = makeDraft();
+  badCharacterRef.days[1].scriptedEncounters[0].characterId = "unknown_person";
+  assert.throws(() => reg.validate(badCharacterRef), /Unknown characterId 'unknown_person'/);
+
+  const badInspectorRef = makeDraft();
+  badInspectorRef.inspectorCharacterId = "not_a_character";
+  assert.throws(() => reg.validate(badInspectorRef), /inspectorCharacterId 'not_a_character' does not reference a defined character/);
+
+  const badPolicyType = makeDraft();
+  badPolicyType.days[1].policies.unsupportedRule = true;
+  assert.throws(() => reg.validate(badPolicyType), /Unsupported policy or rule type 'unsupportedRule'/);
+
+  const badCondRule = makeDraft();
+  badCondRule.days[5].policies.conditionalScreenRules[0].type = "unsupported_cond_type";
+  assert.throws(() => reg.validate(badCondRule), /Unsupported conditional rule type 'unsupported_cond_type'/);
+
+  const badCasePoolType = makeDraft();
+  badCasePoolType.days[1].casePool.push("nonexistent_case_type");
+  assert.throws(() => reg.validate(badCasePoolType), /Unsupported caseType 'nonexistent_case_type'/);
 });
 
 test("8. Save and Load compatibility preserves V2 and V1 legacy progress", () => {
@@ -396,7 +431,11 @@ test("9. Engine, UI, and Characters contain zero hard-coded First Week film or c
     "mr_morris",
     "Mr Morris",
     "VIP-770-MORRIS",
-    "VIP-900-INSPECTOR"
+    "VIP-900-INSPECTOR",
+    "Screen 2 requires red after 19:10",
+    "Wearing RED Jacket",
+    "Red clothes.",
+    "Relaxed (A1)"
   ];
 
   for (const token of forbiddenTokens) {
@@ -592,6 +631,82 @@ test("13. Main Menu navigation mid-shift pauses safely and resumes without dupli
   assert.strictEqual(Game.state.currentCustomer.ticket.serial, serialBefore, "Active ticket must not be regenerated");
   assert.strictEqual(Game.state.queue.length, queueLenBefore, "Queue must not duplicate customers on resume");
   assert.strictEqual(Game.state.casesGeneratedCount, casesCountBefore, "No extra cases should be generated on resume");
+});
+
+test("14. Campaign-specific inspection text, active-shift switch protection, and independent Relaxed label", () => {
+  const { Game, UI, sandbox } = createHarness(1414);
+  const minimalCampaignCode = fs.readFileSync(path.join(ROOT, "tests/minimal-test-campaign.js"), "utf8");
+  vm.runInContext(minimalCampaignCode, sandbox);
+
+  // 1. Verify Relaxed difficulty label does not include legacy '(A1)'
+  Game.setDifficulty("relaxed");
+  const diffBadge = sandbox.document.getElementById("headerDifficultyBadge").textContent;
+  assert.strictEqual(diffBadge, "Relaxed Mode");
+  assert.ok(!diffBadge.includes("A1"), "Difficulty badge must not conflate difficulty with CEFR A1 label");
+
+  // 2. Verify inspection text on Day 1 (no conditional appearance rule active)
+  Game.selectCampaign("the-first-week");
+  Game.state.day = 1;
+  Game.startShift();
+  const day1Compare = Game.compareTwoInspectedItems(
+    { category: "portrait", value: "p1", label: "Customer" },
+    { category: "rule", value: "ticket", label: "Tickets and bookings" }
+  );
+  assert.ok(day1Compare.message.includes("No conditional appearance rule is active"), "Day 1 should report no conditional appearance rule active");
+
+  // 3. Verify inspection text on Day 5 of The First Week preserves Friday red-clothing rule
+  Game.state.day = 5;
+  Game.startShift();
+  Game.state.currentCustomer.person.wearingRed = true;
+  const day5RedCompare = Game.compareTwoInspectedItems(
+    { category: "portrait", value: "WEARING RED", label: "Customer" },
+    { category: "rule", value: "red", label: "Screen 2: red clothes" }
+  );
+  assert.strictEqual(day5RedCompare.message, "Red clothes. Screen 2 requires red after 19:10. All other rules apply.");
+
+  Game.state.currentCustomer.person.wearingRed = false;
+  const day5NoRedCompare = Game.compareTwoInspectedItems(
+    { category: "portrait", value: "NOT RED", label: "Customer" },
+    { category: "rule", value: "red", label: "Screen 2: red clothes" }
+  );
+  assert.strictEqual(day5NoRedCompare.message, "No red clothes. Screen 2 requires red after 19:10. All other rules apply.");
+
+  // 4. Verify active-shift protection when selecting campaigns from the menu
+  const activeCust = Game.state.currentCustomer;
+  const activeSerial = activeCust.ticket.serial;
+  UI.openCampaignSelectModal();
+
+  // Selecting the currently active campaign from the menu resumes the shift instead of discarding it
+  const sameCampRes = Game.startOrContinueCampaign("the-first-week");
+  assert.strictEqual(sameCampRes.status, "resumed");
+  assert.strictEqual(Game.state.shiftActive, true);
+  assert.strictEqual(Game.state.currentCustomer, activeCust);
+  assert.strictEqual(Game.state.currentCustomer.ticket.serial, activeSerial);
+
+  // Selecting a DIFFERENT campaign while a shift is active warns first and does NOT discard the shift
+  UI.openCampaignSelectModal();
+  const switchRes = Game.startOrContinueCampaign("festival-showcase");
+  assert.strictEqual(switchRes.status, "warned");
+  assert.strictEqual(Game.state.campaignId, "the-first-week", "Campaign must not switch before confirmation");
+  assert.strictEqual(Game.state.shiftActive, true, "Shift must remain active until abandonment is confirmed");
+  assert.strictEqual(Game.state.currentCustomer, activeCust, "Active customer must not be discarded without confirmation");
+  const bannerHtml = sandbox.document.getElementById("campaignMenuActiveShiftBanner").innerHTML;
+  assert.ok(bannerHtml.includes("Abandon Active Shift?"), "Warning banner must prompt before abandoning shift");
+
+  // Confirming the pending switch abandons the old shift and loads the new campaign
+  const confirmRes = Game.confirmPendingCampaignAction();
+  assert.strictEqual(confirmRes.status, "switched");
+  assert.strictEqual(Game.state.campaignId, "festival-showcase");
+  assert.strictEqual(Game.state.shiftActive, false);
+
+  // 5. Verify inspection text in 'festival-showcase' describes its custom festival glasses rule
+  Game.startShift();
+  Game.state.currentCustomer.person.glasses = true;
+  const festCompare = Game.compareTwoInspectedItems(
+    { category: "portrait", value: "WEARING GLASSES", label: "Customer" },
+    { category: "rule", value: "gala_glasses", label: "Screen 1: festival glasses" }
+  );
+  assert.strictEqual(festCompare.message, "Glasses worn. Screen 1 requires festival glasses after 20:00. All other rules apply.");
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

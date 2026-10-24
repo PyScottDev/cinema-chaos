@@ -7,6 +7,7 @@
         languageMode: "elementary", // 'elementary' | 'intermediate' | 'advanced'
         selectedLanguageMode: "elementary",
         pendingLanguageMode: null,
+        pendingCampaignAction: null,
         customLanguagePack: null,
         day: 1,
         story: {}, bookings: {}, outcomes: [], modalDepth: 0, serialCounter: 400,
@@ -181,14 +182,34 @@
         this.saveProgress();
       },
 
-      startOrContinueCampaign(campaignId) {
+      startOrContinueCampaign(campaignId, options = {}) {
+        if (this.state.shiftActive) {
+          if (campaignId === this.state.campaignId && !options.forceRestart) {
+            this.state.pendingCampaignAction = null;
+            UI.resumeActiveShiftFromMenu();
+            return { status: "resumed" };
+          }
+          if (!options.confirmed) {
+            this.state.pendingCampaignAction = { type: "switch", campaignId };
+            UI.renderCampaignMenuShiftBanner();
+            return { status: "warned", pending: this.state.pendingCampaignAction };
+          }
+        }
+        this.state.pendingCampaignAction = null;
         this.selectCampaign(campaignId);
         UI.closeCampaignSelectModal();
         UI.closeShiftReportModal();
         UI.openBriefingModal(this.state.day);
+        return { status: "switched" };
       },
 
-      replayCampaign(campaignId) {
+      replayCampaign(campaignId, options = {}) {
+        if (this.state.shiftActive && !options.confirmed) {
+          this.state.pendingCampaignAction = { type: "replay", campaignId };
+          UI.renderCampaignMenuShiftBanner();
+          return { status: "warned", pending: this.state.pendingCampaignAction };
+        }
+        this.state.pendingCampaignAction = null;
         this.selectCampaign(campaignId);
         Object.assign(this.state, {
           day: 1,
@@ -210,6 +231,22 @@
         UI.renderSerialsBinder();
         UI.renderUpgradesStrip();
         UI.openBriefingModal(1);
+        return { status: "replayed" };
+      },
+
+      confirmPendingCampaignAction() {
+        const act = this.state.pendingCampaignAction;
+        if (!act) return null;
+        this.state.pendingCampaignAction = null;
+        if (act.type === "replay") {
+          return this.replayCampaign(act.campaignId, { confirmed: true });
+        }
+        return this.startOrContinueCampaign(act.campaignId, { confirmed: true, forceRestart: true });
+      },
+
+      cancelPendingCampaignAction() {
+        this.state.pendingCampaignAction = null;
+        UI.renderCampaignMenuShiftBanner();
       },
 
       updateTeacherSettings() {
@@ -714,7 +751,7 @@
       openCorrectionDrawer() {
         if(!this.state.currentCustomer || this.state.decisionLocked || this.state.paused || this.state.modalDepth) return;
         const c=this.state.currentCustomer, pol=this.policies();
-        if(!pol.allowCorrections) return UI.showDeskFeedback('warn','The printer opens on Tuesday.');
+        if(!pol.allowCorrections) return UI.showDeskFeedback('warn', pol.printerClosedMessage || this.campaign()?.printerClosedMessage || 'The ticket printer is closed today.');
         if(!c.ticket.exists) return UI.showDeskFeedback('warn','You need a ticket to use the printer.');
         if((!pol.allowPromoChanges && c.ticket.ticketType.includes('PROMO')) || c.ticket.ticketType.includes('VIP')) return UI.showDeskFeedback('warn','This pass cannot be changed.');
         if(!c.known.preference) return UI.showDeskFeedback('warn','Ask which film the customer wants first.');
@@ -909,12 +946,20 @@
       handleCustomerPortraitInspect(el) {
         if (!this.state.currentCustomer) return;
         const p = this.state.currentCustomer.person;
-        this.handleInspectClick(
-          'portrait',
-          p.wearingRed ? 'WEARING RED' : 'NOT RED',
-          `${p.name} (${p.wearingRed ? 'Wearing RED Jacket' : 'Not wearing red'})`,
-          el
-        );
+        const condRule = (this.policies().conditionalScreenRules || [])[0];
+        if (condRule) {
+          const prop = condRule.requiredPersonProp;
+          const hasProp = Boolean(p?.[prop]);
+          const val = hasProp
+            ? (condRule.portraitInspectMatchValue || `HAS_${String(prop).toUpperCase()}`)
+            : (condRule.portraitInspectMismatchValue || `NO_${String(prop).toUpperCase()}`);
+          const desc = hasProp
+            ? (condRule.portraitInspectMatchLabel || `${prop}: yes`)
+            : (condRule.portraitInspectMismatchLabel || `${prop}: no`);
+          this.handleInspectClick('portrait', val, `${p.name} (${desc})`, el);
+        } else {
+          this.handleInspectClick('portrait', p.id || p.name, `${p.name} (${p.tag || 'Customer'})`, el);
+        }
       },
 
       handleInspectClick(category,value,label,domEl) {
@@ -942,7 +987,24 @@
           const time=this.parseTime(field('ticket_time').value),diff=this.arrival(c)-time,tol=this.policies().lateToleranceMins;
           return match(tol===null||tol===undefined||diff<=tol,`Arrival: ${this.formatMins(this.arrival(c))}. Printed start: ${field('ticket_time').value}. ${diff>0?diff+' minutes after start.':'Before the start.'}`);
         }
-        if(pair('portrait','rule'))return neutral(`${c.person.wearingRed?'Red clothes.':'No red clothes.'} Screen 2 requires red after 19:10. All other rules apply.`);
+        if(pair('portrait','rule')) {
+          const ruleField = field('rule');
+          const condRules = this.policies().conditionalScreenRules || [];
+          const condRule = condRules.find(r => r.id === ruleField.value) || condRules[0];
+          if (!condRule) {
+            return neutral(`Customer: ${c.person.name}. Active rule: ${ruleField.label}. No conditional appearance rule is active for this shift.`);
+          }
+          const prop = condRule.requiredPersonProp;
+          const hasProp = Boolean(c.person?.[prop]);
+          const prefix = hasProp
+            ? (condRule.inspectMatchPrefix || `${condRule.portraitInspectMatchLabel || prop}.`)
+            : (condRule.inspectMismatchPrefix || `${condRule.portraitInspectMismatchLabel || 'No ' + prop}.`);
+          const summary = condRule.inspectSummary
+            || condRule.ruleText
+            || condRule.issueText
+            || `Screen ${condRule.screen} requires ${prop} after ${this.formatMins(condRule.afterMins)}. All other rules apply.`;
+          return neutral(`${prefix} ${summary}`);
+        }
         if(pair('statement','ticket_film')) {
           if(!c.known.preference || !c.known.publicPlan)return neutral('The customer has not named a specific film or genre.');
           const f=this.screening(field('ticket_film').value);if(!f)return neutral('No programme entry for this film.');

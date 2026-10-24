@@ -22,6 +22,7 @@
       },
       lateRuleText: "No entry more than 10 minutes after the start. Use the arrival time on the booking record. You may help Mr Morris, but late entry still gets a warning.",
       vipRuleText: "VIP numbers must be on the list. A VIP still needs the right day, film, room, time and booking. Red clothes and the late rule still apply.",
+      printerClosedMessage: "The printer opens on Tuesday.",
       dilemmaMessage: {
         exceptionFeedback: "Mr Morris joins his daughter. +€6. They are happy, but the manager gives a late-entry warning.",
         exceptionNote: "Mr Morris joined his daughter. Management recorded the late entry.",
@@ -637,7 +638,14 @@
                 requiredPersonProp: "wearingRed",
                 issueText: "Screen 2: after 19:10, you need red clothes.",
                 ruleTitle: "Screen 2: red clothes",
-                ruleText: "After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule."
+                ruleText: "After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule.",
+                portraitInspectMatchValue: "WEARING RED",
+                portraitInspectMismatchValue: "NOT RED",
+                portraitInspectMatchLabel: "Wearing RED Jacket",
+                portraitInspectMismatchLabel: "Not wearing red",
+                inspectMatchPrefix: "Red clothes.",
+                inspectMismatchPrefix: "No red clothes.",
+                inspectSummary: "Screen 2 requires red after 19:10. All other rules apply."
               }
             ]
           },
@@ -783,7 +791,14 @@
               requiredPersonProp: "wearingRed",
               issueText: "Screen 2: after 19:10, you need red clothes.",
               ruleTitle: "Screen 2: red clothes",
-              ruleText: "After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule."
+              ruleText: "After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule.",
+              portraitInspectMatchValue: "WEARING RED",
+              portraitInspectMismatchValue: "NOT RED",
+              portraitInspectMatchLabel: "Wearing RED Jacket",
+              portraitInspectMismatchLabel: "Not wearing red",
+              inspectMatchPrefix: "Red clothes.",
+              inspectMismatchPrefix: "No red clothes.",
+              inspectSummary: "Screen 2 requires red after 19:10. All other rules apply."
             }
           ]
         },

@@ -7,6 +7,58 @@
       _campaigns: new Map(),
       _order: [],
 
+      SUPPORTED_POLICY_KEYS: new Set([
+        "allowCorrections",
+        "lateToleranceMins",
+        "lateRuleTitle",
+        "lateRuleText",
+        "checkDuplicates",
+        "allowPromoChanges",
+        "tvLoungeOpen",
+        "allowVipPasses",
+        "initialUsedSerials",
+        "conditionalScreenRules",
+        "printerClosedMessage"
+      ]),
+
+      SUPPORTED_CASE_TYPES: new Set([
+        "valid",
+        "subjective",
+        "wrong_film",
+        "screen",
+        "time",
+        "date",
+        "missing",
+        "group",
+        "incomplete",
+        "change",
+        "hidden_ticket",
+        "late",
+        "duplicate",
+        "promo",
+        "combined",
+        "tv",
+        "tv_wrong",
+        "cancelled",
+        "red",
+        "no_red",
+        "move",
+        "vip"
+      ]),
+
+      SUPPORTED_TRIGGER_KEYS: new Set([
+        "caseIndex",
+        "minClockMins",
+        "maxClockMins",
+        "requireOpenScreeningId",
+        "requireLateScreeningId",
+        "requireOpenRoom",
+        "requireStoryFlag",
+        "requireUnusedSerial"
+      ]),
+
+      VALID_SCREENS: new Set([1, 2, 3, "TV Lounge"]),
+
       parseTime(t) {
         if (!/^\d{2}:\d{2}$/.test(t || "")) return NaN;
         const [h, m] = t.split(":").map(Number);
@@ -41,6 +93,29 @@
           }
         }
 
+        // Validate characters and collect valid character IDs
+        const characterIds = new Set();
+        if (c.characters !== undefined) {
+          if (!c.characters || typeof c.characters !== "object" || Array.isArray(c.characters)) {
+            throw new Error(`Campaign '${c.id}' characters must be an object map.`);
+          }
+          for (const [charKey, charDef] of Object.entries(c.characters)) {
+            if (!charDef || typeof charDef !== "object") {
+              throw new Error(`Invalid character definition at 'characters.${charKey}'.`);
+            }
+            reqStr(charDef.id, `characters.${charKey}.id`);
+            reqStr(charDef.name, `characters.${charKey}.name`);
+            characterIds.add(charKey);
+            characterIds.add(charDef.id);
+          }
+        }
+        if (c.inspectorCharacterId !== undefined && c.inspectorCharacterId !== null) {
+          reqStr(c.inspectorCharacterId, "inspectorCharacterId");
+          if (!characterIds.has(c.inspectorCharacterId)) {
+            throw new Error(`Campaign '${c.id}' inspectorCharacterId '${c.inspectorCharacterId}' does not reference a defined character.`);
+          }
+        }
+
         if (!c.languagePack || typeof c.languagePack !== "object") {
           throw new Error(`Campaign '${c.id}' must define 'languagePack'.`);
         }
@@ -48,12 +123,18 @@
           throw new Error(`Campaign '${c.id}' languagePack.films must be a non-empty array.`);
         }
 
-        const screeningIds = new Set();
+        const baseScreeningIds = new Set();
         for (const [idx, f] of c.languagePack.films.entries()) {
           reqStr(f.id, `languagePack.films[${idx}].id`);
+          if (baseScreeningIds.has(f.id)) {
+            throw new Error(`Duplicate screening id '${f.id}' at languagePack.films[${idx}].id.`);
+          }
           reqStr(f.title, `languagePack.films[${idx}].title`);
           reqStr(f.genre, `languagePack.films[${idx}].genre`);
           reqStr(f.genreLabel, `languagePack.films[${idx}].genreLabel`);
+          if (!this.VALID_SCREENS.has(f.screen)) {
+            throw new Error(`Invalid screen '${f.screen}' at languagePack.films[${idx}].screen.`);
+          }
           const mins = this.parseTime(f.time);
           if (!Number.isFinite(mins)) {
             throw new Error(`Invalid time '${f.time}' at languagePack.films[${idx}].time.`);
@@ -62,15 +143,18 @@
           if (!Number.isInteger(f.capacity) || f.capacity < 1) {
             throw new Error(`Invalid capacity at languagePack.films[${idx}].capacity.`);
           }
-          screeningIds.add(f.id);
+          baseScreeningIds.add(f.id);
         }
 
-        if (c.languagePack.tvLoungeSchedule) {
+        if (c.languagePack.tvLoungeSchedule !== undefined) {
           if (!Array.isArray(c.languagePack.tvLoungeSchedule)) {
             throw new Error(`Campaign '${c.id}' languagePack.tvLoungeSchedule must be an array.`);
           }
           for (const [idx, tv] of c.languagePack.tvLoungeSchedule.entries()) {
             reqStr(tv.id, `languagePack.tvLoungeSchedule[${idx}].id`);
+            if (baseScreeningIds.has(tv.id)) {
+              throw new Error(`Duplicate screening id '${tv.id}' at languagePack.tvLoungeSchedule[${idx}].id.`);
+            }
             reqStr(tv.title, `languagePack.tvLoungeSchedule[${idx}].title`);
             reqStr(tv.genre, `languagePack.tvLoungeSchedule[${idx}].genre`);
             const mins = this.parseTime(tv.time);
@@ -78,7 +162,7 @@
               throw new Error(`Invalid time '${tv.time}' at languagePack.tvLoungeSchedule[${idx}].time.`);
             }
             tv.timeMins = mins;
-            screeningIds.add(tv.id);
+            baseScreeningIds.add(tv.id);
           }
         }
 
@@ -96,22 +180,129 @@
           }
           reqStr(dayCfg.dayName, `${label}.dayName`);
           reqStr(dayCfg.title, `${label}.title`);
-          if (!dayCfg.policies || typeof dayCfg.policies !== "object") {
+          if (!dayCfg.policies || typeof dayCfg.policies !== "object" || Array.isArray(dayCfg.policies)) {
             throw new Error(`Missing 'policies' object at '${label}'.`);
           }
+
+          // Validate policy keys and conditionalScreenRules
+          for (const polKey of Object.keys(dayCfg.policies)) {
+            if (!this.SUPPORTED_POLICY_KEYS.has(polKey)) {
+              throw new Error(`Unsupported policy or rule type '${polKey}' at ${label}.policies.`);
+            }
+          }
+          if (dayCfg.policies.conditionalScreenRules !== undefined) {
+            if (!Array.isArray(dayCfg.policies.conditionalScreenRules)) {
+              throw new Error(`'conditionalScreenRules' must be an array at ${label}.policies.`);
+            }
+            for (const [rIdx, rule] of dayCfg.policies.conditionalScreenRules.entries()) {
+              const rPath = `${label}.policies.conditionalScreenRules[${rIdx}]`;
+              if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+                throw new Error(`Invalid conditional rule object at ${rPath}.`);
+              }
+              if (rule.type !== undefined && rule.type !== "screen_after_time_person_prop") {
+                throw new Error(`Unsupported conditional rule type '${rule.type}' at ${rPath}.`);
+              }
+              reqStr(rule.id, `${rPath}.id`);
+              if (!this.VALID_SCREENS.has(rule.screen)) {
+                throw new Error(`Invalid screen '${rule.screen}' at ${rPath}.screen.`);
+              }
+              if (!Number.isFinite(rule.afterMins)) {
+                throw new Error(`Invalid afterMins at ${rPath}.afterMins.`);
+              }
+              reqStr(rule.requiredPersonProp, `${rPath}.requiredPersonProp`);
+              reqStr(rule.issueText, `${rPath}.issueText`);
+            }
+          }
+
+          const dayScreeningIds = new Set(baseScreeningIds);
           if (Array.isArray(dayCfg.scheduleChanges)) {
             for (const [i, sc] of dayCfg.scheduleChanges.entries()) {
+              const scPath = `${label}.scheduleChanges[${i}]`;
               if (!["relocate", "cancel", "add_extra"].includes(sc.type)) {
-                throw new Error(`Unknown scheduleChange type '${sc.type}' at ${label}.scheduleChanges[${i}].`);
+                throw new Error(`Unknown scheduleChange type '${sc.type}' at ${scPath}.`);
               }
               if (sc.type === "add_extra") {
-                reqStr(sc.sourceScreeningId, `${label}.scheduleChanges[${i}].sourceScreeningId`);
-                reqStr(sc.newId, `${label}.scheduleChanges[${i}].newId`);
-                if (!Number.isFinite(this.parseTime(sc.time))) {
-                  throw new Error(`Invalid time in ${label}.scheduleChanges[${i}].`);
+                reqStr(sc.sourceScreeningId, `${scPath}.sourceScreeningId`);
+                if (!dayScreeningIds.has(sc.sourceScreeningId)) {
+                  throw new Error(`Unknown sourceScreeningId '${sc.sourceScreeningId}' at ${scPath}.`);
                 }
+                reqStr(sc.newId, `${scPath}.newId`);
+                if (dayScreeningIds.has(sc.newId)) {
+                  throw new Error(`Duplicate extra screening newId '${sc.newId}' at ${scPath}.`);
+                }
+                if (!this.VALID_SCREENS.has(sc.screen)) {
+                  throw new Error(`Invalid screen '${sc.screen}' at ${scPath}.screen.`);
+                }
+                const extraMins = this.parseTime(sc.time);
+                if (!Number.isFinite(extraMins)) {
+                  throw new Error(`Invalid time in ${scPath}.`);
+                }
+                sc.timeMins = extraMins;
+                dayScreeningIds.add(sc.newId);
               } else {
-                reqStr(sc.screeningId, `${label}.scheduleChanges[${i}].screeningId`);
+                reqStr(sc.screeningId, `${scPath}.screeningId`);
+                if (!dayScreeningIds.has(sc.screeningId)) {
+                  throw new Error(`Unknown screeningId '${sc.screeningId}' at ${scPath}.`);
+                }
+                if (sc.type === "relocate" && !this.VALID_SCREENS.has(sc.toScreen)) {
+                  throw new Error(`Invalid target screen '${sc.toScreen}' at ${scPath}.toScreen.`);
+                }
+              }
+            }
+          }
+
+          const dayScriptedCaseTypes = new Set();
+          if (dayCfg.scriptedEncounters !== undefined) {
+            if (!Array.isArray(dayCfg.scriptedEncounters)) {
+              throw new Error(`'scriptedEncounters' must be an array at ${label}.`);
+            }
+            for (const [eIdx, enc] of dayCfg.scriptedEncounters.entries()) {
+              const ePath = `${label}.scriptedEncounters[${eIdx}]`;
+              if (!enc || typeof enc !== "object") {
+                throw new Error(`Invalid scriptedEncounter at ${ePath}.`);
+              }
+              reqStr(enc.id, `${ePath}.id`);
+              reqStr(enc.caseType, `${ePath}.caseType`);
+              dayScriptedCaseTypes.add(enc.caseType);
+
+              if (enc.characterId !== undefined && enc.characterId !== null) {
+                reqStr(enc.characterId, `${ePath}.characterId`);
+                if (!characterIds.has(enc.characterId)) {
+                  throw new Error(`Unknown characterId '${enc.characterId}' at ${ePath}.characterId.`);
+                }
+              }
+              if (enc.targetScreeningId !== undefined && enc.targetScreeningId !== null) {
+                reqStr(enc.targetScreeningId, `${ePath}.targetScreeningId`);
+                if (!dayScreeningIds.has(enc.targetScreeningId)) {
+                  throw new Error(`Unknown targetScreeningId '${enc.targetScreeningId}' at ${ePath}.targetScreeningId.`);
+                }
+              }
+              if (enc.trigger !== undefined) {
+                if (!enc.trigger || typeof enc.trigger !== "object" || Array.isArray(enc.trigger)) {
+                  throw new Error(`Invalid trigger object at ${ePath}.trigger.`);
+                }
+                for (const tKey of Object.keys(enc.trigger)) {
+                  if (!this.SUPPORTED_TRIGGER_KEYS.has(tKey)) {
+                    throw new Error(`Unsupported trigger key '${tKey}' at ${ePath}.trigger.`);
+                  }
+                }
+                if (enc.trigger.requireOpenScreeningId && !dayScreeningIds.has(enc.trigger.requireOpenScreeningId)) {
+                  throw new Error(`Unknown requireOpenScreeningId '${enc.trigger.requireOpenScreeningId}' at ${ePath}.trigger.`);
+                }
+                if (enc.trigger.requireLateScreeningId && !dayScreeningIds.has(enc.trigger.requireLateScreeningId)) {
+                  throw new Error(`Unknown requireLateScreeningId '${enc.trigger.requireLateScreeningId}' at ${ePath}.trigger.`);
+                }
+              }
+            }
+          }
+
+          if (dayCfg.casePool !== undefined) {
+            if (!Array.isArray(dayCfg.casePool) || dayCfg.casePool.length === 0) {
+              throw new Error(`'casePool' must be a non-empty array at ${label}.casePool.`);
+            }
+            for (const [cIdx, ct] of dayCfg.casePool.entries()) {
+              if (typeof ct !== "string" || (!this.SUPPORTED_CASE_TYPES.has(ct) && !dayScriptedCaseTypes.has(ct))) {
+                throw new Error(`Unsupported caseType '${ct}' at ${label}.casePool[${cIdx}].`);
               }
             }
           }

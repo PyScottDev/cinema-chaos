@@ -102,10 +102,8 @@
       closeCompare() { (this.compareOrigins||[]).forEach(([el,marker])=>marker.replaceWith(el));this.compareOrigins=[];this.hideModal('compareModal'); },
 
       openCampaignSelectModal(options = {}) {
-        const banner = document.getElementById('campaignMenuActiveShiftBanner');
-        if (banner) {
-          banner.classList.toggle('hidden', !Game.state.shiftActive);
-        }
+        Game.state.pendingCampaignAction = null;
+        this.renderCampaignMenuShiftBanner();
         this.renderCampaignMenuSettings();
         this.renderCampaignCards();
         if (options.isInitialLaunch && !Game.state.shiftActive) {
@@ -115,18 +113,65 @@
         }
       },
 
+      renderCampaignMenuShiftBanner() {
+        const banner = document.getElementById('campaignMenuActiveShiftBanner');
+        if (!banner) return;
+        if (!Game.state.shiftActive) {
+          banner.classList.add('hidden');
+          return;
+        }
+        banner.classList.remove('hidden');
+        const pending = Game.state.pendingCampaignAction;
+        if (pending) {
+          const reg = window.CinemaChaos && window.CinemaChaos.CampaignRegistry;
+          const targetCamp = reg?.get(pending.campaignId);
+          const targetTitle = targetCamp ? this.escapeHTML(targetCamp.title) : this.escapeHTML(pending.campaignId);
+          const desc = pending.type === 'replay'
+            ? `Restarting "${targetTitle}" from Day 1 will abandon your current active shift.`
+            : `Switching to "${targetTitle}" will abandon your current active shift.`;
+          banner.className = "bg-rose-950/95 border-2 border-rose-400 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3";
+          banner.innerHTML = `
+            <div class="text-xs sm:text-sm text-rose-100">
+              <strong class="text-amber-300 uppercase font-ticket block">⚠️ Abandon Active Shift?</strong>
+              <span id="campaignMenuActiveShiftInfo">${desc}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="Game.confirmPendingCampaignAction()" class="bg-rose-700 hover:bg-rose-600 text-white font-extrabold text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow transition">
+                Abandon Shift &amp; Continue
+              </button>
+              <button type="button" onclick="UI.resumeActiveShiftFromMenu()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow transition">
+                ▶️ Keep Playing Shift
+              </button>
+            </div>
+          `;
+        } else {
+          banner.className = "bg-amber-950/90 border-2 border-[#e2b857] rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3";
+          banner.innerHTML = `
+            <div class="text-xs sm:text-sm text-amber-100">
+              <strong class="text-[#f7d983] uppercase font-ticket block">⏸️ Shift Paused in Progress</strong>
+              <span id="campaignMenuActiveShiftInfo">Your current box-office shift is safely paused.</span>
+            </div>
+            <button type="button" onclick="UI.resumeActiveShiftFromMenu()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm px-4 py-2 rounded-lg shadow transition">
+              ▶️ Resume Active Shift
+            </button>
+          `;
+        }
+      },
+
       closeCampaignSelectModal() {
+        Game.state.pendingCampaignAction = null;
         this.hideModal('campaignSelectModal');
       },
 
       resumeActiveShiftFromMenu() {
+        Game.state.pendingCampaignAction = null;
         this.closeCampaignSelectModal();
       },
 
       renderCampaignMenuSettings() {
         const langContainer = document.getElementById('campaignMenuLanguageButtons');
         const diffContainer = document.getElementById('campaignMenuDifficultyButtons');
-        const langNote = document.getElementById('campaignMenuLanguageNote');
+        const langNote = document.getElementById('campaignMenuLanguageNotice') || document.getElementById('campaignMenuLanguageNote');
         const camp = Game.campaign();
         const activeLang = Game.state.selectedLanguageMode || Game.state.languageMode || 'elementary';
         const activeDiff = Game.state.difficulty || 'normal';
@@ -188,8 +233,11 @@
           const completedCount = (saved.completedDays || []).filter(d => d <= playableDays).length;
           const hasProgress = completedCount > 0 || saved.day > 1 || saved.money > 0;
           const isCurrent = Game.state.campaignId === camp.id;
+          const isShiftActiveHere = isCurrent && Game.state.shiftActive;
           const dayLabel = saved.day > playableDays ? 'Endless Mode' : `Day ${saved.day} of ${camp.totalDays || 7}`;
-          const primaryBtnLabel = hasProgress
+          const primaryBtnLabel = isShiftActiveHere
+            ? 'Resume Active Shift →'
+            : hasProgress
             ? (saved.day > playableDays ? 'Continue (Endless Mode) →' : `Continue (Day ${saved.day}) →`)
             : 'Start Campaign →';
 
@@ -280,7 +328,7 @@
         const dayCfg = Game.dayConfig(s.day);
         document.getElementById('headerDayBadge').textContent = `DAY ${s.day}: ${dayCfg.dayName}`;
         document.getElementById('headerDifficultyBadge').textContent =
-          s.difficulty === 'relaxed' ? 'Relaxed (A1)' : s.difficulty === 'normal' ? 'Normal Mode' : 'Chaos Mode';
+          s.difficulty === 'relaxed' ? 'Relaxed Mode' : s.difficulty === 'normal' ? 'Normal Mode' : 'Chaos Mode';
         const langBadge = document.getElementById('headerLanguageBadge');
         if (langBadge) {
           const lang = s.selectedLanguageMode || s.languageMode || 'elementary';
