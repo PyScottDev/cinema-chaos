@@ -16,6 +16,7 @@
         reputation: 80,
         warnings: 0,
         maxWarnings: 3,
+        lastShiftDismissed: false,
         ownedUpgrades: [],
         completedDays: [],
         highScore: 0,
@@ -45,6 +46,8 @@
           served: 0,
           correct: 0,
           mistakes: 0,
+          warnings: 0,
+          exceptions: 0,
           customersLost: 0,
           cashEarned: 0,
           dilemmaNotes: []
@@ -124,13 +127,70 @@
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       },
 
+      warningThresholds: {
+        relaxed: 4,
+        normal: 3,
+        chaos: 2
+      },
+
+      getMaxWarnings(diff = this.state.difficulty) {
+        return this.warningThresholds[diff] ?? this.warningThresholds.normal;
+      },
+
+      getWarningOrdinal(limit = this.getMaxWarnings()) {
+        const map = { 1: 'first', 2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth' };
+        return map[limit] || `${limit}th`;
+      },
+
+      isShiftDismissed() {
+        return this.state.warnings >= this.getMaxWarnings();
+      },
+
+      getWarningActionLabel(action, isException = false) {
+        if (isException) return 'Discretionary admission';
+        if (action === 'ADMIT') return 'Incorrect admission';
+        if (action === 'REFUSE') return 'Ticket refused incorrectly';
+        if (action === 'CORRECT') return 'Incorrect ticket correction';
+        return 'Rule violation';
+      },
+
+      issueWarning(reasonLabel = 'Rule violation') {
+        const max = this.getMaxWarnings();
+        this.state.maxWarnings = max;
+        if (this.state.ownedUpgrades.includes('handbook') && !this.state.forgivenWarningUsed) {
+          this.state.forgivenWarningUsed = true;
+          return {
+            issued: false,
+            forgiven: true,
+            warnings: this.state.warnings,
+            maxWarnings: max,
+            dismissed: this.state.warnings >= max,
+            summaryText: `${reasonLabel} — No management warning issued (forgiven by Manager's Handbook, ${this.state.warnings} / ${max}).`
+          };
+        }
+        this.state.warnings += 1;
+        if (this.state.shiftStats) {
+          this.state.shiftStats.warnings = this.state.warnings;
+        }
+        const dismissed = this.state.warnings >= max;
+        return {
+          issued: true,
+          forgiven: false,
+          warnings: this.state.warnings,
+          maxWarnings: max,
+          dismissed,
+          summaryText: `${reasonLabel} — Management warning ${this.state.warnings} / ${max}.${dismissed ? ' Shift warning limit reached!' : ''}`
+        };
+      },
+
       setDifficulty(diff) {
         if (!["relaxed","normal","chaos"].includes(diff)) return;
         this.state.difficulty = diff;
-        this.state.maxWarnings = diff === 'relaxed' ? 4 : diff === 'normal' ? 3 : 2;
+        this.state.maxWarnings = this.getMaxWarnings(diff);
         if(this.state.shiftActive) this.startShiftLoop();
         UI.updateDifficultyButtons();
         UI.renderHeader();
+        if (typeof UI.renderBriefingObjective === 'function') UI.renderBriefingObjective();
         this.saveProgress();
       },
 
@@ -168,6 +228,9 @@
         this.stopShiftLoop();
         this.state.shiftActive = false;
         this.state.paused = false;
+        this.state.warnings = 0;
+        this.state.lastShiftDismissed = false;
+        this.state.forgivenWarningUsed = false;
         this.state.currentCustomer = null;
         this.state.decisionLocked = false;
         this.state.queue = [];
@@ -200,6 +263,16 @@
         }
         this.state.pendingCampaignAction = null;
         this.selectCampaign(campaignId);
+        const playableMax = this.campaign()?.playableDaysCount || 5;
+        if (this.state.completedDays.includes(this.state.day) && this.state.day <= playableMax) {
+          this.state.day += 1;
+          this.prepareDaySchedule(this.state.day);
+          UI.renderHeader();
+          UI.renderScheduleBinder();
+          UI.renderRulesBinder();
+          UI.renderSerialsBinder();
+          this.saveProgress();
+        }
         UI.closeCampaignSelectModal();
         UI.closeShiftReportModal();
         UI.openBriefingModal(this.state.day);
@@ -291,9 +364,9 @@
         this.stopShiftLoop();this.state.modalDepth=0;UI.modalStack.clear();UI.closeBriefingModal();UI.closeCampaignSelectModal();UI.clearDepartureBanner();
         this.applyPendingLanguageMode();
         this.prepareDaySchedule(this.state.day);
-        Object.assign(this.state,{shiftActive:true,paused:false,clockMins:1065,clockFormatted:'17:45',warnings:0,queue:[],casesGeneratedCount:0,
+        Object.assign(this.state,{shiftActive:true,paused:false,clockMins:1065,clockFormatted:'17:45',warnings:0,lastShiftDismissed:false,queue:[],casesGeneratedCount:0,
           forgivenWarningUsed:false,currentCustomer:null,decisionLocked:false,closing:false,outcomes:[],
-          shiftStats:{served:0,correct:0,mistakes:0,customersLost:0,cashEarned:0,dilemmaNotes:[]}});
+          shiftStats:{served:0,correct:0,mistakes:0,warnings:0,exceptions:0,customersLost:0,cashEarned:0,dilemmaNotes:[]}});
         this.setDifficulty(this.state.difficulty);SoundFX.bell();
         UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.renderPause();
         this.spawnCustomerToQueue();this.spawnCustomerToQueue();this.nextCustomerFromQueue();this.startShiftLoop();
@@ -437,7 +510,7 @@
         else validActions=options.length ? ['CORRECT'] : ['REFUSE'];
         // Discretionary dilemma customers may decline an alternative. A compassionate admission is recorded separately, not scored as compliant.
         if(c.dilemma && !needsQuestion && issues.length && !hard && !validActions.includes('REFUSE')) validActions.push('REFUSE');
-        const discretionary=!!c.dilemma && issues.length===1 && issues[0].code==='late';
+        const discretionary=Boolean(c.dilemma && !hard && issues.length===1 && (!c.discretionaryIssueCode || issues[0].code===c.discretionaryIssueCode));
         return {validActions,issues,options,needsQuestion,discretionary,reason:issues.map(i=>i.text).join(' ') || 'The booking and ticket match.'};
       },
       parseTime(t) { if(!/^\d{2}:\d{2}$/.test(t||'')) return NaN; const [h,m]=t.split(':').map(Number); return h<24 && m<60 ? h*60+m:NaN; },
@@ -757,8 +830,8 @@
       },
       nextCustomerFromQueue() {
         if(!this.state.shiftActive || this.state.paused || this.state.modalDepth) return;
-        if(this.state.warnings>=this.state.maxWarnings) return this.endShift('SHIFT ENDED — PLEASE TRY AGAIN');
-        if(this.state.clockMins>=this.state.clockEndMins) return this.endShift('SHIFT COMPLETE');
+        if(this.isShiftDismissed()) return this.endShift('SHIFT FAILED — MANAGEMENT DISMISSED YOU');
+        if(this.state.clockMins>=this.state.clockEndMins) return this.endShift('SHIFT COMPLETE — WELL DONE');
         this.applyPendingLanguageMode();
         this.state.decisionLocked=false; this.closeCorrectionDrawer();this.clearInspectSelection();
         document.getElementById('nextCustomerBtn').classList.add('hidden');
@@ -836,12 +909,21 @@
           s.money+=earn;s.shiftStats.cashEarned+=earn;this.adjustReputation(s.ownedUpgrades.includes('handbook')?4:3);
           message=`✓ ${action}. +€${earn}. ${ev.reason}`;SoundFX.cash();
         } else if(result.exception) {
-          s.shiftStats.mistakes++;s.money+=6;s.shiftStats.cashEarned+=6;this.adjustReputation(4);
-          message=(dm.exceptionFeedback||`${c.person.name} is admitted as an exception. +€6. Management gives a warning.`)+this.giveWarning();
+          s.shiftStats.exceptions = (s.shiftStats.exceptions || 0) + 1;
+          s.money+=6;s.shiftStats.cashEarned+=6;this.adjustReputation(4);
+          const warnRes = this.issueWarning('Discretionary admission');
+          const baseExc = dm.exceptionFeedback || `${c.person.name} is admitted as an exception. +€6.`;
+          const warnNote = warnRes.issued
+            ? `Discretionary admission — Management warning issued (${warnRes.warnings} / ${warnRes.maxWarnings}).`
+            : `Discretionary admission — Warning forgiven by Manager's Handbook (${warnRes.warnings} / ${warnRes.maxWarnings}).`;
+          message = `⚖️ ${warnNote} ${baseExc} (Cash +€6, Reputation +4)`;
           s.shiftStats.dilemmaNotes.push(dm.exceptionNote||`${c.person.name} was admitted as a discretionary exception.`);
         } else {
           s.shiftStats.mistakes++;const penalty=s.difficulty==='chaos'?8:5;s.money=Math.max(0,s.money-penalty);this.adjustReputation(-7);
-          message=`✕ ${action==='CORRECT'?'That replacement does not meet all the rules or the customer’s plan.':ev.reason} Use ${ev.validActions.join(' or ')}. −€${penalty}.`+this.giveWarning();SoundFX.buzzer();
+          const warnRes = this.issueWarning(this.getWarningActionLabel(action, false));
+          const errDetail = action==='CORRECT'?'That replacement does not meet all the rules or the customer’s plan.':ev.reason;
+          message=`✕ Inspection mistake: ${errDetail} Use ${ev.validActions.join(' or ')}. ${warnRes.summaryText} (Cash −€${penalty}, Reputation −7)`;
+          SoundFX.buzzer();
         }
         const outcome=result.exception?'kind':result.accepted&&action!=='REFUSE'?'helped':result.accepted?'refused':'mistake';
         if(c.storyKey) {
@@ -855,11 +937,16 @@
           const notes=camp.inspectorNotes||{};
           s.shiftStats.dilemmaNotes.push(s.reputation>=80?(notes.highRep||'The inspector liked the service.'):(notes.lowRep||'The inspector asked the manager to improve the service.'));
         }
-        s.outcomes.push({customer:c.person.name,caseType:c.caseType,action,accepted:result.accepted,compliant:!!result.compliant,ticketBefore:before,ticketAfter:structuredClone(c.ticket),time:s.clockMins});
+        s.outcomes.push({customer:c.person.name,caseType:c.caseType,action,accepted:result.accepted,compliant:!!result.compliant,exception:!!result.exception,ticketBefore:before,ticketAfter:structuredClone(c.ticket),time:s.clockMins});
         UI.renderTicketOnDesk(c);UI.animateStamp(action,null,c);SoundFX.stamp();
         UI.showDeskFeedback(result.accepted?(result.exception?'warn':'ok'):'err',message);
         UI.renderScheduleBinder();UI.renderSerialsBinder();UI.renderHeader();UI.setDecisionButtons(true);
-        const next=document.getElementById('nextCustomerBtn');next.textContent=s.warnings>=s.maxWarnings?'View shift report →':'Next customer →';next.classList.remove('hidden');
+        if (this.isShiftDismissed()) {
+          document.getElementById('nextCustomerBtn').classList.add('hidden');
+          this.endShift('SHIFT FAILED — MANAGEMENT DISMISSED YOU');
+          return;
+        }
+        const next=document.getElementById('nextCustomerBtn');next.textContent='Next customer →';next.classList.remove('hidden');
         this.saveProgress();
       },
 
@@ -888,9 +975,9 @@
         return {accepted:true,compliant:!exception,exception,evaluation:ev};
       },
 
-      giveWarning() {
-        if(this.state.ownedUpgrades.includes('handbook')&&!this.state.forgivenWarningUsed) {this.state.forgivenWarningUsed=true;return ' Your handbook saved this warning.';}
-        this.state.warnings++;return '';
+      giveWarning(reasonLabel = 'Rule violation') {
+        const res = this.issueWarning(reasonLabel);
+        return ' ' + res.summaryText;
       },
 
       tick() {
@@ -1063,20 +1150,30 @@
       /*************************************************************************
        * END OF SHIFT, UPGRADES & LOCALSTORAGE SAVE SYSTEM
        *************************************************************************/
-      endShift(headline) {
+      endShift(customHeadline = null) {
         this.state.shiftActive = false;
         UI.setDecisionButtons(true);
         this.stopShiftLoop();
         UI.clearDepartureBanner();
 
-        const dismissed = this.state.warnings >= this.state.maxWarnings;
+        const max = this.getMaxWarnings();
+        this.state.maxWarnings = max;
+        const dismissed = this.isShiftDismissed();
+        this.state.lastShiftDismissed = dismissed;
+        if (this.state.shiftStats) {
+          this.state.shiftStats.warnings = this.state.warnings;
+        }
         if (!dismissed && !this.state.completedDays.includes(this.state.day)) {
           this.state.completedDays.push(this.state.day);
         }
         if (this.state.money > this.state.highScore) {
           this.state.highScore = this.state.money;
         }
+        const headline = dismissed
+          ? 'SHIFT FAILED — MANAGEMENT DISMISSED YOU'
+          : 'SHIFT COMPLETE — WELL DONE';
         this.saveProgress();
+        UI.renderHeader();
         UI.openShiftReportModal(headline, dismissed);
       },
 
@@ -1099,17 +1196,10 @@
       replayCurrentDay() {
         UI.closeShiftReportModal();
         this.applyPendingLanguageMode();
-        this.prepareDaySchedule(this.state.day);
-        UI.openBriefingModal(this.state.day);
-      },
-
-      advanceToNextDay() {
-        UI.closeShiftReportModal();
-        this.applyPendingLanguageMode();
-        const playableMax = this.campaign().playableDaysCount || 5;
-        if (this.state.day <= playableMax) {
-          this.state.day += 1;
-        }
+        this.state.warnings = 0;
+        this.state.lastShiftDismissed = false;
+        this.state.forgivenWarningUsed = false;
+        this.state.shiftStats = { served: 0, correct: 0, mistakes: 0, warnings: 0, exceptions: 0, customersLost: 0, cashEarned: 0, dilemmaNotes: [] };
         this.prepareDaySchedule(this.state.day);
         UI.renderHeader();
         UI.renderScheduleBinder();
@@ -1117,6 +1207,30 @@
         UI.renderSerialsBinder();
         this.saveProgress();
         UI.openBriefingModal(this.state.day);
+      },
+
+      advanceToNextDay() {
+        if (this.state.lastShiftDismissed || this.isShiftDismissed() || !this.state.completedDays.includes(this.state.day)) {
+          return false;
+        }
+        UI.closeShiftReportModal();
+        this.applyPendingLanguageMode();
+        const playableMax = this.campaign().playableDaysCount || 5;
+        if (this.state.day <= playableMax) {
+          this.state.day += 1;
+        }
+        this.state.warnings = 0;
+        this.state.lastShiftDismissed = false;
+        this.state.forgivenWarningUsed = false;
+        this.state.shiftStats = { served: 0, correct: 0, mistakes: 0, warnings: 0, exceptions: 0, customersLost: 0, cashEarned: 0, dilemmaNotes: [] };
+        this.prepareDaySchedule(this.state.day);
+        UI.renderHeader();
+        UI.renderScheduleBinder();
+        UI.renderRulesBinder();
+        UI.renderSerialsBinder();
+        this.saveProgress();
+        UI.openBriefingModal(this.state.day);
+        return true;
       },
 
       getCampaignSavedState(campaignId) {
@@ -1291,12 +1405,12 @@
         } catch(e) {
           this.startupMessage = 'Saved progress could not be loaded. A new campaign is ready.';
         }
-        this.state.maxWarnings = {relaxed:4,normal:3,chaos:2}[this.state.difficulty];
+        this.state.maxWarnings = this.getMaxWarnings(this.state.difficulty);
       },
 
       resetCampaignConfirm() {
         this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;UI.clearDepartureBanner();
-        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,ownedUpgrades:[],completedDays:[],totalCustomersLost:0,story:{},outcomes:[]});
+        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,lastShiftDismissed:false,forgivenWarningUsed:false,ownedUpgrades:[],completedDays:[],totalCustomersLost:0,story:{},outcomes:[]});
         this.prepareDaySchedule(1);this.saveProgress();UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.openBriefingModal(1);
       },
     };

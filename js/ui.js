@@ -11,7 +11,7 @@
         document.getElementById('customerPortraitBox').innerHTML=CHARACTERS.renderPortraitSVG(c.person,'neutral');
         document.getElementById('customerIdentityBar').textContent=`${c.person.name} · ${c.groupSize} ${c.groupSize===1?'person':'people'}`;
         const traits=document.getElementById('customerTraitRow');traits.replaceChildren();
-        [c.person.wearingRed?'🧥 Red clothes':'',c.person.tag==='Cinema Visitor'?'':c.person.tag].filter(Boolean).forEach(text=>{
+        [c.person.wearingRed?'🧥 Red clothes':'',c.person.tag==='Cinema Visitor'?'':c.person.tag,c.dilemma?'⚖️ Dilemma':''].filter(Boolean).forEach(text=>{
           const badge=document.createElement('span');badge.className='bg-amber-900 text-amber-100 text-xs px-2 py-1 rounded-full';badge.textContent=text;traits.append(badge);
         });
         document.getElementById('customerStatementBox').textContent=c.statement;
@@ -42,6 +42,12 @@
         const b=Game.booking(c), booking=document.createElement('button');booking.className='inspectable w-full mt-3 text-xs text-left border-t border-dashed border-slate-500 pt-2';
         booking.textContent=`Booking record: ${b?b.seats+' seat(s) · '+b.status:'not found'} · Arrival ${Game.formatMins(c.arrivalTime)}`;
         booking.onclick=()=>Game.handleInspectClick('booking_seats',b?.seats??0,'Booking record: '+(b?.seats??0)+' seats',booking);card.append(booking);
+        if(c.dilemma) {
+          const dilemmaNote=document.createElement('div');
+          dilemmaNote.className='text-xs mt-2 p-2 rounded bg-amber-100/90 border border-amber-700 text-amber-950 font-sans font-semibold';
+          dilemmaNote.textContent='⚖️ Discretionary dilemma: Management may issue a warning if you make an exception.';
+          card.append(dilemmaNote);
+        }
         if(Game.state.ownedUpgrades.includes('computer')) {const note=document.createElement('div');note.className='text-xs mt-2 font-bold';note.textContent=Game.state.usedSerials.includes(t.serial)?'💻 USED ticket number':'💻 Ticket number not used';card.append(note);}
         if(Game.state.ownedUpgrades.includes('scanner')) {const f=Game.screening(t.filmId);const scan=document.createElement('button');scan.className='mt-2 text-xs font-bold border border-amber-700 rounded p-2';scan.textContent='🔍 Scan printed fields';scan.onclick=()=>{
           const fields=f?['filmTitle','screen','time'].filter(k=>String(t[k])!==String(f[k==='filmTitle'?'title':k])):[];
@@ -231,14 +237,17 @@
           const saved = Game.getCampaignSavedState(camp.id);
           const playableDays = camp.playableDaysCount || camp.totalDays || 7;
           const completedCount = (saved.completedDays || []).filter(d => d <= playableDays).length;
-          const hasProgress = completedCount > 0 || saved.day > 1 || saved.money > 0;
+          const effectiveDay = (saved.completedDays || []).includes(saved.day) && saved.day <= playableDays
+            ? saved.day + 1
+            : saved.day;
+          const hasProgress = completedCount > 0 || effectiveDay > 1 || saved.money > 0;
           const isCurrent = Game.state.campaignId === camp.id;
           const isShiftActiveHere = isCurrent && Game.state.shiftActive;
-          const dayLabel = saved.day > playableDays ? 'Endless Mode' : `Day ${saved.day} of ${camp.totalDays || 7}`;
+          const dayLabel = effectiveDay > playableDays ? 'Endless Mode' : `Day ${effectiveDay} of ${camp.totalDays || 7}`;
           const primaryBtnLabel = isShiftActiveHere
             ? 'Resume Active Shift →'
             : hasProgress
-            ? (saved.day > playableDays ? 'Continue (Endless Mode) →' : `Continue (Day ${saved.day}) →`)
+            ? (effectiveDay > playableDays ? 'Continue (Endless Mode) →' : `Continue (Day ${effectiveDay}) →`)
             : 'Start Campaign →';
 
           return `
@@ -340,7 +349,45 @@
         document.getElementById('moneyDisplay').textContent = `€${s.money}`;
         document.getElementById('reputationBar').style.width = `${s.reputation}%`;
         document.getElementById('reputationText').textContent = `${s.reputation}%`;
-        document.getElementById('warningsDisplay').textContent = `${s.warnings} / ${s.maxWarnings}`;
+        const maxWarnings = Game.getMaxWarnings ? Game.getMaxWarnings(s.difficulty) : s.maxWarnings;
+        s.maxWarnings = maxWarnings;
+        const warningsDisplay = document.getElementById('warningsDisplay');
+        if (warningsDisplay) warningsDisplay.textContent = `${s.warnings} / ${maxWarnings}`;
+        const warningsBox = document.getElementById('warningsBox');
+        const warningsIcon = document.getElementById('warningsStatusIcon');
+        const warningsBadge = document.getElementById('warningsUrgencyBadge');
+        if (warningsBox) {
+          const isDismissed = s.warnings >= maxWarnings;
+          const isFinalWarning = !isDismissed && s.warnings === maxWarnings - 1;
+          const isCaution = !isDismissed && !isFinalWarning && s.warnings > 0;
+          const warnState = isDismissed ? 'dismissed' : isFinalWarning ? 'danger' : isCaution ? 'caution' : 'clear';
+          warningsBox.setAttribute('data-warning-state', warnState);
+          if (isDismissed || isFinalWarning) {
+            warningsBox.className = 'bg-rose-950/95 border-2 border-rose-400 px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all warnings-state-danger';
+            if (warningsDisplay) warningsDisplay.className = 'font-ticket text-sm sm:text-base font-extrabold text-amber-300';
+            if (warningsIcon) warningsIcon.textContent = isDismissed ? '🛑' : '🚨';
+            if (warningsBadge) {
+              warningsBadge.textContent = isDismissed ? 'Dismissed' : 'Final Warning';
+              warningsBadge.className = 'text-[10px] font-extrabold uppercase tracking-tight bg-rose-800 text-amber-200 border border-amber-300/80 px-1.5 py-0.5 rounded';
+            }
+          } else if (isCaution) {
+            warningsBox.className = 'bg-amber-950/95 border-2 border-amber-400 px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all';
+            if (warningsDisplay) warningsDisplay.className = 'font-ticket text-sm sm:text-base font-bold text-amber-300';
+            if (warningsIcon) warningsIcon.textContent = '⚠️';
+            if (warningsBadge) {
+              warningsBadge.textContent = 'Caution';
+              warningsBadge.className = 'text-[10px] font-bold uppercase tracking-tight bg-amber-900 text-amber-100 border border-amber-400/70 px-1.5 py-0.5 rounded';
+            }
+          } else {
+            warningsBox.className = 'bg-[#2c090d] border border-red-800/80 px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all';
+            if (warningsDisplay) warningsDisplay.className = 'font-ticket text-sm sm:text-base font-bold text-emerald-300';
+            if (warningsIcon) warningsIcon.textContent = '✓';
+            if (warningsBadge) {
+              warningsBadge.textContent = '';
+              warningsBadge.className = 'hidden';
+            }
+          }
+        }
         document.getElementById('scannerUpgradeBadge').classList.toggle('hidden', !s.ownedUpgrades.includes('scanner'));
         this.updateClockDisplay();
       },
@@ -708,7 +755,31 @@
         return String(text).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
       },
 
+      renderBriefingObjective() {
+        const s = Game.state;
+        const maxWarnings = Game.getMaxWarnings ? Game.getMaxWarnings(s.difficulty) : s.maxWarnings;
+        const ordinal = Game.getWarningOrdinal ? Game.getWarningOrdinal(maxWarnings) : `${maxWarnings}th`;
+        const currentWarnings = s.shiftActive ? s.warnings : 0;
+        const badgeEl = document.getElementById('briefingWarningThresholdBadge');
+        if (badgeEl) {
+          badgeEl.textContent = `Management warnings: ${currentWarnings} / ${maxWarnings}`;
+        }
+        const leadEl = document.getElementById('briefingObjectiveLead');
+        if (leadEl) {
+          leadEl.textContent = 'Serve customers correctly and finish your shift without receiving too many management warnings.';
+        }
+        const noteEl = document.getElementById('briefingObjectiveRuleNote');
+        if (noteEl) {
+          noteEl.textContent = `Incorrect ticket decisions can lead to warnings. Receiving your ${ordinal} warning (${maxWarnings} / ${maxWarnings}) will end the shift.`;
+        }
+      },
+
       openBriefingModal(dayNum) {
+        if (!Game.state.shiftActive) {
+          Game.state.warnings = 0;
+          Game.state.lastShiftDismissed = false;
+          this.renderHeader();
+        }
         const cfg = Game.dayConfig(dayNum);
         const rules = this.getActiveRules();
         const defaultMemo = ['Welcome to the Grand Cinema.', 'Read the programme. Check the ticket. Ask the customer.', 'After each decision, press Next customer.'].join('\n');
@@ -719,6 +790,7 @@
         document.getElementById('briefingDayTitle').textContent = cfg.title;
         document.getElementById('briefingMemoText').textContent = memo;
         document.getElementById('briefingLanguageFocus').textContent = cfg.languageFocus;
+        this.renderBriefingObjective();
 
         const ul = document.getElementById('briefingRulesChecklist');
         ul.innerHTML = checklist.map(item => `
@@ -738,25 +810,75 @@
       },
 
       openShiftReportModal(headline, dismissed) {
-        const st = Game.state.shiftStats;
+        const s = Game.state;
+        const st = s.shiftStats;
         const lost = st.customersLost || 0;
+        const exceptions = st.exceptions || 0;
+        const maxWarnings = Game.getMaxWarnings ? Game.getMaxWarnings(s.difficulty) : s.maxWarnings;
+        const warningsCount = s.warnings;
         const playableMax = Game.campaign()?.playableDaysCount || 5;
-        document.getElementById('reportModalTitle').textContent = headline;
+        const dayCfg = Game.dayConfig(s.day);
+
+        const resolvedHeadline = dismissed
+          ? 'SHIFT FAILED — MANAGEMENT DISMISSED YOU'
+          : 'SHIFT COMPLETE — WELL DONE';
+        document.getElementById('reportModalTitle').textContent = resolvedHeadline;
         document.getElementById('reportServed').textContent = st.served;
         document.getElementById('reportCorrect').textContent = st.correct;
         document.getElementById('reportMistakes').textContent = st.mistakes;
+        const reportWarnEl = document.getElementById('reportWarnings');
+        if (reportWarnEl) reportWarnEl.textContent = `${warningsCount} / ${maxWarnings}`;
         const reportLostEl = document.getElementById('reportCustomersLost');
         if (reportLostEl) reportLostEl.textContent = String(lost);
-        document.getElementById('reportTotalCash').textContent = `€${Game.state.money}`;
+        document.getElementById('reportTotalCash').textContent = `€${s.money}`;
 
-        let comment = `"Acceptable work. Please work faster tomorrow, and remember the rules."`;
+        const outcomeBanner = document.getElementById('reportOutcomeBanner');
+        const outcomeSummary = document.getElementById('reportOutcomeSummary');
+        const outcomeBadge = document.getElementById('reportOutcomeWarningsBadge');
+        const outcomeDetail = document.getElementById('reportOutcomeDetail');
         if (dismissed) {
-          comment = `"Too many mistakes! The Grand Cinema cannot survive this chaos. Please replay this shift and check the rules carefully."`;
-        } else if (st.mistakes === 0 && lost === 0 && st.correct >= 4) {
-          comment = `"Magnificent! Zero mistakes! Even the Corporate Inspector is impressed. Have a cup of tea before tomorrow's shift."`;
+          if (outcomeBanner) outcomeBanner.className = 'rounded-xl border-2 p-3.5 shadow-sm space-y-1 bg-rose-950 text-rose-100 border-rose-400';
+          if (outcomeSummary) {
+            outcomeSummary.textContent = `You received ${warningsCount} management warnings. The limit for this shift was ${maxWarnings}.`;
+          }
+          if (outcomeBadge) {
+            outcomeBadge.className = 'font-ticket text-xs font-extrabold px-2.5 py-0.5 rounded-lg border bg-black/50 border-rose-400 text-amber-300';
+            outcomeBadge.textContent = `Warnings: ${warningsCount} / ${maxWarnings} (Dismissed)`;
+          }
+          if (outcomeDetail) {
+            outcomeDetail.className = 'font-ticket text-xs text-rose-200/95';
+            outcomeDetail.textContent = `Your shift ended early because you reached the management warning limit. You must replay Day ${s.day} (${dayCfg.dayName}) before advancing.`;
+          }
+        } else {
+          if (outcomeBanner) outcomeBanner.className = 'rounded-xl border-2 p-3.5 shadow-sm space-y-1 bg-emerald-950 text-emerald-100 border-emerald-500';
+          if (outcomeSummary) {
+            outcomeSummary.textContent = 'You completed your shift without reaching the management warning limit.';
+          }
+          if (outcomeBadge) {
+            outcomeBadge.className = 'font-ticket text-xs font-extrabold px-2.5 py-0.5 rounded-lg border bg-black/40 border-emerald-400 text-emerald-200';
+            outcomeBadge.textContent = `Warnings: ${warningsCount} / ${maxWarnings}`;
+          }
+          const unlockMsg = s.day < playableMax
+            ? `Day ${s.day + 1} is now unlocked!`
+            : s.day === playableMax
+            ? 'Endless Mode is now unlocked!'
+            : 'Ready for another Endless shift!';
+          if (outcomeDetail) {
+            outcomeDetail.className = 'font-ticket text-xs text-emerald-200/95';
+            outcomeDetail.textContent = `Closing time reached with ${warningsCount} of ${maxWarnings} permitted warnings. ${unlockMsg}`;
+          }
+        }
+
+        let comment = `"Acceptable work. You stayed below the warning limit (${warningsCount} / ${maxWarnings}). Please remember all rules tomorrow."`;
+        if (dismissed) {
+          comment = `"You received ${warningsCount} of ${maxWarnings} permitted management warnings, so your shift was ended early. Replay Day ${s.day} and check the rules carefully to advance."`;
+        } else if (st.mistakes === 0 && exceptions === 0 && warningsCount === 0 && lost === 0 && st.correct >= 4) {
+          comment = `"Magnificent! Zero mistakes and zero warnings! Even the Corporate Inspector is impressed. Have a cup of tea before tomorrow's shift."`;
+        } else if (st.mistakes === 0 && exceptions > 0) {
+          comment = `"Zero inspection mistakes! You made ${exceptions} discretionary ${exceptions === 1 ? 'admission' : 'admissions'} (${warningsCount} / ${maxWarnings} warnings) and completed the shift."`;
         } else if (st.mistakes === 0 && lost > 0) {
           comment = `"Zero inspection mistakes, well done — though ${lost} waiting ${lost === 1 ? 'customer' : 'customers'} lost patience and left the queue. Try to keep the line moving tomorrow!"`;
-        } else if (Game.state.day === playableMax) {
+        } else if (s.day === playableMax) {
           comment = `"You survived all five days at The Grand Cinema! Thanks to your ticket inspections, the cinema is saved from bankruptcy!"`;
         }
         document.getElementById('reportManagerComment').textContent = comment;
@@ -766,20 +888,29 @@
           storyBox.innerHTML = `<strong>📖 Shift Story Notes:</strong><br/>` + st.dilemmaNotes.join('<br/>');
           storyBox.classList.remove('hidden');
         } else {
-          storyBox.innerHTML = `<strong>📖 Cinema Status:</strong> Reputation stands at <strong>${Game.state.reputation}%</strong>. High Score: <strong>€${Game.state.highScore}</strong>.`;
+          storyBox.innerHTML = `<strong>📖 Cinema Status:</strong> Reputation stands at <strong>${s.reputation}%</strong>. High Score: <strong>€${s.highScore}</strong>.`;
           storyBox.classList.remove('hidden');
         }
 
+        const replayBtn = document.getElementById('replayShiftBtn');
         const nextBtn = document.getElementById('nextDayContinueBtn');
         if (dismissed) {
           nextBtn.classList.add('hidden');
+          if (replayBtn) {
+            replayBtn.textContent = `🔄 Replay Day ${s.day} Shift (Required)`;
+            replayBtn.className = 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-lg transition';
+          }
         } else {
           nextBtn.classList.remove('hidden');
-          nextBtn.textContent = Game.state.day === playableMax
+          if (replayBtn) {
+            replayBtn.textContent = '🔄 Replay This Shift';
+            replayBtn.className = 'bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition';
+          }
+          nextBtn.textContent = s.day === playableMax
             ? "🎉 ENTER ENDLESS MODE ➡️"
-            : Game.state.day > playableMax
+            : s.day > playableMax
             ? "PLAY ANOTHER ENDLESS SHIFT ➡️"
-            : `CONTINUE TO DAY ${Game.state.day + 1} ➡️`;
+            : `CONTINUE TO DAY ${s.day + 1} ➡️`;
         }
 
         this.renderUpgradeShop();

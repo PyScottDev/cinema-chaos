@@ -62,9 +62,11 @@
         </div>
 
         <!-- Warnings Counter -->
-        <div class="bg-[#2c090d] border border-red-800/80 px-3 py-1 rounded-lg flex items-center gap-1.5" title="Management Warnings">
-          <span class="text-xs text-red-300 uppercase font-semibold">Warnings</span>
-          <span id="warningsDisplay" class="font-ticket text-sm sm:text-base font-bold text-red-400">0 / 3</span>
+        <div id="warningsBox" data-warning-state="clear" class="bg-[#2c090d] border border-red-800/80 px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all" title="Management Warnings — Reaching the limit ends your shift">
+          <span id="warningsStatusIcon" aria-hidden="true" class="text-xs">✓</span>
+          <span class="text-xs text-red-200 uppercase font-bold tracking-wider">Warnings</span>
+          <span id="warningsDisplay" class="font-ticket text-sm sm:text-base font-bold text-emerald-300">0 / 3</span>
+          <span id="warningsUrgencyBadge" class="hidden text-[10px] font-extrabold uppercase tracking-tight bg-red-900 text-amber-200 border border-amber-400/80 px-1.5 py-0.5 rounded">Final Warning</span>
         </div>
       </div>
 
@@ -494,6 +496,25 @@
           <div id="briefingMemoText" class="whitespace-pre-line"></div>
         </div>
 
+        <!-- Shift Objective & Warning Limit Box -->
+        <div id="briefingObjectiveBox" class="bg-[#2c090d] text-amber-100 border-2 border-[#d4af37] p-3.5 rounded-xl shadow-md space-y-1.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-[#f7d983] flex items-center gap-1.5">
+              <span>🎯</span>
+              <span>YOUR OBJECTIVE</span>
+            </span>
+            <span id="briefingWarningThresholdBadge" class="font-ticket text-xs sm:text-sm font-extrabold bg-black/60 border border-amber-400/80 text-amber-300 px-2.5 py-0.5 rounded-lg">
+              Management warnings: 0 / 3
+            </span>
+          </div>
+          <p id="briefingObjectiveLead" class="text-xs sm:text-sm font-semibold text-white">
+            Serve customers correctly and finish your shift without receiving too many management warnings.
+          </p>
+          <p id="briefingObjectiveRuleNote" class="font-ticket text-xs text-amber-200/95">
+            Incorrect ticket decisions can lead to warnings. Receiving your third warning will end the shift.
+          </p>
+        </div>
+
         <!-- Today's Key Rules Checklist -->
         <div>
           <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">Today's Inspection Checklist:</h3>
@@ -579,8 +600,21 @@
       </div>
 
       <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <!-- Authoritative Pass / Fail Outcome Summary Banner -->
+        <div id="reportOutcomeBanner" role="status" class="rounded-xl border-2 p-3.5 shadow-sm space-y-1 bg-emerald-950 text-emerald-100 border-emerald-500">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <strong id="reportOutcomeSummary" class="text-xs sm:text-sm font-extrabold tracking-wide">
+              You completed your shift without reaching the management warning limit.
+            </strong>
+            <span id="reportOutcomeWarningsBadge" class="font-ticket text-xs font-bold px-2.5 py-0.5 rounded-lg border bg-black/40 border-emerald-400 text-emerald-200">
+              Management warnings: 0 / 3
+            </span>
+          </div>
+          <p id="reportOutcomeDetail" class="font-ticket text-xs text-emerald-200/95"></p>
+        </div>
+
         <!-- Metrics Grid -->
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 font-ticket">
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 font-ticket">
           <div class="bg-white p-3 rounded-xl border border-slate-300 text-center">
             <span class="text-[11px] text-slate-500 uppercase block">Customers Served</span>
             <span id="reportServed" class="text-xl font-bold text-slate-900">0</span>
@@ -593,11 +627,15 @@
             <span class="text-[11px] text-rose-700 uppercase block">Inspection Mistakes</span>
             <span id="reportMistakes" class="text-xl font-bold text-rose-700">0</span>
           </div>
+          <div class="bg-red-50 p-3 rounded-xl border border-red-300 text-center">
+            <span class="text-[11px] text-red-800 uppercase block">Management Warnings</span>
+            <span id="reportWarnings" class="text-xl font-bold text-red-800">0 / 3</span>
+          </div>
           <div class="bg-orange-50 p-3 rounded-xl border border-orange-300 text-center">
             <span class="text-[11px] text-orange-800 uppercase block">Customers Lost</span>
             <span id="reportCustomersLost" class="text-xl font-bold text-orange-800">0</span>
           </div>
-          <div class="bg-amber-50 p-3 rounded-xl border border-amber-400 text-center col-span-2 sm:col-span-1">
+          <div class="bg-amber-50 p-3 rounded-xl border border-amber-400 text-center">
             <span class="text-[11px] text-amber-800 uppercase block">Total Cash</span>
             <span id="reportTotalCash" class="text-xl font-bold text-amber-900">€0</span>
           </div>
@@ -625,8 +663,8 @@
         </div>
       </div>
 
-      <div class="bg-slate-900 px-5 py-3.5 flex items-center justify-between">
-        <button onclick="Game.replayCurrentDay()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition">
+      <div class="bg-slate-900 px-5 py-3.5 flex items-center justify-between gap-2 flex-wrap">
+        <button id="replayShiftBtn" onclick="Game.replayCurrentDay()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition">
           🔄 Replay This Shift
         </button>
         <button id="nextDayContinueBtn" onclick="Game.advanceToNextDay()" class="bg-gradient-to-b from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-extrabold px-6 py-2.5 rounded-xl shadow-lg text-sm transition">

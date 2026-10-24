@@ -36,7 +36,9 @@ function makeEl() {
     append(...n) { this.children.push(...n); },
     before() {},
     replaceWith() {},
-    setAttribute() {},
+    _attrs: {},
+    setAttribute(k, v) { this._attrs[k] = String(v); },
+    getAttribute(k) { return this._attrs[k] ?? null; },
     querySelector() { return makeEl(); },
     matches() { return false; },
     click() {}
@@ -868,6 +870,196 @@ test("15. Customer patience, low-patience visual states, departures, statistics 
   assert.strictEqual(Game.state.totalCustomersLost, 0, "New campaign starts with 0 totalCustomersLost");
   Game.selectCampaign("the-first-week");
   assert.strictEqual(Game.state.totalCustomersLost, 4, "Switching back restores campaign's saved totalCustomersLost");
+});
+
+test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnings vs discretionary admissions, and pass/fail progression", () => {
+  const { Game, UI, sandbox } = createHarness(1616);
+  const doc = sandbox.document;
+
+  // 1 & 4. Authoritative warning thresholds in Relaxed, Normal, and Chaos reflected in Briefing & HUD
+  for (const [diff, expectedLimit, expectedOrd] of [
+    ["relaxed", Game.getMaxWarnings("relaxed"), Game.getWarningOrdinal(Game.getMaxWarnings("relaxed"))],
+    ["normal", Game.getMaxWarnings("normal"), Game.getWarningOrdinal(Game.getWarningThresholds ? Game.getMaxWarnings("normal") : 3)],
+    ["chaos", Game.getMaxWarnings("chaos"), Game.getWarningOrdinal(Game.getMaxWarnings("chaos"))]
+  ]) {
+    Game.setDifficulty(diff);
+    assert.strictEqual(Game.state.maxWarnings, expectedLimit, `maxWarnings must match authoritative limit for ${diff}`);
+    assert.strictEqual(doc.getElementById("warningsDisplay").textContent, `0 / ${expectedLimit}`);
+    assert.strictEqual(doc.getElementById("briefingWarningThresholdBadge").textContent, `Management warnings: 0 / ${expectedLimit}`);
+    assert.ok(
+      doc.getElementById("briefingObjectiveLead").textContent.includes("Serve customers correctly and finish your shift without receiving too many management warnings."),
+      "Briefing must display clear shift objective"
+    );
+    assert.ok(
+      doc.getElementById("briefingObjectiveRuleNote").textContent.includes(`Receiving your ${expectedOrd} warning`),
+      `Briefing must state the ${expectedOrd} warning dismissal rule for ${diff}`
+    );
+  }
+
+  // 5. Distinction between inspection mistakes and management warnings (including Handbook forgiveness)
+  Game.setDifficulty("normal"); // limit = 3
+  Game.state.day = 1;
+  Game.state.ownedUpgrades = ["handbook"];
+  Game.startShift();
+
+  // Force a valid customer and deliberately REFUSE them (an inspection mistake)
+  const validCust = Game.generateCustomerScenario("valid");
+  Game.finalizeCustomerAtWindow(validCust);
+  Game.state.currentCustomer = validCust;
+  Game.makeDecision("REFUSE");
+
+  // Because of the Handbook upgrade, this first mistake is recorded as an inspection mistake (1), but 0 warnings!
+  assert.strictEqual(Game.state.shiftStats.mistakes, 1, "Incorrect decision must increment inspection mistakes");
+  assert.strictEqual(Game.state.warnings, 0, "Handbook upgrade forgives the first management warning, keeping warnings distinct from mistakes");
+  assert.ok(doc.getElementById("deskFeedbackBanner").textContent.includes("Inspection mistake"), "Feedback must identify inspection mistake");
+  assert.ok(doc.getElementById("deskFeedbackBanner").textContent.includes("Ticket refused incorrectly"), "Feedback must explain why warning was triggered/forgiven");
+
+  // Remove handbook and make another mistake -> now both mistakes (2) and warnings (1 / 3) increment
+  Game.state.ownedUpgrades = [];
+  Game.nextCustomerFromQueue();
+  const validCust2 = Game.generateCustomerScenario("valid");
+  Game.finalizeCustomerAtWindow(validCust2);
+  Game.state.currentCustomer = validCust2;
+  Game.makeDecision("REFUSE");
+
+  assert.strictEqual(Game.state.shiftStats.mistakes, 2);
+  assert.strictEqual(Game.state.warnings, 1);
+  assert.strictEqual(doc.getElementById("warningsDisplay").textContent, `1 / ${Game.getMaxWarnings("normal")}`);
+  assert.strictEqual(doc.getElementById("warningsBox").getAttribute("data-warning-state"), "caution");
+  assert.ok(
+    doc.getElementById("deskFeedbackBanner").textContent.includes(`Ticket refused incorrectly — Management warning 1 / ${Game.getMaxWarnings("normal")}`),
+    "Feedback must state specific warning reason and count"
+  );
+
+  // 6. Deliberate discretionary admission (Day 2 late dilemma) issues a warning WITHOUT counting as an inspection mistake
+  Game.state.day = 2;
+  Game.startShift();
+  Game.state.clockMins = 1108; // Past 18:25 so 18:15 screening is >10 mins late
+  const dilemmaCust = Game.generateCustomerScenario("morris");
+  Game.finalizeCustomerAtWindow(dilemmaCust);
+  Game.state.currentCustomer = dilemmaCust;
+  UI.renderCustomer(dilemmaCust);
+  UI.renderTicketOnDesk(dilemmaCust);
+
+  // Verify pre-decision trade-off notice is rendered on the desk
+  const deskCard = doc.getElementById("deskDocumentArea").children[0];
+  const hasDilemmaWarning = deskCard && deskCard.children.some(ch => String(ch.textContent).includes("Management may issue a warning if you make an exception"));
+  assert.ok(hasDilemmaWarning, "Ticket desk must warn player before making a discretionary exception");
+
+  Game.askCustomerQuestion("which_film", "Which film are you going to see?");
+  const cashBeforeExc = Game.state.money;
+  const repBeforeExc = Game.state.reputation;
+  Game.makeDecision("ADMIT"); // Deliberate compassionate exception
+
+  assert.strictEqual(Game.state.shiftStats.mistakes, 0, "Deliberate discretionary admission must NOT count as an inspection mistake");
+  assert.strictEqual(Game.state.shiftStats.exceptions, 1, "Discretionary admission must be tracked in shiftStats.exceptions");
+  assert.strictEqual(Game.state.warnings, 1, "Discretionary admission must issue 1 management warning");
+  assert.strictEqual(Game.state.money, cashBeforeExc + 6, "Discretionary admission awards +€6");
+  assert.strictEqual(Game.state.reputation, repBeforeExc + 4, "Discretionary admission awards +4 reputation");
+  assert.ok(
+    doc.getElementById("deskFeedbackBanner").textContent.includes("Discretionary admission — Management warning issued"),
+    "Feedback must clearly label discretionary admission and warning"
+  );
+
+  // 7. Customer abandonment does NOT count as an inspection mistake or a management warning
+  Game.state.queue = [{ person: { name: "Impatient Guest", coatColor: "#444" }, patience: 0.2 }];
+  Game.updateQueuePatience();
+  assert.strictEqual(Game.state.shiftStats.customersLost, 1);
+  assert.strictEqual(Game.state.shiftStats.mistakes, 0, "Customer abandonment must not increment mistakes");
+  assert.strictEqual(Game.state.warnings, 1, "Customer abandonment must not issue a management warning");
+
+  // 2 & 8. Passing a shift below the warning threshold unlocks the next day and updates Staff Report
+  Game.state.clockMins = Game.state.clockEndMins;
+  Game.nextCustomerFromQueue(); // Ends shift at closing time with 1 / 3 warnings
+  assert.strictEqual(Game.state.shiftActive, false);
+  assert.strictEqual(Game.state.lastShiftDismissed, false);
+  assert.strictEqual(doc.getElementById("reportModalTitle").textContent, "SHIFT COMPLETE — WELL DONE");
+  assert.strictEqual(
+    doc.getElementById("reportOutcomeSummary").textContent,
+    "You completed your shift without reaching the management warning limit."
+  );
+  assert.strictEqual(doc.getElementById("reportWarnings").textContent, `1 / ${Game.getMaxWarnings("normal")}`);
+  assert.strictEqual(String(doc.getElementById("reportMistakes").textContent), "0");
+  assert.strictEqual(String(doc.getElementById("reportCustomersLost").textContent), "1");
+  assert.ok(Game.state.completedDays.includes(2), "Passing Day 2 must record Day 2 in completedDays");
+  assert.strictEqual(doc.getElementById("nextDayContinueBtn").classList.contains("hidden"), false);
+
+  const advancedOk = Game.advanceToNextDay();
+  assert.strictEqual(advancedOk, true);
+  assert.strictEqual(Game.state.day, 3, "Advancing after passing Day 2 must unlock Day 3");
+  assert.strictEqual(Game.state.warnings, 0, "Advancing to next day must reset warnings to 0");
+
+  // 3, 9 & 10. Failing immediately when warning threshold is reached, blocking progression, and requiring replay
+  Game.setDifficulty("normal"); // limit = 3
+  Game.startShift();
+  const limit = Game.getMaxWarnings("normal");
+
+  for (let i = 1; i <= limit; i++) {
+    const cust = Game.generateCustomerScenario("valid");
+    Game.finalizeCustomerAtWindow(cust);
+    Game.state.currentCustomer = cust;
+    Game.state.decisionLocked = false;
+    Game.makeDecision("REFUSE"); // Wrong decision -> issues warning i
+    if (i < limit) {
+      assert.strictEqual(Game.state.shiftActive, true, `Shift should remain active at ${i} / ${limit} warnings`);
+      if (i === limit - 1) {
+        assert.strictEqual(doc.getElementById("warningsBox").getAttribute("data-warning-state"), "danger", "HUD must show danger state on final warning");
+        assert.strictEqual(doc.getElementById("warningsUrgencyBadge").textContent, "Final Warning");
+      }
+      Game.nextCustomerFromQueue();
+    }
+  }
+
+  // On the 3rd warning, the shift must fail immediately without waiting for Next Customer
+  assert.strictEqual(Game.state.warnings, limit);
+  assert.strictEqual(Game.state.shiftActive, false, "Reaching the warning threshold must immediately end the shift");
+  assert.strictEqual(Game.state.lastShiftDismissed, true);
+  assert.strictEqual(doc.getElementById("warningsBox").getAttribute("data-warning-state"), "dismissed");
+  assert.strictEqual(doc.getElementById("reportModalTitle").textContent, "SHIFT FAILED — MANAGEMENT DISMISSED YOU");
+  assert.strictEqual(
+    doc.getElementById("reportOutcomeSummary").textContent,
+    `You received ${limit} management warnings. The limit for this shift was ${limit}.`
+  );
+  assert.strictEqual(doc.getElementById("reportWarnings").textContent, `${limit} / ${limit}`);
+  assert.strictEqual(Game.state.completedDays.includes(3), false, "Failing Day 3 must NOT add Day 3 to completedDays");
+  assert.strictEqual(doc.getElementById("nextDayContinueBtn").classList.contains("hidden"), true, "Continue button must be hidden after failure");
+  assert.ok(doc.getElementById("replayShiftBtn").textContent.includes("Replay Day 3"), "Replay button must indicate Day 3 must be replayed");
+
+  // Attempting to advance after failure (or bypass via menu) must not unlock Day 4
+  assert.strictEqual(Game.advanceToNextDay(), false, "advanceToNextDay() must refuse to advance after a failed shift");
+  assert.strictEqual(Game.state.day, 3, "Day must remain 3 after failed shift");
+
+  UI.openCampaignSelectModal();
+  Game.startOrContinueCampaign("the-first-week");
+  assert.strictEqual(Game.state.day, 3, "Continuing from Campaign Selection Screen must stay on Day 3");
+
+  // Replaying current day resets shift counters and prepares Day 3 briefing cleanly
+  Game.replayCurrentDay();
+  assert.strictEqual(Game.state.day, 3);
+  assert.strictEqual(Game.state.warnings, 0);
+  assert.strictEqual(Game.state.lastShiftDismissed, false);
+  assert.strictEqual(Game.state.shiftStats.mistakes, 0);
+  assert.strictEqual(doc.getElementById("warningsDisplay").textContent, `0 / ${limit}`);
+
+  // 11 & 12. Warning feedback and thresholds remain consistent when switching campaigns
+  const minimalCampaignCode = fs.readFileSync(path.join(ROOT, "tests/minimal-test-campaign.js"), "utf8");
+  vm.runInContext(minimalCampaignCode, sandbox);
+
+  Game.selectCampaign("festival-showcase");
+  Game.setDifficulty("chaos"); // limit = 2
+  const chaosLimit = Game.getMaxWarnings("chaos");
+  assert.strictEqual(doc.getElementById("briefingWarningThresholdBadge").textContent, `Management warnings: 0 / ${chaosLimit}`);
+  Game.startShift();
+
+  const festValid = Game.generateCustomerScenario("valid");
+  Game.finalizeCustomerAtWindow(festValid);
+  Game.state.currentCustomer = festValid;
+  Game.makeDecision("REFUSE");
+  assert.strictEqual(Game.state.warnings, 1);
+  assert.ok(
+    doc.getElementById("deskFeedbackBanner").textContent.includes(`Ticket refused incorrectly — Management warning 1 / ${chaosLimit}`),
+    "Warning feedback must be consistent across campaigns"
+  );
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

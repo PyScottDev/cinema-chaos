@@ -202,6 +202,15 @@
       animation: departureBannerSlide 0.22s ease-out forwards;
     }
 
+    @keyframes warningDangerPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.65); }
+      50% { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.35); }
+    }
+
+    .warnings-state-danger {
+      animation: warningDangerPulse 1.4s ease-in-out infinite;
+    }
+
     /* Tactile Stamp Buttons */
     .btn-stamp {
       transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
