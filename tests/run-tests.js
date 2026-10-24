@@ -53,13 +53,15 @@ function createHarness(seed = 12345, customScripts = null) {
       _s: {},
       getItem(k) { return this._s[k] ?? null; },
       setItem(k, v) { this._s[k] = String(v); },
-      removeItem(k) { delete this._s[k]; }
+      removeItem(k) { delete this._s[k]; },
+      clear() { this._s = {}; }
     },
     URLSearchParams,
     structuredClone,
     setInterval: () => 1,
     clearInterval: () => {},
     setTimeout: () => 1,
+    clearTimeout: () => {},
     document: {
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, makeEl());
@@ -90,6 +92,7 @@ function createHarness(seed = 12345, customScripts = null) {
   return {
     sandbox,
     elements,
+    storage: sandbox.localStorage,
     Game: sandbox.CinemaDebug.game,
     UI: sandbox.CinemaDebug.ui
   };
@@ -707,6 +710,164 @@ test("14. Campaign-specific inspection text, active-shift switch protection, and
     { category: "rule", value: "gala_glasses", label: "Screen 1: festival glasses" }
   );
   assert.strictEqual(festCompare.message, "Glasses worn. Screen 1 requires festival glasses after 20:00. All other rules apply.");
+});
+
+test("15. Customer patience, low-patience visual states, departures, statistics separation, and save compatibility", () => {
+  const { Game, UI, sandbox, storage } = createHarness(1515);
+
+  // 1 & 2. Patience remains unchanged before shift start, while paused, or when a modal is open
+  Game.setDifficulty("normal");
+  Game.state.shiftActive = false;
+  Game.state.queue = [{ person: { name: "PreShift Guest", coatColor: "#123456" }, patience: 100 }];
+  Game.updateQueuePatience();
+  assert.strictEqual(Game.state.queue[0].patience, 100, "Patience must not decrease before shift has started");
+
+  Game.startShift();
+  assert.ok(Game.state.queue.length >= 1, "Shift starts with waiting customer(s) in queue");
+  const w0 = Game.state.queue[0];
+  w0.patience = 100;
+
+  // Pause guard
+  Game.state.paused = true;
+  Game.updateQueuePatience();
+  assert.strictEqual(w0.patience, 100, "Patience must not decrease while game is paused");
+  Game.state.paused = false;
+
+  // Modal guard (e.g., Guide modal or Campaign Selection Menu open)
+  UI.openGuideModal();
+  assert.ok(Game.state.modalDepth > 0);
+  Game.updateQueuePatience();
+  assert.strictEqual(w0.patience, 100, "Patience must not decrease while a modal is open");
+  UI.closeGuideModal();
+
+  UI.openCampaignSelectModal();
+  assert.ok(Game.state.modalDepth > 0);
+  Game.updateQueuePatience();
+  assert.strictEqual(w0.patience, 100, "Patience must not decrease while Campaign Selection Menu is open");
+  UI.resumeActiveShiftFromMenu();
+
+  // 3. Relaxed mode prevents patience loss and abandonment
+  Game.setDifficulty("relaxed");
+  w0.patience = 5;
+  Game.updateQueuePatience();
+  assert.strictEqual(w0.patience, 5, "Relaxed mode must not reduce customer patience");
+  assert.strictEqual(Game.state.queue.includes(w0), true, "Customers must not abandon the queue in Relaxed mode");
+
+  // 4. Normal and Chaos modes apply their intended patience rates
+  Game.setDifficulty("normal");
+  w0.patience = 100;
+  Game.updateQueuePatience();
+  assert.strictEqual(w0.patience, 99.25, "Normal mode must decrease patience by 0.75 per tick");
+
+  Game.setDifficulty("chaos");
+  w0.patience = 100;
+  Game.updateQueuePatience();
+  assert.strictEqual(w0.patience, 98.5, "Chaos mode must decrease patience by 1.5 per tick");
+
+  // 5. The seating upgrade reduces patience loss by / 1.4
+  Game.state.ownedUpgrades = ["seating"];
+  Game.setDifficulty("normal");
+  w0.patience = 100;
+  Game.updateQueuePatience();
+  assert.ok(Math.abs(w0.patience - (100 - 0.75 / 1.4)) < 1e-9, "Seating upgrade must slow Normal patience decay by / 1.4");
+
+  Game.setDifficulty("chaos");
+  w0.patience = 100;
+  Game.updateQueuePatience();
+  assert.ok(Math.abs(w0.patience - (100 - 1.5 / 1.4)) < 1e-9, "Seating upgrade must slow Chaos patience decay by / 1.4");
+  Game.state.ownedUpgrades = [];
+
+  // Visual states & accessible cues (Normal > 40, Impatient <= 40, Critical <= 20)
+  assert.strictEqual(Game.getPatienceState(75), "normal");
+  assert.strictEqual(Game.getPatienceState(40), "impatient");
+  assert.strictEqual(Game.getPatienceState(25), "impatient");
+  assert.strictEqual(Game.getPatienceState(20), "critical");
+  assert.strictEqual(Game.getPatienceState(5), "critical");
+
+  w0.patience = 35;
+  UI.renderQueue();
+  let queueHtml = sandbox.document.getElementById("queueVisualContainer").innerHTML;
+  assert.ok(queueHtml.includes('data-patience-state="impatient"'), "Queue item at 35% must have impatient state attribute");
+  assert.ok(queueHtml.includes("Impatient"), "Impatient state must include accessible non-color label");
+
+  w0.patience = 15;
+  UI.renderQueue();
+  queueHtml = sandbox.document.getElementById("queueVisualContainer").innerHTML;
+  assert.ok(queueHtml.includes('data-patience-state="critical"'), "Queue item at 15% must have critical state attribute");
+  assert.ok(queueHtml.includes("Critical"), "Critical state must include accessible non-color label");
+
+  // 6, 7 & 8. Customer leaves queue at 0 patience, applies -3 reputation, increments customersLost, and does NOT increment mistakes
+  Game.setDifficulty("normal");
+  UI.clearDepartureBanner();
+  const repBefore = Game.state.reputation;
+  const mistakesBefore = Game.state.shiftStats.mistakes;
+  const lostBefore = Game.state.shiftStats.customersLost;
+  const totalLostBefore = Game.state.totalCustomersLost;
+
+  w0.patience = 0.5; // Will hit 0 on next Normal tick (0.75 decay)
+  const departed = Game.updateQueuePatience();
+  assert.strictEqual(departed.length, 1, "One customer should depart when patience reaches 0");
+  assert.strictEqual(Game.state.queue.includes(w0), false, "Departed customer must be removed from queue");
+  assert.strictEqual(Game.state.reputation, repBefore - 3, "Abandonment must apply -3 reputation penalty");
+  assert.strictEqual(Game.state.shiftStats.customersLost, lostBefore + 1, "Abandonment must increment shiftStats.customersLost");
+  assert.strictEqual(Game.state.totalCustomersLost, totalLostBefore + 1, "Abandonment must increment state.totalCustomersLost");
+  assert.strictEqual(Game.state.shiftStats.mistakes, mistakesBefore, "Abandonment must NOT increment shiftStats.mistakes");
+
+  const bannerEl = sandbox.document.getElementById("queueDepartureBanner");
+  assert.strictEqual(bannerEl.classList.contains("hidden"), false, "Departure notification banner must be visible");
+  assert.ok(bannerEl.innerHTML.includes("CUSTOMER LEFT THE QUEUE"), "Banner must announce customer departure");
+  assert.ok(bannerEl.innerHTML.includes("Reputation −3"), "Banner must show Reputation −3 penalty");
+
+  // 9. Multiple departures do not break the queue and group cleanly
+  UI.clearDepartureBanner();
+  const c1 = { person: { name: "Guest One", coatColor: "#111" }, patience: 0.4 };
+  const c2 = { person: { name: "Guest Two", coatColor: "#222" }, patience: 80 };
+  const c3 = { person: { name: "Guest Three", coatColor: "#333" }, patience: 0.2 };
+  Game.state.queue = [c1, c2, c3];
+  const repBeforeMulti = Game.state.reputation;
+  const multiDeparted = Game.updateQueuePatience();
+  assert.strictEqual(multiDeparted.length, 2, "Both expiring customers must depart on the same tick");
+  assert.strictEqual(Game.state.queue.length, 1, "Surviving customer must remain in queue");
+  assert.strictEqual(Game.state.queue[0], c2, "First-come, first-served order of remaining queue must be preserved");
+  assert.strictEqual(Game.state.reputation, repBeforeMulti - 6, "Two simultaneous departures must apply -6 reputation");
+  assert.strictEqual(Game.state.shiftStats.customersLost, 3, "shiftStats.customersLost must reflect all 3 departed customers");
+  assert.strictEqual(Game.state.shiftStats.mistakes, mistakesBefore, "shiftStats.mistakes must still remain 0");
+  assert.ok(bannerEl.innerHTML.includes("2 CUSTOMERS LEFT THE QUEUE"), "Banner must group multiple departures");
+  assert.ok(bannerEl.innerHTML.includes("Reputation −6"), "Banner must show grouped Reputation −6");
+
+  // Verify End-of-Shift report displays Customers Lost separately from Inspection Mistakes
+  Game.endShift("SHIFT COMPLETE");
+  assert.strictEqual(String(sandbox.document.getElementById("reportCustomersLost").textContent), "3");
+  assert.strictEqual(String(sandbox.document.getElementById("reportMistakes").textContent), "0");
+
+  // 10. Older saved games without totalCustomersLost load without errors and default to 0
+  storage.clear();
+  storage.setItem("cinema_chaos_save_v2", JSON.stringify({
+    version: 2,
+    day: 3,
+    difficulty: "normal",
+    money: 95,
+    reputation: 82,
+    ownedUpgrades: ["seating"],
+    completedDays: [1, 2],
+    highScore: 95,
+    story: {}
+  }));
+  Game.loadProgress("the-first-week");
+  assert.strictEqual(Game.state.day, 3);
+  assert.strictEqual(Game.state.money, 95);
+  assert.strictEqual(Game.state.totalCustomersLost, 0, "Older V2 save without totalCustomersLost must default to 0");
+
+  // 11. Menu pause/resume and campaign switching preserve patience and per-campaign totalCustomersLost
+  const minimalCampaignCode = fs.readFileSync(path.join(ROOT, "tests/minimal-test-campaign.js"), "utf8");
+  vm.runInContext(minimalCampaignCode, sandbox);
+
+  Game.state.totalCustomersLost = 4;
+  Game.saveProgress();
+  Game.selectCampaign("festival-showcase");
+  assert.strictEqual(Game.state.totalCustomersLost, 0, "New campaign starts with 0 totalCustomersLost");
+  Game.selectCampaign("the-first-week");
+  assert.strictEqual(Game.state.totalCustomersLost, 4, "Switching back restores campaign's saved totalCustomersLost");
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

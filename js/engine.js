@@ -19,6 +19,7 @@
         ownedUpgrades: [],
         completedDays: [],
         highScore: 0,
+        totalCustomersLost: 0,
 
         // Teacher Settings
         showLanguageHints: false,
@@ -44,6 +45,7 @@
           served: 0,
           correct: 0,
           mistakes: 0,
+          customersLost: 0,
           cashEarned: 0,
           dilemmaNotes: []
         },
@@ -174,6 +176,7 @@
         this.loadProgress(campaignId);
         this.applyPendingLanguageMode();
         this.prepareDaySchedule(this.state.day);
+        UI.clearDepartureBanner();
         UI.renderHeader();
         UI.renderScheduleBinder();
         UI.renderRulesBinder();
@@ -218,6 +221,7 @@
           warnings: 0,
           ownedUpgrades: [],
           completedDays: [],
+          totalCustomersLost: 0,
           story: {},
           outcomes: []
         });
@@ -284,12 +288,12 @@
       },
 
       startShift() {
-        this.stopShiftLoop();this.state.modalDepth=0;UI.modalStack.clear();UI.closeBriefingModal();UI.closeCampaignSelectModal();
+        this.stopShiftLoop();this.state.modalDepth=0;UI.modalStack.clear();UI.closeBriefingModal();UI.closeCampaignSelectModal();UI.clearDepartureBanner();
         this.applyPendingLanguageMode();
         this.prepareDaySchedule(this.state.day);
         Object.assign(this.state,{shiftActive:true,paused:false,clockMins:1065,clockFormatted:'17:45',warnings:0,queue:[],casesGeneratedCount:0,
           forgivenWarningUsed:false,currentCustomer:null,decisionLocked:false,closing:false,outcomes:[],
-          shiftStats:{served:0,correct:0,mistakes:0,cashEarned:0,dilemmaNotes:[]}});
+          shiftStats:{served:0,correct:0,mistakes:0,customersLost:0,cashEarned:0,dilemmaNotes:[]}});
         this.setDifficulty(this.state.difficulty);SoundFX.bell();
         UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.renderPause();
         this.spawnCustomerToQueue();this.spawnCustomerToQueue();this.nextCustomerFromQueue();this.startShiftLoop();
@@ -309,16 +313,49 @@
 
       togglePause() { if(this.state.shiftActive&&!this.state.modalDepth){this.state.paused=!this.state.paused;UI.renderPause();} },
 
+      patienceConfig: {
+        impatientThreshold: 40,
+        criticalThreshold: 20,
+        normalDecay: 0.75,
+        chaosDecay: 1.5,
+        seatingDivisor: 1.4,
+        reputationPenalty: 3
+      },
+
+      getPatienceState(patience) {
+        if (patience <= this.patienceConfig.criticalThreshold) return 'critical';
+        if (patience <= this.patienceConfig.impatientThreshold) return 'impatient';
+        return 'normal';
+      },
+
+      getPatienceDecayRate() {
+        if (this.state.disableQueueWalkouts || this.state.difficulty === 'relaxed') return 0;
+        const base = this.state.difficulty === 'chaos' ? this.patienceConfig.chaosDecay : this.patienceConfig.normalDecay;
+        return this.state.ownedUpgrades.includes('seating') ? base / this.patienceConfig.seatingDivisor : base;
+      },
+
       updateQueuePatience() {
-        if(!this.state.disableQueueWalkouts && this.state.difficulty!=='relaxed') {
-          const decay=(this.state.difficulty==='chaos'?1.5:0.75)/(this.state.ownedUpgrades.includes('seating')?1.4:1);
-          this.state.queue=this.state.queue.filter(c=>{
-            c.patience=Math.max(0,c.patience-decay);
-            if(c.patience>0)return true;
-            this.state.shiftStats.mistakes++;this.adjustReputation(-3);UI.renderHeader();return false;
+        if (!this.state.shiftActive || this.state.paused || this.state.modalDepth) return [];
+        const decay = this.getPatienceDecayRate();
+        const departed = [];
+        if (decay > 0) {
+          this.state.queue = this.state.queue.filter(c => {
+            c.patience = Math.max(0, c.patience - decay);
+            if (c.patience > 0) return true;
+            departed.push(c);
+            this.state.shiftStats.customersLost = (this.state.shiftStats.customersLost || 0) + 1;
+            this.state.totalCustomersLost = (this.state.totalCustomersLost || 0) + 1;
+            this.adjustReputation(-this.patienceConfig.reputationPenalty);
+            return false;
           });
         }
-        UI.renderQueue();
+        if (departed.length > 0) {
+          UI.renderHeader();
+          UI.notifyCustomerDepartures(departed, departed.length * this.patienceConfig.reputationPenalty);
+          this.saveProgress();
+        }
+        UI.renderQueue(departed);
+        return departed;
       },
 
       /*************************************************************************
@@ -1030,6 +1067,7 @@
         this.state.shiftActive = false;
         UI.setDecisionButtons(true);
         this.stopShiftLoop();
+        UI.clearDepartureBanner();
 
         const dismissed = this.state.warnings >= this.state.maxWarnings;
         if (!dismissed && !this.state.completedDays.includes(this.state.day)) {
@@ -1090,6 +1128,7 @@
             ownedUpgrades: [...this.state.ownedUpgrades],
             completedDays: [...this.state.completedDays],
             highScore: this.state.highScore,
+            totalCustomersLost: this.state.totalCustomersLost || 0,
             story: { ...this.state.story }
           };
         }
@@ -1097,14 +1136,20 @@
           const v3Raw = localStorage.getItem('cinema_chaos_campaigns_v3');
           if (v3Raw) {
             const v3 = JSON.parse(v3Raw);
-            if (v3?.campaigns?.[campaignId]) return v3.campaigns[campaignId];
+            if (v3?.campaigns?.[campaignId]) {
+              const saved = v3.campaigns[campaignId];
+              return { totalCustomersLost: 0, ...saved };
+            }
           }
           if (campaignId === 'the-first-week') {
             const v2Raw = localStorage.getItem('cinema_chaos_save_v2') || localStorage.getItem('cinema_chaos_save_v1');
-            if (v2Raw) return JSON.parse(v2Raw);
+            if (v2Raw) {
+              const saved = JSON.parse(v2Raw);
+              return { totalCustomersLost: 0, ...saved };
+            }
           }
         } catch (e) {}
-        return { day: 1, money: 0, reputation: 80, ownedUpgrades: [], completedDays: [], highScore: 0, story: {} };
+        return { day: 1, money: 0, reputation: 80, ownedUpgrades: [], completedDays: [], highScore: 0, totalCustomersLost: 0, story: {} };
       },
 
       saveProgress() {
@@ -1117,6 +1162,7 @@
           ownedUpgrades: [...s.ownedUpgrades],
           completedDays: [...s.completedDays],
           highScore: s.highScore,
+          totalCustomersLost: s.totalCustomersLost || 0,
           story: { ...s.story }
         };
         try {
@@ -1141,7 +1187,7 @@
 
           if (campId === 'the-first-week') {
             const payload = { version: 2 };
-            ['day','difficulty','money','reputation','ownedUpgrades','completedDays','highScore','showLanguageHints','enableTVContent','disableQueueWalkouts','story'].forEach(k => payload[k] = s[k]);
+            ['day','difficulty','money','reputation','ownedUpgrades','completedDays','highScore','totalCustomersLost','showLanguageHints','enableTVContent','disableQueueWalkouts','story'].forEach(k => payload[k] = s[k]);
             payload.languageMode = v3.languageMode;
             payload.muted = SoundFX.muted;
             localStorage.setItem('cinema_chaos_save_v2', JSON.stringify(payload));
@@ -1199,6 +1245,7 @@
             ownedUpgrades: [],
             completedDays: [],
             highScore: 0,
+            totalCustomersLost: 0,
             story: {}
           });
 
@@ -1224,7 +1271,7 @@
           if (d) {
             const maxDay = (this.campaign()?.totalDays || 7) + 1;
             if (Number.isInteger(d.day) && d.day >= 1 && d.day <= maxDay) s.day = d.day;
-            for (const k of ['money','highScore','reputation']) {
+            for (const k of ['money','highScore','reputation','totalCustomersLost']) {
               if (Number.isFinite(d[k]) && d[k] >= 0) s[k] = k === 'reputation' ? Math.min(100, d[k]) : Math.floor(d[k]);
             }
             const catalog = this.upgradesCatalog();
@@ -1248,8 +1295,8 @@
       },
 
       resetCampaignConfirm() {
-        this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;
-        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,ownedUpgrades:[],completedDays:[],story:{},outcomes:[]});
+        this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;UI.clearDepartureBanner();
+        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,ownedUpgrades:[],completedDays:[],totalCustomersLost:0,story:{},outcomes:[]});
         this.prepareDaySchedule(1);this.saveProgress();UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.openBriefingModal(1);
       },
     };

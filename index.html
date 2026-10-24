@@ -129,6 +129,9 @@
         <div id="queueVisualContainer" class="flex items-center gap-2 min-h-[44px] overflow-x-auto py-1">
           <span class="text-xs text-amber-200/50 italic">Queue is clear...</span>
         </div>
+        <!-- Non-obstructive Queue Departure Notification -->
+        <div id="queueDepartureBanner" role="status" aria-live="polite" class="hidden mt-2 bg-rose-950/95 border border-rose-400/80 rounded-lg px-3 py-2 text-xs text-rose-100 shadow-lg">
+        </div>
       </div>
 
       <!-- Ticket Booth Window Frame -->
@@ -577,7 +580,7 @@
 
       <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
         <!-- Metrics Grid -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-ticket">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 font-ticket">
           <div class="bg-white p-3 rounded-xl border border-slate-300 text-center">
             <span class="text-[11px] text-slate-500 uppercase block">Customers Served</span>
             <span id="reportServed" class="text-xl font-bold text-slate-900">0</span>
@@ -587,10 +590,14 @@
             <span id="reportCorrect" class="text-xl font-bold text-emerald-700">0</span>
           </div>
           <div class="bg-rose-50 p-3 rounded-xl border border-rose-300 text-center">
-            <span class="text-[11px] text-rose-700 uppercase block">Mistakes / Walkouts</span>
+            <span class="text-[11px] text-rose-700 uppercase block">Inspection Mistakes</span>
             <span id="reportMistakes" class="text-xl font-bold text-rose-700">0</span>
           </div>
-          <div class="bg-amber-50 p-3 rounded-xl border border-amber-400 text-center">
+          <div class="bg-orange-50 p-3 rounded-xl border border-orange-300 text-center">
+            <span class="text-[11px] text-orange-800 uppercase block">Customers Lost</span>
+            <span id="reportCustomersLost" class="text-xl font-bold text-orange-800">0</span>
+          </div>
+          <div class="bg-amber-50 p-3 rounded-xl border border-amber-400 text-center col-span-2 sm:col-span-1">
             <span class="text-[11px] text-amber-800 uppercase block">Total Cash</span>
             <span id="reportTotalCash" class="text-xl font-bold text-amber-900">€0</span>
           </div>

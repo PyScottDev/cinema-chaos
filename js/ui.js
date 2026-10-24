@@ -268,7 +268,7 @@
                   </div>
                   <div class="flex justify-between">
                     <span class="text-amber-300/70">High Score:</span>
-                    <span class="font-bold text-amber-300">€${saved.highScore || 0}</span>
+                    <span class="font-bold text-amber-300">€${saved.highScore || 0}${(saved.totalCustomersLost || 0) > 0 ? ` · <span class="text-rose-300">${saved.totalCustomersLost} lost</span>` : ''}</span>
                   </div>
                 </div>
               </div>
@@ -402,28 +402,130 @@
         this.renderCampaignMenuSettings();
       },
 
-      renderQueue() {
+      departureNotice: {
+        count: 0,
+        repLost: 0,
+        names: [],
+        timer: null
+      },
+
+      clearDepartureBanner() {
+        if (this.departureNotice.timer) {
+          if (typeof clearTimeout === 'function') clearTimeout(this.departureNotice.timer);
+          this.departureNotice.timer = null;
+        }
+        this.departureNotice.count = 0;
+        this.departureNotice.repLost = 0;
+        this.departureNotice.names = [];
+        const banner = document.getElementById('queueDepartureBanner');
+        if (banner) {
+          banner.classList.add('hidden');
+          banner.innerHTML = '';
+        }
+      },
+
+      notifyCustomerDepartures(departedCustomers = [], repPenalty = 3) {
+        if (!Array.isArray(departedCustomers) || departedCustomers.length === 0) return;
+        const banner = document.getElementById('queueDepartureBanner');
+        const isAlreadyVisible = banner && !banner.classList.contains('hidden');
+        if (!isAlreadyVisible) {
+          this.departureNotice.count = 0;
+          this.departureNotice.repLost = 0;
+          this.departureNotice.names = [];
+        }
+        this.departureNotice.count += departedCustomers.length;
+        this.departureNotice.repLost += repPenalty;
+        for (const c of departedCustomers) {
+          if (c?.person?.name) this.departureNotice.names.push(c.person.name);
+        }
+
+        if (banner) {
+          const count = this.departureNotice.count;
+          const repLost = this.departureNotice.repLost;
+          const headline = count === 1
+            ? 'CUSTOMER LEFT THE QUEUE'
+            : `${count} CUSTOMERS LEFT THE QUEUE`;
+          const detail = count === 1
+            ? 'A customer got tired of waiting.'
+            : `${count} waiting customers got tired of waiting.`;
+          banner.className = 'mb-2 rounded-lg border-2 border-rose-400 bg-rose-950/95 px-2.5 py-1.5 text-xs text-rose-100 shadow-lg departure-banner-enter';
+          banner.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <strong class="font-ticket uppercase tracking-wider text-amber-300">🚪 ${headline}</strong>
+              <span class="font-ticket font-bold bg-rose-900/90 border border-rose-400/60 text-rose-200 px-1.5 py-0.5 rounded text-[11px]">Reputation −${repLost}</span>
+            </div>
+            <div class="text-[11px] text-rose-100/95 mt-0.5">${this.escapeHTML(detail)}</div>
+          `;
+          banner.classList.remove('hidden');
+        }
+
+        if (this.departureNotice.timer && typeof clearTimeout === 'function') {
+          clearTimeout(this.departureNotice.timer);
+        }
+        if (typeof setTimeout === 'function') {
+          this.departureNotice.timer = setTimeout(() => {
+            this.clearDepartureBanner();
+          }, 4500);
+        }
+      },
+
+      renderQueue(departedCustomers = []) {
         const q = Game.state.queue;
         document.getElementById('queueCountBadge').textContent = `Waiting: ${q.length}`;
         const container = document.getElementById('queueVisualContainer');
-        if (q.length === 0) {
-          container.innerHTML = `<span class="text-xs text-amber-200/50 italic">No customers waiting outside...</span>`;
-          return;
-        }
-        container.innerHTML = q.map(c => {
-          const barColor = c.patience > 60 ? 'bg-emerald-400' : c.patience > 30 ? 'bg-amber-400' : 'bg-rose-500';
+        if (!container) return;
+
+        const activeItemsHtml = q.map(c => {
+          const state = Game.getPatienceState ? Game.getPatienceState(c.patience) : (c.patience <= 20 ? 'critical' : c.patience <= 40 ? 'impatient' : 'normal');
+          const pct = Math.max(0, Math.min(100, Math.round(c.patience)));
+          const cardClass = state === 'critical'
+            ? 'bg-rose-950/95 border-2 border-rose-400 queue-state-critical'
+            : state === 'impatient'
+            ? 'bg-amber-950/90 border-2 border-amber-400 queue-state-impatient'
+            : 'bg-slate-900/90 border border-amber-700/60';
+          const barColor = state === 'critical'
+            ? 'bg-rose-500'
+            : state === 'impatient'
+            ? 'bg-amber-400'
+            : 'bg-emerald-400';
+          const cueHtml = state === 'critical'
+            ? `<span class="queue-patience-cue text-[9px] font-extrabold uppercase tracking-tight text-rose-200 bg-rose-900/90 border border-rose-400/70 px-1 rounded leading-tight">⚠️ Critical</span>`
+            : state === 'impatient'
+            ? `<span class="queue-patience-cue text-[9px] font-bold uppercase tracking-tight text-amber-200 bg-amber-900/90 border border-amber-400/70 px-1 rounded leading-tight">⏳ Impatient</span>`
+            : '';
           return `
-            <div class="bg-slate-900/90 border border-amber-700/60 rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0">
-              <span class="w-3 h-3 rounded-full inline-block border border-white/50" style="background:${c.person.coatColor}"></span>
+            <div data-patience-state="${state}" class="${cardClass} rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0 transition-colors">
+              <span class="w-3 h-3 rounded-full inline-block border border-white/50 shrink-0" style="background:${c.person.coatColor}"></span>
               <div>
-                <div class="text-[10px] font-bold text-amber-100 leading-none">${c.person.name}</div>
-                <div class="w-12 h-1.5 bg-black rounded-full overflow-hidden mt-1">
-                  <div class="h-full ${barColor}" style="width:${Math.round(c.patience)}%"></div>
+                <div class="flex items-center gap-1">
+                  <span class="text-[10px] font-bold text-amber-100 leading-none">${this.escapeHTML(c.person.name)}</span>
+                  ${cueHtml}
+                </div>
+                <div class="w-14 h-1.5 bg-black rounded-full overflow-hidden mt-1" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${this.escapeHTML(c.person.name)} patience ${pct}% (${state})">
+                  <div class="h-full ${barColor}" style="width:${pct}%"></div>
                 </div>
               </div>
             </div>
           `;
         }).join('');
+
+        const departingHtml = Array.isArray(departedCustomers) && departedCustomers.length > 0
+          ? departedCustomers.map(c => `
+            <div data-patience-state="departed" class="bg-rose-950/90 border-2 border-rose-400 rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0 queue-item-departing">
+              <span class="w-3 h-3 rounded-full inline-block border border-white/50 shrink-0" style="background:${c.person?.coatColor || '#ef4444'}"></span>
+              <div>
+                <div class="text-[10px] font-bold text-rose-200 leading-none">${this.escapeHTML(c.person?.name || 'Customer')}</div>
+                <div class="text-[9px] font-extrabold uppercase text-amber-300 mt-0.5">🚪 Left queue</div>
+              </div>
+            </div>
+          `).join('')
+          : '';
+
+        if (q.length === 0 && !departingHtml) {
+          container.innerHTML = `<span class="text-xs text-amber-200/50 italic">No customers waiting outside...</span>`;
+          return;
+        }
+        container.innerHTML = activeItemsHtml + departingHtml;
       },
 
       showDeskFeedback(type, htmlMsg) {
@@ -637,18 +739,23 @@
 
       openShiftReportModal(headline, dismissed) {
         const st = Game.state.shiftStats;
+        const lost = st.customersLost || 0;
         const playableMax = Game.campaign()?.playableDaysCount || 5;
         document.getElementById('reportModalTitle').textContent = headline;
         document.getElementById('reportServed').textContent = st.served;
         document.getElementById('reportCorrect').textContent = st.correct;
         document.getElementById('reportMistakes').textContent = st.mistakes;
+        const reportLostEl = document.getElementById('reportCustomersLost');
+        if (reportLostEl) reportLostEl.textContent = String(lost);
         document.getElementById('reportTotalCash').textContent = `€${Game.state.money}`;
 
         let comment = `"Acceptable work. Please work faster tomorrow, and remember the rules."`;
         if (dismissed) {
           comment = `"Too many mistakes! The Grand Cinema cannot survive this chaos. Please replay this shift and check the rules carefully."`;
-        } else if (st.mistakes === 0 && st.correct >= 4) {
+        } else if (st.mistakes === 0 && lost === 0 && st.correct >= 4) {
           comment = `"Magnificent! Zero mistakes! Even the Corporate Inspector is impressed. Have a cup of tea before tomorrow's shift."`;
+        } else if (st.mistakes === 0 && lost > 0) {
+          comment = `"Zero inspection mistakes, well done — though ${lost} waiting ${lost === 1 ? 'customer' : 'customers'} lost patience and left the queue. Try to keep the line moving tomorrow!"`;
         } else if (Game.state.day === playableMax) {
           comment = `"You survived all five days at The Grand Cinema! Thanks to your ticket inspections, the cinema is saved from bankruptcy!"`;
         }
