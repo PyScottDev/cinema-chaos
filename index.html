@@ -1,0 +1,2723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CINEMA CHAOS — The Grand Cinema Inspection Desk</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Limelight&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --velvet-dark: #24070a;
+      --velvet-mid: #3d0d13;
+      --velvet-light: #5c1620;
+      --brass-gold: #e2b857;
+      --brass-bright: #f7d983;
+      --brass-dark: #9c7623;
+      --paper-cream: #f8f1dc;
+      --paper-aged: #eadbb4;
+      --wood-desk: #2c1912;
+      --wood-grain: #3d231a;
+      --stamp-green: #15803d;
+      --stamp-amber: #b45309;
+      --stamp-red: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--velvet-dark);
+      background-image: 
+        radial-gradient(circle at 50% 10%, rgba(226, 184, 87, 0.12), transparent 60%),
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 18px, transparent 18px, transparent 36px);
+      color: #f9f5eb;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    .font-marquee {
+      font-family: 'Limelight', cursive, serif;
+      letter-spacing: 0.06em;
+    }
+
+    .font-ticket {
+      font-family: 'Courier Prime', monospace;
+    }
+
+    /* Custom Brass Border & Velvet Panels */
+    .brass-frame {
+      border: 2px solid var(--brass-gold);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55), inset 0 0 12px rgba(226, 184, 87, 0.15);
+    }
+
+    .velvet-panel {
+      background: linear-gradient(180deg, var(--velvet-mid) 0%, var(--velvet-dark) 100%);
+      border: 2px solid var(--brass-dark);
+      border-radius: 0.75rem;
+    }
+
+    .desk-surface {
+      background-color: var(--wood-desk);
+      background-image: 
+        radial-gradient(circle at 50% 35%, rgba(255, 224, 150, 0.08), rgba(0, 0, 0, 0.5)),
+        repeating-linear-gradient(180deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 2px, transparent 10px);
+      border: 2px solid var(--brass-dark);
+      border-radius: 0.75rem;
+      box-shadow: inset 0 8px 28px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Perforated Vintage Ticket Styling */
+    .cinema-ticket {
+      background: linear-gradient(135deg, var(--paper-cream) 0%, var(--paper-aged) 100%);
+      color: #1e1b18;
+      border-radius: 0.5rem;
+      position: relative;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.3);
+      border: 2px dashed #b59e6b;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .cinema-ticket::before,
+    .cinema-ticket::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 20px;
+      height: 20px;
+      background-color: var(--wood-desk);
+      border-radius: 50%;
+      transform: translateY(-50%);
+    }
+    .cinema-ticket::before { left: -12px; border-right: 2px solid #b59e6b; }
+    .cinema-ticket::after { right: -12px; border-left: 2px solid #b59e6b; }
+
+    .ticket-lounge {
+      background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+      border-color: #0284c7;
+    }
+
+    .ticket-corrected {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-color: #d97706;
+    }
+
+    .ticket-vip {
+      background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%);
+      border-color: #9333ea;
+    }
+
+    /* Inspectable elements highlight */
+    .inspectable {
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border-radius: 0.35rem;
+      position: relative;
+    }
+
+    .inspectable:hover {
+      outline: 2px dashed #f59e0b;
+      background-color: rgba(245, 158, 11, 0.15);
+    }
+
+    .inspect-selected {
+      outline: 3px solid #facc15 !important;
+      background-color: rgba(250, 204, 21, 0.28) !important;
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
+    }
+
+    .inspect-match {
+      outline: 3px solid #22c55e !important;
+      background-color: rgba(34, 197, 94, 0.25) !important;
+    }
+
+    .inspect-mismatch {
+      outline: 3px solid #ef4444 !important;
+      background-color: rgba(239, 68, 68, 0.25) !important;
+    }
+
+    /* Rubber Stamp Overlay */
+    @keyframes stampSlam {
+      0% { transform: scale(2.6) rotate(-18deg); opacity: 0; }
+      60% { transform: scale(0.92) rotate(-8deg); opacity: 1; }
+      80% { transform: scale(1.04) rotate(-8deg); opacity: 1; }
+      100% { transform: scale(1) rotate(-8deg); opacity: 0.95; }
+    }
+
+    .stamp-mark {
+      animation: stampSlam 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      border: 5px double currentColor;
+      padding: 0.35rem 1.1rem;
+      font-family: 'Courier Prime', monospace;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border-radius: 0.35rem;
+      pointer-events: none;
+      box-shadow: inset 0 0 8px currentColor;
+      background-color: rgba(255, 255, 255, 0.86);
+    }
+
+    /* Customer animations */
+    @keyframes customerWalkIn {
+      0% { transform: translateY(25px) scale(0.94); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .customer-enter {
+      animation: customerWalkIn 0.35s ease-out forwards;
+    }
+
+    @keyframes ticketSlideIn {
+      0% { transform: translateY(-30px) rotate(-4deg); opacity: 0; }
+      100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    }
+
+    .ticket-slide {
+      animation: ticketSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Tactile Stamp Buttons */
+    .btn-stamp {
+      transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.5), 0 8px 15px rgba(0,0,0,0.35);
+    }
+    .btn-stamp:active:not(:disabled) {
+      transform: translateY(4px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 3px 6px rgba(0,0,0,0.35);
+    }
+    .btn-stamp:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--brass-dark);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--brass-gold);
+    }
+
+    textarea,input { user-select:text; }
+    button:focus-visible,.inspectable:focus-visible { outline:3px solid #38bdf8; outline-offset:3px; }
+    #compareModal .cinema-ticket { font-size:1.1rem; }
+    #compareModal #deskDocumentArea { max-width:none; }
+    main > section { min-width:0; }
+    #correctionScreeningSelect { min-width:0; max-width:100%; }
+    #customerFollowUpBox p + p { margin-top:6px; }
+    @media(max-width:1023px) {
+      body > header { position:relative !important; }
+      body > nav { top:0 !important; }
+      #colDesk > div:last-child { position:sticky; bottom:0; z-index:25; }
+      #teacherModal .flex { flex-wrap:wrap; }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+  <!-- =========================================================================
+       TOP MARQUEE HEADER & STATUS BAR
+       ========================================================================= -->
+  <header class="bg-[#1b0507] border-b-2 border-[#9c7623] px-3 py-2 shadow-lg sticky top-0 z-30">
+    <div class="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
+      
+      <!-- Brand Title & Day Badge -->
+      <div class="flex items-center gap-3">
+        <div class="bg-gradient-to-b from-[#f7d983] to-[#b88928] text-[#1b0507] px-3 py-1 rounded-md shadow font-marquee text-lg sm:text-xl tracking-wider flex items-center gap-2">
+          <span>🎬</span>
+          <span>CINEMA CHAOS</span>
+        </div>
+        <div id="headerDayBadge" class="bg-[#3d0d13] border border-[#e2b857] text-[#f7d983] px-2.5 py-1 rounded text-xs sm:text-sm font-bold">
+          DAY 1: MONDAY
+        </div>
+        <div id="headerDifficultyBadge" class="hidden sm:inline-block bg-amber-950/80 border border-amber-700/60 text-amber-200 px-2 py-0.5 rounded text-xs">
+          Normal Mode
+        </div>
+      </div>
+
+      <!-- Central Live Metrics (Clock, Money, Reputation, Warnings) -->
+      <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
+        <!-- Inspectable Clock -->
+        <div id="clockInspectBox"
+             onclick="Game.handleInspectClick('clock', Game.state.clockFormatted, 'Current Time: ' + Game.state.clockFormatted, this)"
+             title="Click in Inspect Mode to compare current time against ticket time or rules"
+             class="inspectable bg-black/70 border-2 border-[#e2b857] px-3 py-1 rounded-lg flex items-center gap-2">
+          <span class="text-amber-400 text-xs uppercase font-bold tracking-wider">Clock</span>
+          <span id="clockDisplay" class="font-ticket text-lg sm:text-xl font-bold text-emerald-400">17:45</span>
+        </div>
+
+        <!-- Earnings -->
+        <div class="bg-[#2c090d] border border-amber-700/60 px-3 py-1 rounded-lg flex items-center gap-1.5">
+          <span class="text-xs text-amber-300/80 uppercase font-semibold">Cash</span>
+          <span id="moneyDisplay" class="font-ticket text-base sm:text-lg font-bold text-amber-300">€0</span>
+        </div>
+
+        <!-- Reputation Bar -->
+        <div class="bg-[#2c090d] border border-amber-700/60 px-3 py-1 rounded-lg flex items-center gap-2" title="Cinema Reputation">
+          <span class="text-xs text-amber-300/80 uppercase font-semibold">Rep</span>
+          <div class="w-16 sm:w-20 h-2.5 bg-black/60 rounded-full overflow-hidden border border-amber-900">
+            <div id="reputationBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300" style="width: 80%"></div>
+          </div>
+          <span id="reputationText" class="font-ticket text-xs font-bold text-emerald-300">80%</span>
+        </div>
+
+        <!-- Warnings Counter -->
+        <div class="bg-[#2c090d] border border-red-800/80 px-3 py-1 rounded-lg flex items-center gap-1.5" title="Management Warnings">
+          <span class="text-xs text-red-300 uppercase font-semibold">Warnings</span>
+          <span id="warningsDisplay" class="font-ticket text-sm sm:text-base font-bold text-red-400">0 / 3</span>
+        </div>
+      </div>
+
+      <!-- Right Utility Controls -->
+      <div class="flex items-center gap-1.5">
+        <button onclick="Game.togglePause()" id="pauseBtn" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition">
+          <span id="pauseBtnIcon">⏸️</span> <span id="pauseBtnText" class="hidden md:inline">Pause</span>
+        </button>
+        <button onclick="SoundFX.toggleMute()" id="muteBtn" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Toggle Sound">
+          <span id="muteBtnIcon">🔊</span>
+        </button>
+        <button onclick="UI.openTeacherModal()" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Teacher Configuration & Language Settings">
+          <span>🎓</span> <span class="hidden lg:inline">Teacher Config</span>
+        </button>
+        <button onclick="UI.openGuideModal()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition" title="How to Play">
+          <span>❓</span> <span class="hidden sm:inline">Guide</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="manualPauseNote" class="hidden text-center bg-amber-200 text-red-950 p-2">Paused. Press Resume to continue.</div>
+  <!-- =========================================================================
+       MOBILE NAVIGATION TABS (Visible on small screens)
+       ========================================================================= -->
+  <nav class="lg:hidden bg-[#2c090d] border-b border-amber-800/60 px-2 py-1.5 flex gap-1.5 sticky top-[52px] z-20">
+    <button onclick="UI.switchMobileTab('window')" id="mobTabWindow" class="flex-1 py-1.5 rounded-md text-xs font-bold bg-[#e2b857] text-slate-950">
+      1. Booth Window
+    </button>
+    <button onclick="UI.switchMobileTab('desk')" id="mobTabDesk" class="flex-1 py-1.5 rounded-md text-xs font-bold bg-[#3d0d13] text-amber-200 border border-amber-700/50">
+      2. Ticket Desk
+    </button>
+    <button onclick="UI.switchMobileTab('info')" id="mobTabInfo" class="flex-1 py-1.5 rounded-md text-xs font-bold bg-[#3d0d13] text-amber-200 border border-amber-700/50">
+      3. Schedule & Rules
+    </button>
+  </nav>
+
+  <!-- =========================================================================
+       MAIN 3-COLUMN WORKSPACE
+       ========================================================================= -->
+  <main class="flex-1 max-w-[1440px] w-full mx-auto p-2 sm:p-3 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+
+    <!-- =======================================================================
+         LEFT COLUMN: CUSTOMER BOOTH WINDOW & QUEUE (4 cols on desktop)
+         ======================================================================= -->
+    <section id="colWindow" class="lg:col-span-4 velvet-panel p-3 flex flex-col justify-between gap-3">
+      
+      <!-- Waiting customers Bar (Diner Dash style queue pressure) -->
+      <div class="bg-black/50 border border-amber-800/60 rounded-lg p-2.5">
+        <div class="flex items-center justify-between text-xs mb-1.5">
+          <span class="font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+            <span>🚶‍♂️</span> Waiting customers
+          </span>
+          <span id="queueCountBadge" class="bg-amber-900/80 text-amber-200 px-2 py-0.5 rounded font-ticket text-xs">
+            Waiting: 0
+          </span>
+        </div>
+        <!-- Visual Queue Avatars & Patience Meters -->
+        <div id="queueVisualContainer" class="flex items-center gap-2 min-h-[44px] overflow-x-auto py-1">
+          <span class="text-xs text-amber-200/50 italic">Queue is clear...</span>
+        </div>
+      </div>
+
+      <!-- Ticket Booth Window Frame -->
+      <div class="relative bg-gradient-to-b from-[#1a0d18] via-[#2a1321] to-[#12070c] border-4 border-[#b88928] rounded-xl overflow-hidden shadow-inner flex flex-col justify-between min-h-[300px]">
+        
+        <!-- Retro Velvet Curtains Decoration -->
+        <div class="absolute top-0 left-0 right-0 h-6 bg-gradient-to-r from-red-950 via-red-800 to-red-950 border-b border-amber-500/40 flex justify-around items-center px-4 z-10">
+          <span class="text-[10px] tracking-widest uppercase text-amber-300/80 font-bold">The Grand Cinema — Box Office</span>
+        </div>
+
+        <!-- Customer Portrait & Name Tag -->
+        <div class="pt-7 px-3 flex flex-col items-center justify-center relative">
+          <!-- Inspectable Customer Trait Badge (e.g., Wearing Red, Elderly, Regular) -->
+          <div id="customerTraitRow" class="flex flex-wrap gap-1.5 justify-center mb-1 z-10"></div>
+
+          <!-- SVG Portrait Container -->
+          <div id="customerPortraitBox"
+               onclick="Game.handleCustomerPortraitInspect(this)"
+               title="Click in Inspect Mode to check customer's clothing or identity"
+               class="inspectable w-36 h-36 sm:w-40 sm:h-40 flex items-center justify-center">
+            <!-- Populated dynamically with expressive original SVG -->
+          </div>
+
+          <!-- Customer Name & Group Info -->
+          <div id="customerIdentityBar" class="bg-black/80 border border-amber-500/50 px-3 py-0.5 rounded-full text-xs font-bold text-amber-200 -mt-2 z-10 shadow">
+            Waiting for customer...
+          </div>
+        </div>
+
+        <!-- Booth Brass Speaking Grille & Counter -->
+        <div class="bg-[#2c1610] border-t-4 border-[#d4af37] p-3 relative">
+          <!-- Speech Bubble -->
+          <div id="speechBubble" class="bg-[#fffbeb] text-slate-900 rounded-xl p-3 shadow-md border-2 border-amber-700 relative min-h-[96px] flex flex-col justify-between">
+            <div id="customerStatementBox"
+                 onclick="Game.handleInspectClick('statement', Game.state.currentCustomer?.statementSummary || '', 'Customer Statement', this)"
+                 class="inspectable text-sm sm:text-base font-semibold leading-snug text-slate-900 p-1">
+              "Welcome to your shift! Click Start Shift when you are ready."
+            </div>
+
+            <!-- Follow-up Q&A transcript inside bubble -->
+            <div id="customerFollowUpBox" class="mt-2 pt-2 border-t border-amber-300/80 text-xs sm:text-sm text-indigo-950 font-medium hidden">
+            </div>
+
+            <!-- Helpful A1 Vocabulary / Grammar Tooltip Hint (Optional via Teacher Config) -->
+            <div id="languageHintBar" class="mt-1.5 text-[11px] text-amber-900/80 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-300 hidden">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Question Customer Panel (Context-Sensitive A1 Questions) -->
+      <div class="bg-black/45 border border-amber-700/60 rounded-xl p-2.5">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+            <span>💬</span> Ask the customer
+          </span>
+          <span class="text-[11px] text-amber-200/70">Click a question:</span>
+        </div>
+        <div id="questionButtonsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <!-- Populated dynamically based on context -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =======================================================================
+         CENTRE COLUMN: INSPECTION DESK, TICKET & STAMPS (4 cols on desktop)
+         ======================================================================= -->
+    <section id="colDesk" class="lg:col-span-4 desk-surface p-3 flex flex-col justify-between gap-3 relative">
+      
+      <div id="mobileCustomerSummary" class="lg:hidden text-sm text-amber-100 border-b border-amber-700 pb-2"></div>
+      <button onclick="UI.openCompare()" class="bg-[#3d0d13] text-amber-200 border border-amber-600 rounded-lg p-2 text-xs font-bold">⛶ Enlarge ticket &amp; programme</button>
+      <!-- Top Desk Bar: Inspection Tool Toggle & Comparison Banner -->
+      <div class="bg-black/65 border border-amber-600/70 rounded-xl p-2.5 flex flex-col gap-2">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button id="inspectModeBtn"
+                    onclick="Game.toggleInspectMode()"
+                    class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs px-3 py-1.5 rounded-lg shadow flex items-center gap-1.5 transition">
+              <span>🔍</span>
+              <span id="inspectModeBtnText">INSPECT MODE: ON</span>
+            </button>
+            <button onclick="Game.clearInspectSelection()"
+                    class="bg-slate-800 hover:bg-slate-700 text-amber-200 text-xs px-2 py-1.5 rounded-lg border border-slate-600 transition"
+                    title="Clear selected comparison items">
+              Clear
+            </button>
+          </div>
+          <span id="scannerUpgradeBadge" class="hidden text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-600 px-2 py-0.5 rounded font-semibold">
+            ⚡ Scanner v2
+          </span>
+        </div>
+
+        <!-- Live Comparison Status Display -->
+        <div id="inspectComparisonBanner" class="bg-slate-900/90 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-amber-100 flex items-center justify-between min-h-[36px]">
+          <span id="inspectStatusText" role="status" aria-live="polite">🔍 Click any two fields (Ticket, Statement, Schedule, Clock, Rules) to compare them!</span>
+        </div>
+      </div>
+
+      <!-- Centre Desk Workspace: Physical Ticket / Documents / Correction Printer -->
+      <div class="flex-1 flex flex-col items-center justify-center relative py-2 min-h-[310px]">
+        
+        <!-- Physical Ticket Container -->
+        <div id="deskDocumentArea" class="w-full max-w-md mx-auto relative">
+          <!-- Dynamically populated with Ticket, Special Pass, or No-Ticket Notice -->
+        </div>
+
+        <!-- Stamp Visual Overlay -->
+        <div id="stampAnimationOverlay" class="hidden absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+          <div id="stampMarkBox" class="stamp-mark text-2xl sm:text-3xl">ADMITTED</div>
+        </div>
+
+        <!-- Ticket Correction Printer Drawer (Hidden until CORRECT button clicked) -->
+        <div id="correctionPrinterDrawer" class="hidden w-full max-w-md mx-auto mt-3 bg-[#1e1410] border-2 border-amber-500 rounded-xl p-3 shadow-2xl z-20">
+          <div class="flex items-center justify-between border-b border-amber-700/60 pb-2 mb-2.5">
+            <div class="flex items-center gap-1.5">
+              <span class="text-lg">🖨️</span>
+              <div>
+                <h4 class="text-xs font-extrabold uppercase tracking-wider text-amber-300">Ticket Correction Printer</h4>
+                <p class="text-[11px] text-amber-200/70">Select valid replacement details from today's schedule:</p>
+              </div>
+            </div>
+            <button onclick="Game.closeCorrectionDrawer()" class="text-xs bg-red-950 hover:bg-red-900 text-red-200 px-2 py-1 rounded border border-red-700">
+              Cancel
+            </button>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div>
+              <label class="block text-amber-200 font-semibold mb-1">1. Select Replacement Screening / Programme:</label>
+              <select id="correctionScreeningSelect" onchange="Game.updateCorrectionPreview()" class="w-full bg-slate-900 text-amber-100 border border-amber-600 rounded-lg p-2 font-ticket text-xs">
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-black/40 p-2 rounded border border-amber-800/50">
+                <span class="text-[10px] text-amber-400 uppercase block">Assigned Screen / Room</span>
+                <span id="correctionPreviewScreen" class="font-ticket font-bold text-sm text-white">Screen 1</span>
+              </div>
+              <div class="bg-black/40 p-2 rounded border border-amber-800/50">
+                <span class="text-[10px] text-amber-400 uppercase block">Start Time & Seats Left</span>
+                <span id="correctionPreviewTimeSeats" class="font-ticket font-bold text-sm text-emerald-300">18:00 (8 left)</span>
+              </div>
+            </div>
+
+            <div id="correctionPolicyNote" class="text-[11px] bg-amber-950/60 border border-amber-700/60 text-amber-200 p-2 rounded">
+              Checking policy...
+            </div>
+
+            <button onclick="Game.confirmPrintAndCorrect()" id="printCorrectedTicketBtn" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-2 rounded-lg shadow flex items-center justify-center gap-2 transition">
+              <span>🖨️</span>
+              <span>PRINT REPLACEMENT & STAMP CORRECTED</span>
+            </button>
+          </div>
+        </div>
+
+        <button id="nextCustomerBtn" onclick="Game.nextCustomerFromQueue()" class="hidden mt-3 bg-amber-400 text-slate-950 font-bold p-3 rounded-lg z-30">Next customer →</button>
+        <!-- Decision Consequence / Feedback Toast on Desk -->
+        <div role="status" aria-live="polite" id="deskFeedbackBanner" class="hidden w-full max-w-md mx-auto mt-2 rounded-xl p-3 border-2 shadow-xl text-xs sm:text-sm">
+        </div>
+
+      </div>
+
+      <!-- Bottom Desk Bar: The Three Tactile Rubber Stamps -->
+      <div class="bg-black/60 border-t-2 border-amber-700/60 rounded-xl p-3">
+        <div class="text-[11px] text-center text-amber-300/80 uppercase tracking-wider font-bold mb-2">
+          Your decision
+        </div>
+        <div class="grid grid-cols-3 gap-2.5">
+          <!-- ADMIT STAMP -->
+          <button id="btnAdmit"
+                  onclick="Game.makeDecision('ADMIT')"
+                  class="btn-stamp bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 border-2 border-emerald-300/80 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center gap-0.5">
+            <span class="text-lg sm:text-xl">✅</span>
+            <span class="font-ticket font-bold text-xs sm:text-sm tracking-wider">ADMIT</span>
+            <span class="text-[10px] text-emerald-200">Valid Ticket</span>
+          </button>
+
+          <!-- CORRECT STAMP -->
+          <button id="btnCorrect"
+                  onclick="Game.openCorrectionDrawer()"
+                  class="btn-stamp bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 border-2 border-amber-300/80 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center gap-0.5">
+            <span class="text-lg sm:text-xl">🛠️</span>
+            <span class="font-ticket font-bold text-xs sm:text-sm tracking-wider">CORRECT</span>
+            <span class="text-[10px] text-amber-200">Fix Screening</span>
+          </button>
+
+          <!-- REFUSE STAMP -->
+          <button id="btnRefuse"
+                  onclick="Game.makeDecision('REFUSE')"
+                  class="btn-stamp bg-gradient-to-b from-rose-700 to-red-900 hover:from-rose-600 hover:to-red-800 border-2 border-rose-300/80 text-white rounded-xl py-2.5 px-2 flex flex-col items-center justify-center gap-0.5">
+            <span class="text-lg sm:text-xl">🚫</span>
+            <span class="font-ticket font-bold text-xs sm:text-sm tracking-wider">REFUSE</span>
+            <span class="text-[10px] text-rose-200">Deny Entry</span>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =======================================================================
+         RIGHT COLUMN: SCHEDULE, MANAGER RULES & LOGS (4 cols on desktop)
+         ======================================================================= -->
+    <section id="colInfo" class="lg:col-span-4 velvet-panel p-3 flex flex-col justify-between gap-2.5">
+      
+      <!-- Reference Binder Tabs -->
+      <div class="grid grid-cols-3 gap-1.5 bg-black/50 p-1.5 rounded-xl border border-amber-800/60">
+        <button onclick="UI.switchBinderTab('schedule')" id="tabBtnSchedule" class="py-1.5 px-2 rounded-lg text-xs font-bold bg-[#e2b857] text-slate-950 shadow transition flex items-center justify-center gap-1">
+          <span>🎞️</span> <span>Schedule</span>
+        </button>
+        <button onclick="UI.switchBinderTab('rules')" id="tabBtnRules" class="py-1.5 px-2 rounded-lg text-xs font-bold bg-transparent text-amber-200 hover:bg-white/10 transition flex items-center justify-center gap-1 relative">
+          <span>📋</span> <span>Rules</span>
+          <span id="rulesAlertDot" class="hidden w-2 h-2 rounded-full bg-red-500 animate-ping absolute top-1 right-1"></span>
+        </button>
+        <button onclick="UI.switchBinderTab('serials')" id="tabBtnSerials" class="py-1.5 px-2 rounded-lg text-xs font-bold bg-transparent text-amber-200 hover:bg-white/10 transition flex items-center justify-center gap-1">
+          <span>🔢</span> <span>Log & VIP</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: OFFICIAL CINEMA SCHEDULE (AND DAY 4 TV LOUNGE) -->
+      <div id="binderTabSchedule" class="flex-1 flex flex-col gap-2 overflow-y-auto pr-0.5">
+        <div class="bg-[#fff8e7] text-slate-900 rounded-xl p-3 border-2 border-[#b88928] shadow-md">
+          <div class="flex items-center justify-between border-b-2 border-slate-800 pb-1.5 mb-2">
+            <div>
+              <h3 class="font-marquee text-sm sm:text-base text-red-950">THE GRAND CINEMA PROGRAMME</h3>
+              <p id="scheduleSubheader" class="text-[11px] font-ticket text-slate-600">Free seats = seats without a booking</p>
+            </div>
+            <span id="scheduleDayTag" class="bg-red-900 text-amber-200 font-ticket text-xs font-bold px-2 py-0.5 rounded">
+              MONDAY
+            </span>
+          </div>
+
+          <!-- Main Film Screenings Table -->
+          <div id="filmScheduleList" class="space-y-1.5">
+            <!-- Dynamically rendered schedule cards/rows -->
+          </div>
+
+          <!-- Day 4+ TV Lounge Programme Section -->
+          <div id="tvLoungeScheduleSection" class="hidden mt-3 pt-2.5 border-t-2 border-dashed border-sky-800">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="font-marquee text-xs sm:text-sm text-sky-900 flex items-center gap-1">
+                <span>📺</span> SPECIAL TV LOUNGE SCHEDULE
+              </span>
+              <span class="bg-sky-800 text-white font-ticket text-[10px] font-bold px-2 py-0.5 rounded">
+                TV LOUNGE PASS
+              </span>
+            </div>
+            <div id="tvScheduleList" class="space-y-1.5">
+              <!-- Dynamically rendered TV Lounge programmes -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Genre & Description Reference Card for A1 Learners -->
+        <div class="bg-black/45 border border-amber-800/60 rounded-xl p-2.5 text-xs">
+          <div class="font-bold text-amber-300 uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>📖 Word help</span>
+            <span class="text-[10px] text-amber-200/70">Funny ≠ Fun!</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 text-[11px] text-amber-100/90">
+            <div><strong class="text-amber-300">Comedy:</strong> funny, to laugh</div>
+            <div><strong class="text-amber-300">Horror:</strong> scary, ghosts/monsters</div>
+            <div><strong class="text-amber-300">Sci-fi:</strong> space, future, planets</div>
+            <div><strong class="text-amber-300">Documentary:</strong> real animals/world</div>
+            <div><strong class="text-amber-300">Romantic:</strong> people in love</div>
+            <div><strong class="text-amber-300">Thriller:</strong> exciting, mystery</div>
+            <div><strong class="text-amber-300">Animation:</strong> cartoons, family</div>
+            <div><strong class="text-emerald-300">"To have fun":</strong> enjoy any good film!</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: MANAGER'S RULEBOOK & DAILY NOTICES -->
+      <div id="binderTabRules" class="hidden flex-1 flex flex-col gap-2 overflow-y-auto pr-0.5">
+        <div class="bg-[#fdf6e2] text-slate-900 rounded-xl p-3 border-2 border-amber-700 shadow-md">
+          <div class="border-b-2 border-red-900 pb-1.5 mb-2 flex items-center justify-between">
+            <div>
+              <h3 class="font-marquee text-sm sm:text-base text-red-900">MANAGER'S POLICY BINDER</h3>
+              <p class="text-[11px] font-ticket text-slate-600">"Customers are always right. Except when they are wrong."</p>
+            </div>
+            <span class="text-xl">👔</span>
+          </div>
+
+          <!-- Active Daily Rules List -->
+          <div id="activeRulesList" class="space-y-2 text-xs">
+            <!-- Populated dynamically per day -->
+          </div>
+
+          <!-- Live Mid-Shift Bulletin Memo -->
+          <div id="midShiftNoticeBox" class="hidden mt-3 bg-red-100 border-2 border-red-700 rounded-lg p-2.5 text-red-950">
+            <div class="font-bold text-xs uppercase flex items-center gap-1">
+              <span>🚨</span> URGENT MANAGEMENT MEMO
+            </div>
+            <p id="midShiftNoticeText" class="font-ticket text-xs mt-1"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: USED TICKET SERIAL LOG & VIP AUTHORIZATIONS -->
+      <div id="binderTabSerials" class="hidden flex-1 flex flex-col gap-2 overflow-y-auto pr-0.5">
+        <div class="bg-[#f5f3ff] text-slate-900 rounded-xl p-3 border-2 border-indigo-800 shadow-md">
+          <div class="border-b-2 border-indigo-950 pb-1.5 mb-2 flex items-center justify-between">
+            <div>
+              <h3 class="font-marquee text-sm text-indigo-950">SECURITY & SERIAL NUMBER LOG</h3>
+              <p class="text-[11px] font-ticket text-slate-600">Duplicate serial numbers are INVALID (Day 3+)</p>
+            </div>
+            <span class="text-lg">🔐</span>
+          </div>
+
+          <div class="mb-3">
+            <h4 class="text-xs font-bold uppercase text-indigo-900 mb-1">Used Ticket Serial Numbers Today:</h4>
+            <div id="usedSerialsContainer" class="flex flex-wrap gap-1.5 bg-white p-2 rounded border border-indigo-200 min-h-[60px]">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <div class="border-t border-indigo-300 pt-2">
+            <h4 class="text-xs font-bold uppercase text-purple-900 mb-1">Authorized VIP / Special Passes:</h4>
+            <div id="vipListContainer" class="space-y-1 text-xs font-ticket bg-white p-2 rounded border border-purple-200">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Active Upgrades Strip -->
+      <div class="bg-black/50 border border-amber-800/60 rounded-xl p-2 flex items-center justify-between text-xs">
+        <span class="text-amber-300/90 font-bold uppercase text-[11px]">Booth Upgrades:</span>
+        <div id="ownedUpgradesStrip" class="flex items-center gap-1.5 flex-wrap justify-end">
+          <span class="text-[11px] text-amber-200/50 italic">Standard Equipment</span>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       MODAL 1: START / DAILY MANAGEMENT BRIEFING MODAL
+       ========================================================================= -->
+  <div id="briefingModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-3">
+    <div class="bg-[#fdf6e2] text-slate-900 max-w-xl w-full rounded-2xl border-4 border-[#d4af37] shadow-2xl overflow-hidden">
+      <!-- Top Header -->
+      <div class="bg-gradient-to-r from-[#3d0d13] via-[#5c1620] to-[#3d0d13] text-amber-200 px-5 py-4 border-b-2 border-[#d4af37] flex items-center justify-between">
+        <div>
+          <span id="briefingDaySubtitle" class="text-xs uppercase tracking-widest text-amber-300 font-bold block">THE GRAND CINEMA — STAFF NOTICE</span>
+          <h2 id="briefingDayTitle" class="font-marquee text-xl sm:text-2xl text-white">DAY 1: WELCOME TO THE GRAND CINEMA</h2>
+        </div>
+        <div class="text-3xl">🎟️</div>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <!-- Manager's Memo Note -->
+        <div class="bg-amber-100/90 border-l-4 border-red-800 p-3.5 rounded-r-xl shadow-sm font-ticket text-sm leading-relaxed text-slate-900">
+          <div class="font-bold text-red-900 uppercase mb-1 flex items-center justify-between">
+            <span>📌 FROM THE MANAGER'S DESK:</span>
+            <span class="text-xs bg-red-900 text-amber-100 px-2 py-0.5 rounded">MANDATORY</span>
+          </div>
+          <div id="briefingMemoText" class="whitespace-pre-line"></div>
+        </div>
+
+        <!-- Today's Key Rules Checklist -->
+        <div>
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">Today's Inspection Checklist:</h3>
+          <ul id="briefingRulesChecklist" class="space-y-1.5 text-xs sm:text-sm font-medium text-slate-800">
+          </ul>
+        </div>
+
+        <!-- Language Focus Box -->
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-950">
+          <div class="font-bold uppercase text-indigo-900 mb-1">🗣️ English Focus (Unit 9a & 9b):</div>
+          <p id="briefingLanguageFocus"></p>
+        </div>
+
+        <p id="saveNotice" class="text-xs text-slate-600"></p>
+        <!-- Difficulty Selector on Day 1 -->
+        <div class="bg-slate-200/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-xs font-bold text-slate-800 block">Shift Pacing / Difficulty:</span>
+            <span class="text-[11px] text-slate-600">Same A1 English level; adjusts queue patience & shift speed.</span>
+          </div>
+          <div class="flex gap-1.5">
+            <button onclick="Game.setDifficulty('relaxed')" id="diffBtnRelaxed" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
+              Relaxed (A1)
+            </button>
+            <button onclick="Game.setDifficulty('normal')" id="diffBtnNormal" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
+              Normal
+            </button>
+            <button onclick="Game.setDifficulty('chaos')" id="diffBtnChaos" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
+              Chaos
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="bg-slate-900 px-5 py-3.5 flex items-center justify-between">
+        <button onclick="Game.resetCampaignConfirm()" class="text-xs text-slate-400 hover:text-red-400 underline">
+          Reset Saved Progress
+        </button>
+        <button onclick="Game.startShift()" class="bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-extrabold px-6 py-2.5 rounded-xl shadow-lg text-sm flex items-center gap-2 transition">
+          <span>🔔</span>
+          <span>OPEN BOOTH & START SHIFT</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 2: END OF SHIFT REPORT & UPGRADE SHOP MODAL
+       ========================================================================= -->
+  <div id="shiftReportModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-40 flex items-center justify-center p-3">
+    <div class="bg-[#fdf6e2] text-slate-900 max-w-2xl w-full rounded-2xl border-4 border-[#d4af37] shadow-2xl overflow-hidden">
+      <div class="bg-gradient-to-r from-[#24070a] via-[#4a1018] to-[#24070a] text-amber-200 px-5 py-4 border-b-2 border-[#d4af37] flex items-center justify-between">
+        <div>
+          <span class="text-xs uppercase tracking-widest text-amber-300 font-bold block">GRAND CINEMA — STAFF REPORT</span>
+          <h2 id="reportModalTitle" class="font-marquee text-xl sm:text-2xl text-white">END OF SHIFT EVALUATION</h2>
+        </div>
+        <span class="text-3xl">📊</span>
+      </div>
+
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-ticket">
+          <div class="bg-white p-3 rounded-xl border border-slate-300 text-center">
+            <span class="text-[11px] text-slate-500 uppercase block">Customers Served</span>
+            <span id="reportServed" class="text-xl font-bold text-slate-900">0</span>
+          </div>
+          <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-300 text-center">
+            <span class="text-[11px] text-emerald-700 uppercase block">Correct Decisions</span>
+            <span id="reportCorrect" class="text-xl font-bold text-emerald-700">0</span>
+          </div>
+          <div class="bg-rose-50 p-3 rounded-xl border border-rose-300 text-center">
+            <span class="text-[11px] text-rose-700 uppercase block">Mistakes / Walkouts</span>
+            <span id="reportMistakes" class="text-xl font-bold text-rose-700">0</span>
+          </div>
+          <div class="bg-amber-50 p-3 rounded-xl border border-amber-400 text-center">
+            <span class="text-[11px] text-amber-800 uppercase block">Total Cash</span>
+            <span id="reportTotalCash" class="text-xl font-bold text-amber-900">€0</span>
+          </div>
+        </div>
+
+        <!-- Manager's Opinion -->
+        <div class="bg-amber-100 border-l-4 border-amber-700 p-3 rounded-r-xl font-ticket text-xs sm:text-sm">
+          <strong class="text-red-900 block uppercase mb-0.5">Manager's Evaluation:</strong>
+          <p id="reportManagerComment" class="italic text-slate-800"></p>
+        </div>
+
+        <!-- Recurring Characters & Story Notes -->
+        <div id="reportStoryNotes" class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-950">
+        </div>
+
+        <!-- Booth Upgrades Shop -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800">🛠️ Cinema Booth Upgrades (Spend Cash):</h3>
+            <span id="shopAvailableCash" class="font-ticket text-xs font-bold bg-amber-200 text-amber-950 px-2.5 py-0.5 rounded-full">Available: €0</span>
+          </div>
+          <div id="upgradeShopGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 px-5 py-3.5 flex items-center justify-between">
+        <button onclick="Game.replayCurrentDay()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition">
+          🔄 Replay This Shift
+        </button>
+        <button id="nextDayContinueBtn" onclick="Game.advanceToNextDay()" class="bg-gradient-to-b from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-extrabold px-6 py-2.5 rounded-xl shadow-lg text-sm transition">
+          CONTINUE TO NEXT SHIFT ➡️
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 3: TEACHER CONFIGURATION & VOCABULARY PACK EDITOR
+       ========================================================================= -->
+  <div id="teacherModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+    <div class="bg-slate-900 text-amber-100 max-w-2xl w-full rounded-2xl border-2 border-[#e2b857] shadow-2xl overflow-hidden">
+      <div class="bg-[#3d0d13] px-5 py-3.5 border-b border-amber-700 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🎓</span>
+          <h2 class="font-marquee text-lg text-amber-300">TEACHER CONFIGURATION & SYLLABUS PACK</h2>
+        </div>
+        <button onclick="UI.closeTeacherModal()" class="text-xs bg-red-900 hover:bg-red-800 text-white px-3 py-1 rounded-lg">Close</button>
+      </div>
+
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs sm:text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
+            <label class="font-bold text-amber-300 block mb-1">Difficulty / Reading Pace</label>
+            <select id="teacherDiffSelect" onchange="Game.setDifficulty(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
+              <option value="relaxed">Relaxed (Recommended for A1 — Slow Queue)</option>
+              <option value="normal">Normal (Standard Pacing)</option>
+              <option value="chaos">Chaos (Fast Queue & Strict Rules)</option>
+            </select>
+          </div>
+
+          <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
+            <label class="font-bold text-amber-300 block mb-1">Jump to Campaign Day</label>
+            <div class="flex gap-1.5">
+              <select id="teacherDaySelect" class="flex-1 bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
+                <option value="1">Day 1: Monday (Basics & Genres)</option>
+                <option value="2">Day 2: Tuesday (Late Rule & Corrections)</option>
+                <option value="3">Day 3: Wednesday (Screen Moves & Duplicates)</option>
+                <option value="4">Day 4: Thursday (TV Lounge Programmes)</option>
+                <option value="5">Day 5: Friday (Cinema Chaos Finale)</option>
+                <option value="6">Endless Mode</option>
+              </select>
+              <button onclick="Game.teacherJumpToDay()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 rounded-lg">Go</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <label class="bg-slate-800/90 p-3 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="teacherToggleHints" onchange="Game.updateTeacherSettings()" class="w-4 h-4 accent-amber-500">
+            <span>Show short vocabulary help</span>
+          </label>
+          <label class="bg-slate-800/90 p-3 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="teacherToggleTV" onchange="Game.updateTeacherSettings()" checked class="w-4 h-4 accent-amber-500">
+            <span>Include TV Vocabulary (Day 4+)</span>
+          </label>
+          <label class="bg-slate-800/90 p-3 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="teacherToggleTimer" onchange="Game.updateTeacherSettings()" class="w-4 h-4 accent-amber-500">
+            <span>No Queue Walkouts (Zero Stress)</span>
+          </label>
+        </div>
+
+        <!-- JSON Vocabulary Pack Import / Export -->
+        <div class="bg-slate-800/90 p-3.5 rounded-xl border border-slate-700 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-amber-300">📦 Editable Language Pack (JSON Import / Export)</span>
+            <div class="flex gap-1.5">
+              <button onclick="Game.exportLanguagePack()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded">Export JSON</button>
+              <button onclick="Game.applyCustomLanguagePack()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded">Import JSON</button><button onclick="Game.restoreDefaultPack()" class="bg-slate-600 text-white text-xs px-2 py-1 rounded">Restore Unit 9</button>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-300">
+            Edit the text below, then import it. A valid import saves the pack and restarts this shift. TV content changes apply to the next shift.
+          </p>
+          <textarea id="languagePackJsonArea" rows="6" class="w-full bg-slate-950 text-emerald-300 font-ticket text-xs p-2.5 rounded-lg border border-slate-600"></textarea>
+          <div id="jsonStatusMsg" class="text-xs text-emerald-400 hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 4: HOW TO PLAY
+       ========================================================================= -->
+  <div id="guideModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+    <div class="bg-[#fdf6e2] text-slate-900 max-w-2xl w-full rounded-2xl border-4 border-[#d4af37] shadow-2xl overflow-hidden">
+      <div class="bg-[#3d0d13] text-amber-200 px-5 py-3.5 border-b-2 border-[#d4af37] flex items-center justify-between">
+        <h2 class="font-marquee text-lg sm:text-xl text-white">📖 HOW TO PLAY</h2>
+        <button onclick="UI.closeGuideModal()" class="text-xs bg-red-800 hover:bg-red-700 text-white px-3 py-1 rounded-lg font-bold">Close</button>
+      </div>
+
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs sm:text-sm leading-relaxed">
+        <div class="bg-amber-100 border-l-4 border-amber-700 p-3 rounded-r-xl">
+          <h3 class="font-bold text-red-950 uppercase mb-1">1. Your Job at The Grand Cinema</h3>
+          <p>You work at the ticket inspection booth. Read what each customer plans to see (<em>"be going to"</em>) and why (<em>infinitive of purpose: "to laugh", "to learn about animals"</em>), inspect their ticket against the <strong>Cinema Schedule</strong> and <strong>Manager's Rules</strong>, and stamp your decision:</p>
+          <ul class="list-disc pl-5 mt-1.5 space-y-1">
+            <li><strong>✅ ADMIT:</strong> Everything on the ticket matches the schedule, active policies, and the customer's booking.</li>
+            <li><strong>🛠️ CORRECT:</strong> The customer has a fixable mistake (wrong film genre for what they asked, moved screen, or wrong time). Click <strong>CORRECT</strong> to open the Ticket Printer, pick the right screening, and print a replacement ticket!</li>
+            <li><strong>🚫 REFUSE:</strong> The customer has no ticket, a duplicate serial number, arrives more than 10 minutes late, holds a non-changeable Promo ticket with an error, or their screening is completely sold out with no valid alternative.</li>
+            <li><strong>💬 QUESTION:</strong> If information is missing or subjective (e.g. <em>"I'm going to see a film to relax"</em> with a Thriller ticket), ask a clarifying question! Remember: subjective preferences do not make a valid ticket invalid if the customer confirms they want to watch it.</li>
+          </ul>
+        </div>
+
+        <div class="bg-white border border-slate-300 p-3.5 rounded-xl">
+          <h3 class="font-bold text-indigo-950 uppercase mb-1">2. Using the 🔍 Inspect Tool</h3>
+          <p>When <strong>INSPECT MODE</strong> is ON, click any two items — such as the customer's speech bubble, a field on the ticket, a row in the Cinema Schedule, the Booth Clock, or a Manager Rule — to visually compare them and spot discrepancies.</p>
+        </div>
+
+        <div class="bg-white border border-slate-300 p-3.5 rounded-xl">
+          <h3 class="font-bold text-slate-900 mb-1">3. Take your time</h3>
+          <p>Arrival time is saved when the customer reaches your desk. Reading does not make them late. Help and document view pause the clock. After a decision, read the message and press Next customer.</p>
+          <p class="mt-2">Keyboard: A = admit · C = correct · R = refuse · Q = ask which film · I = inspect · P = pause · N = next.</p>
+          <p class="mt-2">Free seats do not include bookings. A customer with a booking can enter a full screening. A replacement moves their booking; it does not charge for seats twice.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="compareModal" class="hidden fixed inset-0 bg-black/90 z-50 p-3 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Ticket and programme">
+    <div class="max-w-4xl mx-auto velvet-panel p-4">
+      <div class="flex justify-between gap-3 mb-3"><h2 class="font-marquee text-amber-200">Ticket &amp; programme</h2><button onclick="UI.closeCompare()" class="bg-red-900 rounded px-4 py-2">Close</button></div>
+      <p id="compareRequest" class="text-sm text-amber-100 mb-3"></p>
+      <div id="compareStatus" role="status" aria-live="polite" class="text-sm bg-black/50 p-2 mb-3 rounded">Select a ticket field and a programme row.</div>
+      <div class="grid md:grid-cols-2 gap-5"><div id="compareTicket"></div><div id="compareSchedule" class="space-y-2 bg-[#fff8e7] p-3 rounded text-slate-900"></div></div>
+    </div>
+  </div>
+  <div id="noticeModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Manager notice">
+    <div class="cinema-ticket max-w-md p-6"><h2 class="font-marquee text-red-900 mb-3">Manager’s notice</h2><p id="noticeText"></p><button onclick="UI.hideModal('noticeModal')" class="mt-4 bg-red-900 text-amber-100 px-5 py-2 rounded">OK · Continue</button></div>
+  </div>
+
+  <!-- =========================================================================
+       EMBEDDED JAVASCRIPT ENGINE (MODULAR ARCHITECTURE)
+       ========================================================================= -->
+  <script>
+    /***************************************************************************
+     * 1. EDITABLE LANGUAGE SYLLABUS DATA (CEFR A1 - Life Elementary Unit 9a & 9b)
+     * Separated cleanly from the game engine so teachers can customize it.
+     ***************************************************************************/
+    let LANGUAGE_PACK = {
+      version: 2,
+      unitTitle: "Life Elementary — Unit 9 (9a & 9b): Entertainment, Film & TV",
+      filmGenres: [
+        "animation",
+        "comedy",
+        "documentary",
+        "horror",
+        "romantic",
+        "science fiction",
+        "thriller"
+      ],
+      tvProgrammes: [
+        "sports programme",
+        "comedy show",
+        "quiz show",
+        "horror film",
+        "drama series",
+        "wildlife documentary",
+        "the news"
+      ],
+      adjectives: [
+        "funny",
+        "interesting",
+        "violent",
+        "scary",
+        "exciting",
+        "fun",
+        "boring"
+      ],
+      // Core Cinema Films mapped to the 7 target genres
+      films: [
+        {
+          id: "laughing_bananas",
+          title: "Laughing Bananas",
+          genre: "comedy",
+          genreLabel: "Comedy",
+          screen: 1,
+          time: "18:00",
+          timeMins: 18 * 60,
+          capacity: 12,
+          adjective: "funny",
+          descriptions: [
+            "I want something funny.",
+            "I'm going to see a comedy to laugh.",
+            "We're going to watch a funny film tonight."
+          ],
+          purposePhrases: ["to laugh", "to have fun with my friends"]
+        },
+        {
+          id: "happy_penguins",
+          title: "Happy Penguins",
+          genre: "animation",
+          genreLabel: "Animation",
+          screen: 2,
+          time: "18:15",
+          timeMins: 18 * 60 + 15,
+          capacity: 10,
+          adjective: "fun",
+          descriptions: [
+            "We're going to see the animation.",
+            "I'm going to watch a cartoon film with my family to have fun.",
+            "I want something fun for children and adults."
+          ],
+          purposePhrases: ["to have fun", "to watch a fun cartoon"]
+        },
+        {
+          id: "the_dark_house",
+          title: "The Dark House",
+          genre: "horror",
+          genreLabel: "Horror",
+          screen: 3,
+          time: "18:30",
+          timeMins: 18 * 60 + 30,
+          capacity: 10,
+          adjective: "scary",
+          descriptions: [
+            "I'm going to watch a horror film.",
+            "I love scary films about ghosts.",
+            "We're going to see a scary film tonight."
+          ],
+          purposePhrases: ["to be scared", "to see something scary"]
+        },
+        {
+          id: "planet_x",
+          title: "Planet X",
+          genre: "science fiction",
+          genreLabel: "Sci-fi",
+          screen: 3,
+          time: "19:00",
+          timeMins: 19 * 60,
+          capacity: 14,
+          adjective: "exciting",
+          descriptions: [
+            "I love films about space.",
+            "We're going to see the new science-fiction film.",
+            "I'm going to watch a sci-fi film about astronauts."
+          ],
+          purposePhrases: ["to see space rockets", "to have an exciting evening"]
+        },
+        {
+          id: "wild_world",
+          title: "Wild World",
+          genre: "documentary",
+          genreLabel: "Documentary",
+          screen: 1,
+          time: "19:30",
+          timeMins: 19 * 60 + 30,
+          capacity: 12,
+          adjective: "interesting",
+          descriptions: [
+            "I'm going to see a film about real animals.",
+            "I'm going to watch a documentary to learn about animals.",
+            "I want something interesting about nature."
+          ],
+          purposePhrases: ["to learn about animals", "to see something interesting"]
+        },
+        {
+          id: "love_in_paris",
+          title: "Love in Paris",
+          genre: "romantic",
+          genreLabel: "Romantic film",
+          screen: 2,
+          time: "20:00",
+          timeMins: 20 * 60,
+          capacity: 10,
+          adjective: "romantic",
+          descriptions: [
+            "We want to watch a film about two people in love.",
+            "I'm going to see a romantic film with my partner.",
+            "We're going to watch a love story tonight."
+          ],
+          purposePhrases: ["to have a romantic evening", "to see a story about love"]
+        },
+        {
+          id: "the_last_train",
+          title: "The Last Train",
+          genre: "thriller",
+          genreLabel: "Thriller",
+          screen: 3,
+          time: "20:30",
+          timeMins: 20 * 60 + 30,
+          capacity: 14,
+          adjective: "exciting",
+          descriptions: [
+            "I'm going to see something exciting.",
+            "I'm going to watch a thriller tonight.",
+            "We want an exciting mystery film, not a boring film."
+          ],
+          purposePhrases: ["to see an exciting story", "to have an exciting night"]
+        }
+      ],
+      // Day 4+ TV Lounge Programmes
+      tvLoungeSchedule: [
+        {id:"tv_horror",title:"Midnight Visitors",genre:"horror film",genreLabel:"Horror film",screen:"TV Lounge",time:"21:00",timeMins:1260,capacity:8,statement:"I’m going to watch a horror film. I like scary stories."},
+        {
+          id: "tv_sports",
+          title: "Champions Football Live",
+          genre: "sports programme",
+          genreLabel: "Sports programme",
+          screen: "TV Lounge",
+          time: "18:15",
+          timeMins: 18 * 60 + 15,
+          capacity: 8,
+          statement: "I'm going to watch the sports programme to see the football match."
+        },
+        {
+          id: "tv_quiz",
+          title: "Big Money Questions",
+          genre: "quiz show",
+          genreLabel: "Quiz show",
+          screen: "TV Lounge",
+          time: "18:45",
+          timeMins: 18 * 60 + 45,
+          capacity: 8,
+          statement: "We're going to watch the quiz show to answer the questions!"
+        },
+        {
+          id: "tv_wildlife",
+          title: "Secrets of the Ocean",
+          genre: "wildlife documentary",
+          genreLabel: "Wildlife documentary",
+          screen: "TV Lounge",
+          time: "19:15",
+          timeMins: 19 * 60 + 15,
+          capacity: 8,
+          statement: "I'm going to watch the wildlife documentary to learn about sea animals."
+        },
+        {
+          id: "tv_news",
+          title: "World Report at Eight",
+          genre: "the news",
+          genreLabel: "The news",
+          screen: "TV Lounge",
+          time: "20:00",
+          timeMins: 20 * 60,
+          capacity: 8,
+          statement: "I want to watch the news to learn about the world."
+        },
+        {
+          id: "tv_drama",
+          title: "City Hospital",
+          genre: "drama series",
+          genreLabel: "Drama series",
+          screen: "TV Lounge",
+          time: "20:15",
+          timeMins: 20 * 60 + 15,
+          capacity: 8,
+          statement: "I'm going to watch the drama series to see the new episode."
+        },
+        {
+          id: "tv_comedy",
+          title: "The Friday Laugh Show",
+          genre: "comedy show",
+          genreLabel: "Comedy show",
+          screen: "TV Lounge",
+          time: "20:45",
+          timeMins: 20 * 60 + 45,
+          capacity: 8,
+          statement: "I'm going to watch the comedy show to laugh."
+        }
+      ]
+    };
+
+    const DEFAULT_LANGUAGE_PACK = structuredClone(LANGUAGE_PACK);
+
+    /***************************************************************************
+     * 2. SYNTHESIZED WEB AUDIO SOUND SYSTEM (Zero external dependencies)
+     ***************************************************************************/
+    const SoundFX = {
+      ctx: null,
+      muted: false,
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      },
+
+      toggleMute() {
+        this.muted = !this.muted;
+        const icon = document.getElementById('muteBtnIcon');
+        if (icon) icon.textContent = this.muted ? '🔇' : '🔊';
+        Game.saveProgress();
+      },
+
+      playTone(freq, type, duration, gainVal = 0.12, slideFreq = null) {
+        if (this.muted) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          if (slideFreq) {
+            osc.frequency.exponentialRampToValueAtTime(slideFreq, this.ctx.currentTime + duration);
+          }
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {}
+      },
+
+      bell() {
+        this.playTone(880, 'sine', 0.25, 0.12);
+        setTimeout(() => this.playTone(1320, 'sine', 0.35, 0.1), 90);
+      },
+
+      stamp() {
+        this.playTone(110, 'triangle', 0.16, 0.28, 45);
+        setTimeout(() => this.playTone(75, 'square', 0.1, 0.15), 40);
+      },
+
+      printer() {
+        this.playTone(320, 'sawtooth', 0.08, 0.08);
+        setTimeout(() => this.playTone(390, 'sawtooth', 0.08, 0.08), 90);
+        setTimeout(() => this.playTone(460, 'sawtooth', 0.12, 0.09), 180);
+      },
+
+      cash() {
+        this.playTone(987.77, 'sine', 0.12, 0.14);
+        setTimeout(() => this.playTone(1318.51, 'sine', 0.28, 0.15), 110);
+      },
+
+      buzzer() {
+        this.playTone(155, 'sawtooth', 0.25, 0.16, 120);
+        setTimeout(() => this.playTone(130, 'sawtooth', 0.3, 0.16), 160);
+      },
+
+      click() {
+        this.playTone(540, 'sine', 0.05, 0.06);
+      }
+    };
+
+    /***************************************************************************
+     * 3. RECURRING CHARACTERS & EXPRESSIVE SVG PORTRAIT GENERATOR
+     ***************************************************************************/
+    const CHARACTERS = {
+      recurring: {
+        mr_morris: {
+          id: "mr_morris",
+          name: "Mr Morris",
+          tag: "Regular Customer",
+          isElderly: true,
+          coatColor: "#475569",
+          shirtColor: "#f8fafc",
+          hairColor: "#cbd5e1",
+          skinColor: "#f1c27d",
+          glasses: true,
+          hat: true,
+          wearingRed: false
+        },
+        sofia: {
+          id: "sofia",
+          name: "Sofia",
+          tag: "Documentary Fan",
+          isElderly: false,
+          coatColor: "#0f766e",
+          shirtColor: "#fef08a",
+          hairColor: "#3b1e08",
+          skinColor: "#e0ac69",
+          glasses: true,
+          hat: false,
+          wearingRed: false
+        },
+        leo: {
+          id: "leo",
+          name: "Leo",
+          tag: "Hates Scary Films",
+          isElderly: false,
+          coatColor: "#dc2626", // Wearing red!
+          shirtColor: "#ffffff",
+          hairColor: "#eab308",
+          skinColor: "#ffdbac",
+          glasses: false,
+          hat: false,
+          wearingRed: true
+        },
+        mystery: {
+          id: "mystery",
+          name: "The Mystery Customer",
+          tag: "VIP / Inspector?",
+          isElderly: false,
+          coatColor: "#311042",
+          shirtColor: "#fde047",
+          hairColor: "#111827",
+          skinColor: "#d2996c",
+          glasses: true,
+          hat: true,
+          wearingRed: false
+        }
+      },
+
+      firstNames: [
+        "Anna", "David", "Elena", "Marcus", "Clara", "Samir", "Nora", "Tom",
+        "Lucia", "Ben", "Hannah", "Omar", "Eva", "Daniel", "Mei", "Victor"
+      ],
+
+      createRandomPerson(rng, forceRed = null) {
+        const name = this.firstNames[Math.floor(rng() * this.firstNames.length)];
+        const wearingRed = forceRed !== null ? forceRed : (rng() < 0.28);
+        const redCoats = ["#dc2626", "#b91c1c", "#e11d48"];
+        const otherCoats = ["#1d4ed8", "#15803d", "#6d28d9", "#0f766e", "#b45309", "#334155"];
+        const coatColor = wearingRed
+          ? redCoats[Math.floor(rng() * redCoats.length)]
+          : otherCoats[Math.floor(rng() * otherCoats.length)];
+
+        const skins = ["#ffdbac", "#f1c27d", "#e0ac69", "#c68642", "#8d5524"];
+        const hairs = ["#1f2937", "#451a03", "#92400e", "#d97706", "#cbd5e1"];
+
+        return {
+          id: "cust_" + Math.floor(rng() * 100000),
+          name,
+          tag: wearingRed ? "Wearing Red Jacket" : "Cinema Visitor",
+          isElderly: rng() < 0.15,
+          coatColor,
+          shirtColor: "#f8fafc",
+          hairColor: hairs[Math.floor(rng() * hairs.length)],
+          skinColor: skins[Math.floor(rng() * skins.length)],
+          glasses: rng() < 0.35,
+          hat: rng() < 0.25,
+          wearingRed
+        };
+      },
+
+      renderPortraitSVG(person, mood = "neutral") {
+        const mouthPath = mood === "happy"
+          ? "M 42 66 Q 50 74 58 66"
+          : mood === "sad"
+          ? "M 42 71 Q 50 64 58 71"
+          : "M 43 68 Q 50 70 57 68";
+
+        const glassesSVG = person.glasses ? `
+          <g stroke="#fbbf24" stroke-width="2" fill="rgba(255,255,255,0.2)">
+            <circle cx="41" cy="50" r="6.5" />
+            <circle cx="59" cy="50" r="6.5" />
+            <line x1="47.5" y1="50" x2="52.5" y2="50" />
+          </g>
+        ` : "";
+
+        const hatSVG = person.hat ? `
+          <g>
+            <ellipse cx="50" cy="28" rx="26" ry="5" fill="#1e293b" stroke="#d4af37" stroke-width="1.5"/>
+            <rect x="33" y="14" width="34" height="15" rx="4" fill="#334155" stroke="#d4af37" stroke-width="1.5"/>
+          </g>
+        ` : "";
+
+        const wrinklesSVG = person.isElderly ? `
+          <path d="M 38 41 Q 50 39 62 41" stroke="#8d5524" stroke-width="1" fill="none" opacity="0.6"/>
+        ` : "";
+
+        return `
+          <svg viewBox="0 0 100 105" class="w-full h-full drop-shadow-lg customer-enter">
+            <!-- Shoulders / Coat -->
+            <path d="M 16 102 C 16 78, 32 74, 50 74 C 68 74, 84 78, 84 102 Z"
+                  fill="${person.coatColor}" stroke="#111827" stroke-width="2.5" />
+            <!-- Shirt Collar -->
+            <polygon points="41,75 59,75 50,92" fill="${person.shirtColor}" />
+            <!-- Neck -->
+            <rect x="44" y="66" width="12" height="12" rx="3" fill="${person.skinColor}" />
+            <!-- Hair Back -->
+            <circle cx="50" cy="48" r="23" fill="${person.hairColor}" />
+            <!-- Head -->
+            <ellipse cx="50" cy="51" rx="19" ry="21" fill="${person.skinColor}" stroke="#111827" stroke-width="2" />
+            <!-- Hair Top -->
+            <path d="M 31 46 C 32 28, 68 28, 69 46 C 62 37, 38 37, 31 46 Z" fill="${person.hairColor}" />
+            ${wrinklesSVG}
+            <!-- Eyes -->
+            <circle cx="41" cy="50" r="2.4" fill="#111827" />
+            <circle cx="59" cy="50" r="2.4" fill="#111827" />
+            ${glassesSVG}
+            <!-- Nose -->
+            <path d="M 50 52 L 48 59 L 52 59" stroke="#78350f" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <!-- Mouth -->
+            <path d="${mouthPath}" stroke="#7f1d1d" stroke-width="2.2" fill="none" stroke-linecap="round" />
+            ${hatSVG}
+          </svg>
+        `;
+      }
+    };
+
+    /***************************************************************************
+     * 4. CAMPAIGN DAYS, MANAGER NOTICES & UPGRADES CONFIGURATION
+     ***************************************************************************/
+    const CAMPAIGN_DAYS = {
+      1: {
+        dayNum: 1,
+        dayName: "MONDAY",
+        title: "Day 1 — First Day on the Job",
+        memo: `MONDAY: NEW CINEMA RULE\n"All customers need a ticket.\nNo ticket? No film.\nThe film, screen and time on the ticket must match today's schedule.\nPlease smile."`,
+        checklist: [
+          "Every customer must have a valid ticket for MONDAY.",
+          "Check that the Film, Screen, and Time match the Cinema Schedule.",
+          "Listen to what the customer wants to see (e.g. 'something funny' = Comedy).",
+          "On Day 1, ticket corrections are not open yet: ADMIT valid bookings or REFUSE invalid ones."
+        ],
+        languageFocus: "7 Film genres (Animation, Comedy, Documentary, Horror, Romantic, Sci-fi, Thriller) + descriptions ('something funny', 'films about space', 'real animals').",
+        rulesSummary: [
+          { id: "r_ticket", title: "Rule 1: Valid Ticket Required", text: "Every customer must present a ticket for TODAY (MONDAY). No ticket = REFUSE." },
+          { id: "r_schedule", title: "Rule 2: Schedule Match", text: "Ticket Film, Screen number, and Time must match the Official Programme." },
+          { id: "r_genre", title: "Rule 3: Customer Request", text: "If a customer bought the wrong film for what they want, REFUSE (Printer repairs finish tomorrow)." }
+        ]
+      },
+      2: {
+        dayNum: 2,
+        dayName: "TUESDAY",
+        title: "Day 2 — The Tuesday Rush",
+        memo: `TUESDAY: NEW COMPANY RULES\n"1. The Ticket Correction Printer is now working! If a customer has the wrong film, screen or time, use CORRECT.\n2. Customers cannot enter more than 10 minutes after the film starts.\n3. Group bookings need enough seats!"`,
+        checklist: [
+          "LATE RULE: Customers cannot enter more than 10 minutes after start time (e.g. 18:00 film closes at 18:10).",
+          "CORRECTIONS ENABLED: Use CORRECT to print a replacement ticket if a customer has the wrong film, wrong screen, or wrong time (and seats are available).",
+          "GROUP SEATS: Check that the ticket seats match the group size and the screening has enough seats."
+        ],
+        languageFocus: "Future plans with 'be going to' (affirmative, negative, questions) + checking screening start times and seat capacity.",
+        rulesSummary: [
+          { id: "r_late", title: "Rule 1: 10-Minute Late Limit", text: "Customers CANNOT enter more than 10 minutes after a film starts. (Check Booth Clock vs Film Time)." },
+          { id: "r_correct", title: "Rule 2: Ticket Corrections", text: "Standard tickets with wrong film, screen, or time can be CORRECTED if another suitable screening has seats." },
+          { id: "r_group", title: "Rule 3: Group Bookings", text: "Ticket seat count must cover the customer's group size." }
+        ]
+      },
+      3: {
+        dayNum: 3,
+        dayName: "WEDNESDAY",
+        title: "Day 3 — Management Knows Best",
+        memo: `WEDNESDAY: IMPORTANT NOTICE\n"1. Projector problem in Screen 3! 'Planet X' (19:00) is MOVED to Screen 1.\n2. Watch out for DUPLICATE ticket serial numbers! Check the Security Log.\n3. PROMO tickets are cheap: PROMO tickets CANNOT be corrected!"`,
+        checklist: [
+          "SCREEN CHANGE: 'Planet X' (19:00) has moved from Screen 3 to Screen 1. Correct tickets that still say Screen 3!",
+          "DUPLICATE SERIALS: Check the Ticket Serial # against the Used Serial Log. Refuse duplicates!",
+          "PROMO TICKETS: Tickets marked 'PROMO (NO CHANGE)' cannot be corrected. If a Promo ticket has an error, you must REFUSE."
+        ],
+        languageFocus: "Infinitive of purpose ('to laugh', 'to learn about animals', 'to relax') + negative plans ('I'm not going to watch anything scary').",
+        rulesSummary: [
+          { id: "r_move", title: "Rule 1: Screen Move Notice", text: "'Planet X' (19:00) moved to Screen 1. Tickets saying Screen 3 must be CORRECTED to Screen 1." },
+          { id: "r_dup", title: "Rule 2: No Duplicate Serials", text: "Check the Serial Log tab. If a Serial # was already used today, REFUSE entry." },
+          { id: "r_promo", title: "Rule 3: Promo Tickets Final", text: "Ticket Type 'PROMO' cannot be corrected. Any error on a Promo ticket = REFUSE." },
+          { id: "r_late", title: "Rule 4: 10-Minute Late Limit", text: "No entry more than 10 minutes after start time." }
+        ]
+      },
+      4: {
+        dayNum: 4,
+        dayName: "THURSDAY",
+        title: "Day 4 — Customer Happiness Week & TV Lounge",
+        memo: `THURSDAY: THE TELEVISION LOUNGE IS OPEN!\n"We now have a luxury TV Lounge showing Sports programmes, Quiz shows, Wildlife documentaries, Drama series, Comedy shows, and The News!\nCustomers for TV programmes need a TV LOUNGE ticket."`,
+        checklist: [
+          "TV LOUNGE OPEN: Check the TV Lounge Schedule at the bottom of the Schedule tab.",
+          "TV customers need a ticket for 'TV Lounge' matching their programme and time (or use CORRECT to fix a Standard ticket to the TV Lounge).",
+          "Continue checking the 10-minute late limit, duplicate serial numbers, and Promo restrictions."
+        ],
+        languageFocus: "Television vocabulary (sports programme, comedy show, quiz show, wildlife documentary, drama series, the news) + purpose ('to learn about the world').",
+        rulesSummary: [
+          { id: "r_tv", title: "Rule 1: TV Lounge Access", text: "TV programmes take place in the 'TV Lounge'. If a customer has the wrong room or programme on a Standard ticket, use CORRECT." },
+          { id: "r_dup", title: "Rule 2: Duplicate Serials & Promo Rules", text: "Duplicate serials = REFUSE. Promo tickets cannot be corrected." },
+          { id: "r_late", title: "Rule 3: 10-Minute Late Limit", text: "No entry more than 10 minutes after start time." }
+        ]
+      },
+      5: {
+        dayNum: 5,
+        dayName: "FRIDAY",
+        title: "Day 5 — Everything Is Fine (Cinema Chaos!)",
+        memo: `FRIDAY: IMPORTANT FINAL RULES\n"1. Customers CANNOT enter Screen 2 after 19:10. EXCEPTION: Customers wearing RED! The manager likes red.\n2. 'Love in Paris' (20:00) is CANCELLED! Correct those customers to another film they accept.\n3. Official VIP Passes signed by the Manager are valid."`,
+        checklist: [
+          "THE RED RULE: No entry to Screen 2 after 19:10 UNLESS the customer is wearing RED!",
+          "CANCELLED FILM: 'Love in Paris' (20:00) is cancelled. Question the customer and CORRECT their ticket to another film they want!",
+          "VIP GUEST PASS: Check VIP passes against the Security & VIP Log."
+        ],
+        languageFocus: "Full Unit 9a & 9b synthesis: combining future plans ('be going to'), purpose ('to + infinitive'), film & TV vocabulary, and resolving contradictions.",
+        rulesSummary: [
+          { id: "r_red", title: "Rule 1: Screen 2 Red Policy", text: "Customers cannot enter Screen 2 after 19:10 — EXCEPT customers wearing RED clothing! (The Manager likes red)." },
+          { id: "r_cancel", title: "Rule 2: Cancelled Screening", text: "'Love in Paris' (20:00) is CANCELLED. Question the customer and CORRECT their ticket to an available screening they like." },
+          { id: "r_vip", title: "Rule 3: Manager's VIP Passes", text: "Customers with a signed VIP Authorization Pass (listed in Log tab) may enter." },
+          { id: "r_all", title: "Rule 4: Standard Policies Apply", text: "Max 10 mins late, no duplicate serials, Promo tickets cannot be changed." }
+        ]
+      },
+      6: {
+        dayNum: 6,
+        dayName: "SATURDAY",
+        title: "Endless Mode — Saturday Night Fever",
+        memo: `SATURDAY: ENDLESS SHIFT\n"You survived all five days! Now see how long you can run the box office on Saturday night.\nAll rules, TV Lounge programmes, and special policies are active!"`,
+        checklist: [
+          "All cinema & TV Lounge screenings are active.",
+          "Watch out for Screen 2 after 19:10 (unless wearing red), duplicate serials, and late arrivals.",
+          "Set your highest score!"
+        ],
+        languageFocus: "Complete Unit 9 review in endless replayable scenarios.",
+        rulesSummary: [
+          { id: "r_endless", title: "All Campaign Rules Active", text: "10-min late limit, Screen 2 Red rule after 19:10, Duplicate serial check, Promo no-change rule, and TV Lounge access." }
+        ]
+      }
+    };
+
+    const UPGRADES_CATALOG = [
+      {
+        id: "scanner",
+        name: "Better Ticket Scanner",
+        cost: 35,
+        icon: "🔍",
+        desc: "Compare the printed film, room and time with one scan."
+      },
+      {
+        id: "printer",
+        name: "Faster Ticket Printer",
+        cost: 40,
+        icon: "🖨️",
+        desc: "Pre-selects a screening from the customer’s stated plan. +€3 per correct replacement."
+      },
+      {
+        id: "seating",
+        name: "Velvet Queue Rope & Chairs",
+        cost: 45,
+        icon: "🪑",
+        desc: "Waiting customers in the queue have +40% more patience before leaving."
+      },
+      {
+        id: "computer",
+        name: "Cinema Computer v2",
+        cost: 50,
+        icon: "💻",
+        desc: "Automatically cross-checks Ticket Serial # against the Duplicate Log and shows a badge."
+      },
+      {
+        id: "handbook",
+        name: "Manager's Golden Handbook",
+        cost: 55,
+        icon: "📘",
+        desc: "Forgives your first management warning each shift and boosts reputation gains."
+      }
+    ];
+
+    /***************************************************************************
+     * 5. CENTRAL VALIDATION ENGINE & SCENARIO GENERATOR
+     ***************************************************************************/
+    const Game = {
+      state: {
+        day: 1,
+        story: {}, bookings: {}, outcomes: [], modalDepth: 0, serialCounter: 400,
+        difficulty: "normal", // 'relaxed' | 'normal' | 'chaos'
+        money: 0,
+        reputation: 80,
+        warnings: 0,
+        maxWarnings: 3,
+        ownedUpgrades: [],
+        completedDays: [],
+        highScore: 0,
+
+        // Teacher Settings
+        showLanguageHints: false,
+        enableTVContent: true,
+        disableQueueWalkouts: false,
+
+        // Live Shift State
+        shiftActive: false,
+        paused: false,
+        clockMins: 17 * 60 + 45, // 17:45
+        clockEndMins: 21 * 60 + 15, // 21:15
+        clockFormatted: "17:45",
+
+        schedule: [],
+        tvSchedule: [],
+        usedSerials: [],
+        authorizedVips: ["VIP-770-MORRIS", "VIP-900-INSPECTOR"],
+
+        currentCustomer: null,
+        queue: [],
+        casesGeneratedCount: 0,
+        shiftStats: {
+          served: 0,
+          correct: 0,
+          mistakes: 0,
+          cashEarned: 0,
+          dilemmaNotes: []
+        },
+
+        // Inspection Tool State
+        inspectMode: true,
+        inspectFirst: null,
+        decisionLocked: false
+      },
+
+      timerInterval: null,
+      rngSeed: Date.now() % 2147483647,
+
+      // Seeded pseudo-random generator for reproducible & balanced case distribution
+      rng() {
+        this.rngSeed = (this.rngSeed * 16807) % 2147483647;
+        return (this.rngSeed - 1) / 2147483646;
+      },
+
+      init() {
+        this.loadProgress();
+        const seed = Number(new URLSearchParams(location.search).get("seed"));
+        if(Number.isInteger(seed)&&seed>0) this.rngSeed=seed%2147483647||1;
+        this.prepareDaySchedule(this.state.day);
+        UI.renderHeader();
+        UI.renderScheduleBinder();
+        UI.renderRulesBinder();
+        UI.renderSerialsBinder();
+        UI.openBriefingModal(this.state.day);
+        document.getElementById('languagePackJsonArea').value = JSON.stringify(LANGUAGE_PACK, null, 2);
+        document.getElementById('saveNotice').textContent=this.startupMessage||'Progress saves between customers. Reloading starts this shift again.';
+      },
+
+      formatMins(totalMins) {
+        const h = Math.floor(totalMins / 60);
+        const m = totalMins % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      },
+
+      setDifficulty(diff) {
+        if (!["relaxed","normal","chaos"].includes(diff)) return;
+        this.state.difficulty = diff;
+        this.state.maxWarnings = diff === 'relaxed' ? 4 : diff === 'normal' ? 3 : 2;
+        if(this.state.shiftActive) this.startShiftLoop();
+        UI.updateDifficultyButtons();
+        UI.renderHeader();
+        this.saveProgress();
+      },
+
+      updateTeacherSettings() {
+        this.state.showLanguageHints=document.getElementById('teacherToggleHints').checked;
+        this.state.enableTVContent=document.getElementById('teacherToggleTV').checked;
+        this.state.disableQueueWalkouts=document.getElementById('teacherToggleTimer').checked;
+        if(this.state.currentCustomer) UI.renderCustomer(this.state.currentCustomer);
+        this.saveProgress();
+      },
+
+      teacherJumpToDay() {
+        this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;this.state.decisionLocked=false;
+        this.state.day=Number(document.getElementById('teacherDaySelect').value)||1;
+        UI.closeTeacherModal();UI.closeShiftReportModal();this.prepareDaySchedule(this.state.day);
+        UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.openBriefingModal(this.state.day);this.saveProgress();
+      },
+
+      exportLanguagePack() {
+        const text=JSON.stringify(LANGUAGE_PACK,null,2),blob=new Blob([text],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+        a.href=url;a.download='cinema-language-pack.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        document.getElementById('languagePackJsonArea').value=text;
+      },
+
+      applyCustomLanguagePack() {
+        const msg=document.getElementById('jsonStatusMsg');
+        try {
+          const parsed=this.validateLanguagePack(JSON.parse(document.getElementById('languagePackJsonArea').value));
+          localStorage.setItem('cinema_chaos_pack_v2',JSON.stringify(parsed));
+          LANGUAGE_PACK=parsed;
+          this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;
+          this.prepareDaySchedule(this.state.day);UI.renderScheduleBinder();UI.renderRulesBinder();UI.openBriefingModal(this.state.day);
+          msg.textContent='✓ Pack saved. Close settings and start a new shift.';msg.className='text-xs text-emerald-400';
+        } catch(e){msg.textContent='Pack not changed: '+e.message;msg.className='text-xs text-rose-400';}
+      },
+
+
+
+      startShift() {
+        this.stopShiftLoop();this.state.modalDepth=0;UI.modalStack.clear();UI.closeBriefingModal();
+        this.prepareDaySchedule(this.state.day);
+        Object.assign(this.state,{shiftActive:true,paused:false,clockMins:1065,clockFormatted:'17:45',warnings:0,queue:[],casesGeneratedCount:0,
+          forgivenWarningUsed:false,currentCustomer:null,decisionLocked:false,closing:false,outcomes:[],
+          shiftStats:{served:0,correct:0,mistakes:0,cashEarned:0,dilemmaNotes:[]}});
+        this.setDifficulty(this.state.difficulty);SoundFX.bell();
+        UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.renderPause();
+        this.spawnCustomerToQueue();this.spawnCustomerToQueue();this.nextCustomerFromQueue();this.startShiftLoop();
+      },
+
+      startShiftLoop() {
+        this.stopShiftLoop();
+        this.timerInterval=setInterval(()=>this.tick(),this.state.difficulty==='relaxed'?2400:this.state.difficulty==='chaos'?1150:1600);
+      },
+
+      stopShiftLoop() {
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
+      },
+
+      togglePause() { if(this.state.shiftActive&&!this.state.modalDepth){this.state.paused=!this.state.paused;UI.renderPause();} },
+
+      updateQueuePatience() {
+        if(!this.state.disableQueueWalkouts && this.state.difficulty!=='relaxed') {
+          const decay=(this.state.difficulty==='chaos'?1.5:0.75)/(this.state.ownedUpgrades.includes('seating')?1.4:1);
+          this.state.queue=this.state.queue.filter(c=>{
+            c.patience=Math.max(0,c.patience-decay);
+            if(c.patience>0)return true;
+            this.state.shiftStats.mistakes++;this.adjustReputation(-3);UI.renderHeader();return false;
+          });
+        }
+        UI.renderQueue();
+      },
+
+
+
+
+
+      /*************************************************************************
+       * SCENARIO GENERATOR: Creates and checks cases against live state
+       * ~40% valid straightforward cases, ~60% varied inspection challenges
+       *************************************************************************/
+      // All screenings are fixed for a shift. Only announced setup events change them.
+      allScreenings() { return [...this.state.schedule, ...this.state.tvSchedule]; },
+      screening(id) { return this.allScreenings().find(f => f.id === id); },
+      today() { return CAMPAIGN_DAYS[this.state.day].dayName; },
+      arrival(c) { return c.arrivalTime ?? this.state.clockMins; },
+      booking(c) { return this.state.bookings[c.ticket?.serial]; },
+      freeSeats(f) {
+        return f.capacity - Object.values(this.state.bookings).filter(b => b.screeningId === f.id && b.status !== 'cancelled').reduce((n,b) => n+b.seats,0);
+      },
+      syncSeats() { this.allScreenings().forEach(f => { f.unallocatedSeats = this.freeSeats(f); }); },
+      canEnter(f, c) {
+        return f && f.status !== 'CANCELLED' && (this.state.day < 2 || this.arrival(c) <= f.timeMins+10)
+          && !(this.state.day >= 5 && f.screen === 2 && this.arrival(c)>1150 && !c.person.wearingRed);
+      },
+      accepts(c, f, requirements = c.known.preference) {
+        if (!requirements) return false;
+        return (!requirements.ids || requirements.ids.includes(f.id)) && (!requirements.genres || requirements.genres.includes(f.genre))
+          && (!requirements.notGenres || !requirements.notGenres.includes(f.genre)) && (!requirements.latest || f.timeMins <= requirements.latest);
+      },
+      correctionOptions(c) {
+        const t=c.ticket, b=this.booking(c);
+        if (this.state.day<2 || !t?.exists || t.date!==this.today() || this.state.usedSerials.includes(t.serial)
+          || !b || b.status!=='reserved' || t.ticketType.includes('PROMO') || t.ticketType.includes('VIP') || !c.known.preference) return [];
+        return this.allScreenings().filter(f => this.canEnter(f,c) && this.accepts(c,f)
+          && this.freeSeats(f)+(b.screeningId===f.id ? b.seats:0) >= c.groupSize);
+      },
+      evaluateCustomerCase(c) {
+        const t=c.ticket, f=this.screening(t?.filmId), b=this.booking(c), issues=[];
+        const add=(code,text,hard=false)=>issues.push({code,text,hard});
+        if(!t?.exists) add('missing','No ticket.',true);
+        else {
+          if(t.date!==this.today()) add('date',`Ticket: ${t.date}. Today: ${this.today()}.`,true);
+          if(this.state.usedSerials.includes(t.serial)) add('duplicate','This ticket number is already used.',true);
+          if(t.ticketType.includes('VIP') && (this.state.day<5 || !this.state.authorizedVips.includes(t.serial))) add('vip','This VIP number is not on the list.',true);
+          if(!['STANDARD','PROMO (NO CHANGE)','MANAGER VIP PASS','TV LOUNGE PASS','REPLACEMENT PRINTED'].includes(t.ticketType)) add('authenticity','This ticket type is not valid.',true);
+          if(!b || b.status!=='reserved') add('booking','There is no unused booking for this ticket.',true);
+          if(!f) add('film','This film is not on the programme.',true);
+          if(f) {
+            if((f.screen==='TV Lounge'&&!t.ticketType.includes('LOUNGE')&&!t.ticketType.includes('VIP')) || (f.screen!=='TV Lounge'&&t.ticketType.includes('LOUNGE'))) add('pass','The ticket type does not match this room.');
+            if(f.status==='CANCELLED') add('cancelled','This film is cancelled.');
+            if(t.filmTitle!==f.title) add('title','The film name does not match the booking.');
+            if(String(t.screen)!==String(f.screen)) add('screen',`Ticket room: ${t.screen}. Programme room: ${f.screen}.`);
+            if(this.parseTime(t.time)!==f.timeMins) add('time',`Ticket time: ${t.time}. Programme time: ${f.time}.`);
+            if(this.state.day>=2 && this.arrival(c)>f.timeMins+10) add('late',`Arrival ${this.formatMins(this.arrival(c))}: more than 10 minutes late.`);
+            if(this.state.day>=5 && f.screen===2 && this.arrival(c)>1150 && !c.person.wearingRed) add('red','Screen 2: after 19:10, you need red clothes.');
+            if(b && (b.screeningId!==f.id || b.seats!==t.seats || t.seats<c.groupSize)) add('seats',`Booking: ${b.seats} seat(s). People: ${c.groupSize}.`);
+            if(b && this.freeSeats(f)<0) add('capacity','There are not enough seats.',true);
+            if(c.known.preference && !this.accepts(c,f)) add('preference','The ticket does not match the customer’s plan.');
+          }
+        }
+        const hard=issues.some(i=>i.hard), needsQuestion=!!(c.requiredTicketQuestion&&!t?.exists)||(!hard && !!c.requiredQuestion && !c.known.preference);
+        const options=hard ? [] : this.correctionOptions(c);
+        let validActions=[];
+        if(needsQuestion) validActions=['QUESTION'];
+        else if(!issues.length) validActions=['ADMIT'];
+        else validActions=options.length ? ['CORRECT'] : ['REFUSE'];
+        // Morris may decline an alternative. A compassionate admission is recorded separately, not scored as compliant.
+        if(c.dilemma && !needsQuestion && issues.length && !hard && !validActions.includes('REFUSE')) validActions.push('REFUSE');
+        const discretionary=!!c.dilemma && issues.length===1 && issues[0].code==='late';
+        return {validActions,issues,options,needsQuestion,discretionary,reason:issues.map(i=>i.text).join(' ') || 'The booking and ticket match.'};
+      },
+      parseTime(t) { if(!/^\d{2}:\d{2}$/.test(t||'')) return NaN; const [h,m]=t.split(':').map(Number); return h<24 && m<60 ? h*60+m:NaN; },
+      pick(list) { return list.length ? list[Math.floor(this.rng()*list.length)] : null; },
+      makeUniqueSerial() { return 'GC-'+this.state.day+'-'+(++this.state.serialCounter); },
+      prepareDaySchedule(day) {
+        this.state.bookings={}; this.state.serialCounter=400;
+        this.state.schedule=LANGUAGE_PACK.films.map(f=>({...f, status:'ON TIME',originalScreen:f.screen,unallocatedSeats:f.capacity}));
+        this.state.tvSchedule=day>=4 && this.state.enableTVContent ? LANGUAGE_PACK.tvLoungeSchedule.map(f=>({...f,status:'ON TIME',unallocatedSeats:f.capacity})):[];
+        const moved=this.screening('planet_x');
+        if(day===3 && moved) { moved.screen=1; moved.status='MOVED TO SCR 1'; }
+        const cancelled=this.screening('love_in_paris');
+        if(day>=5 && cancelled) cancelled.status='CANCELLED';
+        // A real second screening: announced on the Friday briefing and printed in the programme.
+        const penguins=this.screening('happy_penguins');
+        if(day>=5 && penguins) this.state.schedule.push({...penguins,id:'happy_penguins_late',screen:2,time:'19:15',timeMins:1155,status:'EXTRA SHOW'});
+        this.state.schedule.sort((a,b)=>a.timeMins-b.timeMins);this.state.tvSchedule.sort((a,b)=>a.timeMins-b.timeMins);
+        this.state.usedSerials=day>=3 ? ['GC-104','GC-209','GC-318']:[];
+        this.state.scriptedDone={}; this.state.noticesSeen={};
+        this.state.clockEndMins=Math.max(...this.allScreenings().map(f=>f.timeMins))+10;
+        this.state.scheduleSnapshot=this.allScreenings().map(f=>[f.id,f.time,f.timeMins,f.screen,f.status]);
+      },
+      // Queue visitors have no invented tickets yet: cases are constructed from the live state at the window.
+      spawnCustomerToQueue() {
+        this.state.queue.push({person:CHARACTERS.createRandomPerson(()=>this.rng()),patience:100}); UI.renderQueue();
+      },
+      generateCustomerScenario(forcedType=null, person=null) {
+        const s=this.state, now=s.clockMins, day=s.day;
+        const shell={person:person||CHARACTERS.createRandomPerson(()=>this.rng()),arrivalTime:now};
+        const open=this.allScreenings().filter(f=>this.canEnter(f,shell) && this.freeSeats(f)>=1);
+        const late=this.allScreenings().filter(f=>f.status!=='CANCELLED' && now>f.timeMins+10 && this.freeSeats(f)>=1);
+        const pickId=(id)=>open.find(f=>f.id===id);
+        let type=forcedType;
+        if(!type) {
+          if(day===2 && now>=1106 && now<=1115 && !s.scriptedDone.morris && late.find(f=>f.id==='happy_penguins')) type='morris';
+          else if(day>=5 && now>1150 && now<=1163 && !s.scriptedDone.red && pickId('happy_penguins_late')) type='red';
+          else if(day===1 && s.casesGeneratedCount===2 && pickId('wild_world')) type='sofia';
+          else if(day===2 && s.casesGeneratedCount===2 && pickId('laughing_bananas')) type='leo';
+          else if(day===3 && s.casesGeneratedCount===1 && pickId('planet_x')) type='move';
+          else if(day===4 && s.casesGeneratedCount===1 && open.some(f=>f.screen==='TV Lounge')) type='tv';
+          else if(day===4 && s.casesGeneratedCount===3 && s.story.morris) type='morris_return';
+          else if(day>=5 && s.casesGeneratedCount===4 && !s.usedSerials.includes('VIP-900-INSPECTOR')) type='vip';
+          else if(day>=3 && s.casesGeneratedCount===6 && s.story.leo) type='leo_return';
+          else if(this.rng()<0.40) type=this.pick(['valid','valid','subjective']);
+          else {
+            const types=['wrong_film','screen','time','date','missing'];
+            if(day>=2) types.push('group','incomplete','change','hidden_ticket',...(late.length?['late']:[]));
+            if(day>=3) types.push('duplicate','promo','combined');
+            if(day>=4 && open.some(f=>f.screen==='TV Lounge')) types.push('tv_wrong');
+            if(day>=5 && this.screening('love_in_paris')) types.push('cancelled');
+            if(day>=5 && now>1150 && now<=1165) types.push('red','no_red');
+            type=this.pick(types);
+          }
+        }
+        if(!open.length && !['late','morris'].includes(type)) type=late.length && day>=2 ? 'late':'missing';
+        let f=this.pick(open)||this.allScreenings()[0], desired=f;
+        if(type==='sofia') f=desired=pickId('wild_world')||f;
+        if(type==='move') {f=desired=pickId('planet_x'); if(!f) return this.generateCustomerScenario('screen',person);}
+        if(type.startsWith('tv')) {f=desired=this.pick(open.filter(x=>x.screen==='TV Lounge')); if(!f) return this.generateCustomerScenario('valid',person);}
+        if(type==='late' || type==='morris') {
+          f=desired=type==='morris'?late.find(x=>x.id==='happy_penguins'):this.pick(late);
+          if(!f) return this.generateCustomerScenario('screen',person);
+        }
+        if(type==='red' || type==='no_red') {
+          f=desired=this.screening('happy_penguins_late');
+          if(!f || now<=1150 || now>f.timeMins+10 || this.freeSeats(f)<1) return this.generateCustomerScenario('screen',person);
+          shell.person=CHARACTERS.createRandomPerson(()=>this.rng(),type==='red');
+        }
+        if(type==='cancelled') {
+          f=this.screening('love_in_paris'); desired=this.pick(open.filter(x=>x.screen!==2));
+          if(!f || f.status!=='CANCELLED' || !desired || this.freeSeats(f)<1) return this.generateCustomerScenario('screen',person);
+        }
+        if(['wrong_film','promo','incomplete','leo','change'].includes(type)) {
+          desired=type==='leo' ? pickId('laughing_bananas'):this.pick(open);
+          const other=this.pick(open.filter(x=>x.genre!==desired?.genre));
+          if(!desired || !other) return this.generateCustomerScenario('screen',person);
+          f=other;
+        }
+        if(type==='group' && this.freeSeats(f)<3) return this.generateCustomerScenario('screen',person);
+        const group=type==='group'?3:1;
+        const c={...shell,groupSize:group,caseType:type,patience:100,known:{preference:{ids:[desired.id]}},
+          intent:{ids:[desired.id]},dialogue:[],asked:[],questionedYet:false,requiredQuestion:false,
+          statement:this.pick([`I'm going to see ${f.title}.`,...(f.descriptions||[f.statement]).filter(text=>!/^We|^We're/.test(text)&&! /\bfamily|partner\b/.test(text)),`I'm here ${f.purposePhrases?.[0]||'to have fun'}.`]),
+          ticket:{exists:true,serial:this.makeUniqueSerial(),filmId:f.id,filmTitle:f.title,genreLabel:f.genreLabel,screen:f.screen,time:f.time,date:this.today(),seats:1,ticketType:f.screen==='TV Lounge'?'TV LOUNGE PASS':'STANDARD'}};
+        const vocabulary={scary:'Scary = makes you feel afraid.',funny:'Funny = makes you laugh.',interesting:'Interesting = you want to know more.',fun:'Fun = you enjoy it.'};
+        c.languageHint=vocabulary[f.adjective]||'“To learn” tells us why someone does something.';
+        if(['wrong_film','promo','leo','change'].includes(type)) {
+          c.intent=c.known.preference={genres:[desired.genre]};
+          c.statement=`I'm not going to watch this film. I want ${desired.genre==='comedy'?'something funny':`a ${desired.genreLabel.toLowerCase()}`}.`;
+        }
+        if(type==='screen' || type==='combined' || type==='tv_wrong') c.ticket.screen=f.screen===1?2:1;
+        if(type==='time' || type==='combined') c.ticket.time='17:00';
+        if(type==='move') c.ticket.screen=f.originalScreen;
+        if(type==='date') c.ticket.date='LAST SUNDAY';
+        if(type==='missing' || type==='hidden_ticket') {
+          if(type==='hidden_ticket') { c.backupTicket={...c.ticket}; c.requiredTicketQuestion=true; c.statement="My ticket? It isn't in my bag. One moment..."; }
+          else c.statement="I haven't got a ticket. I'm not going to buy one.";
+          c.ticket={exists:false,reason:'No ticket on the desk.'};
+        }
+        if(type==='incomplete') {c.known.preference=null;c.requiredQuestion=true;c.statement="I'm going to meet my friends. Which film are we going to see? Let me check.";}
+        if(type==='cancelled') {c.intent={genres:[desired.genre]};c.known.preference=null;c.requiredQuestion=true;c.statement=`I'm going to see ${f.title}. Can I watch another film?`;}
+        if(type==='group') c.statement=`We're going to see ${f.title}. There are three of us.`;
+        if(type==='duplicate') c.ticket.serial=this.pick(s.usedSerials);
+        if(type==='promo') c.ticket.ticketType='PROMO (NO CHANGE)';
+        if(type==='late') c.statement=`I'm late. I only want to see ${f.title}.`;
+        if(type==='subjective') c.statement=`I'm going to watch ${f.title} to relax.`;
+        if(type==='sofia') {c.person={...CHARACTERS.recurring.sofia};c.statement=`I'm here to learn about animals. I'm going to see ${f.title}.`;}
+        if(type==='leo') {c.person={...CHARACTERS.recurring.leo,tag:'Regular customer'};c.statement="I'm not going to see a horror film. I want something funny.";}
+        if(type==='leo_return') {c.person={...CHARACTERS.recurring.leo,tag:'Regular customer'};c.statement=s.story.leo==='helped'?`Thanks for your help! Today I'm going to try ${f.title}.`:`Last time was difficult. Today I'm going to see ${f.title}.`;}
+        if(type==='morris') {
+          c.person={...CHARACTERS.recurring.mr_morris};c.dilemma=true;c.known.preference=null;c.requiredQuestion=true;
+          c.intent={genres:['animation','comedy']};c.statement=`I'm ${now-f.timeMins} minutes late. My daughter is inside. Can you help me?`;
+        }
+        if(type==='morris_return') {
+          c.person={...CHARACTERS.recurring.mr_morris};
+          c.statement=s.story.morris==='kind'?`Thank you for Tuesday! Today I'm going to see ${f.title}.`:s.story.morris==='helped'?`We liked the other film! Today I'm going to see ${f.title}.`:`I was sad on Tuesday. Today I'm on time for ${f.title}.`;
+        }
+        if(type==='vip') {c.person={...CHARACTERS.recurring.mystery};c.ticket.serial='VIP-900-INSPECTOR';c.ticket.ticketType='MANAGER VIP PASS';c.statement=`I'm going to watch ${f.title} to check the cinema.`;}
+        if(type==='red' || type==='no_red') {c.statement=`I'm going to see ${f.title} at ${f.time}.`;c.intent=c.known.preference={ids:[f.id]};}
+        c.known.publicPlan=c.statement.includes(desired.title)||c.statement.toLowerCase().includes(desired.genre)||/something funny|real animals|space|cartoon|love story|scary/.test(c.statement);
+        c.statementSummary=c.statement;
+        c.qaResponses={
+          which_film:c.intent.genres ? `I want a ${c.intent.genres.join(' or ')}. Any one is fine.`:`I'm going to see ${desired.title}.`,
+          why_see:`I'm here ${desired.purposePhrases?.[0]||'to have fun'}.`,
+          are_you_sure:['incomplete','wrong_film','promo','leo','change'].includes(type)?`No. ${c.intent.genres?`I want a ${c.intent.genres[0]}.`:`I want ${desired.title}.`}`:`Yes. I'm going to see ${f.title}.`,
+          how_many:`There ${group===1?'is one person':'are '+group+' people'}.`,
+          friends_coming:group>1?"Yes, they are. We're going to watch together.":"No. He isn't going to come today.",
+          other_ticket:type==='hidden_ticket'?"Here it is! It was in my coat.":"No. I don't have another ticket.",
+          alternative:c.intent.genres?`A ${c.intent.genres.join(' or ')} is OK.`:`Only ${desired.title}, please.`
+        };
+        if(type==='morris') {c.qaResponses.which_film=c.qaResponses.alternative="A comedy or an animation is OK. My daughter can come out.";c.qaResponses.are_you_sure="I can watch a comedy or an animation instead.";}
+        if(type==='cancelled') c.qaResponses.are_you_sure=c.qaResponses.alternative;
+        const ticket=c.backupTicket||c.ticket;
+        c.proposedBooking=ticket.exists && !['date','duplicate','missing'].includes(type) ? {serial:ticket.serial,screeningId:f.id,seats:ticket.seats,status:'reserved'}:null;
+        if(!this.validateGeneratedCase(c)) return this.generateCustomerScenario('missing',person);
+        s.casesGeneratedCount++;
+        if(['morris','red'].includes(type)) s.scriptedDone[type]=true;
+        return c;
+      },
+      validateGeneratedCase(c) {
+        const t=c.backupTicket||c.ticket;
+        if(t.exists && (!this.screening(t.filmId) || !Number.isInteger(t.seats) || t.seats<1)) return false;
+        if(c.proposedBooking && !this.state.bookings[c.proposedBooking.serial] && this.freeSeats(this.screening(c.proposedBooking.screeningId))<c.proposedBooking.seats) return false;
+        if(c.requiredQuestion && !c.qaResponses.which_film) return false;
+        if(c.intent.ids && c.intent.ids.some(id=>!this.screening(id))) return false;
+        if(!(c.groupSize>0 && c.statement && c.person))return false;
+        const draft=Object.create(this);draft.state={...this.state,bookings:{...this.state.bookings}};
+        if(c.proposedBooking)draft.state.bookings[c.proposedBooking.serial]={...c.proposedBooking};
+        const test=structuredClone(c);
+        if(test.backupTicket){test.ticket=test.backupTicket;test.requiredTicketQuestion=false;}
+        if(test.requiredQuestion)test.known.preference=structuredClone(test.intent);
+        const ev=draft.evaluateCustomerCase(test);
+        if(!ev.validActions.length||ev.needsQuestion)return false;
+        if(['valid','subjective','red','sofia','morris_return','leo_return','vip','tv'].includes(c.caseType)&&!ev.validActions.includes('ADMIT'))return false;
+        const expected={screen:'screen',time:'time',date:'date',duplicate:'duplicate',late:'late',no_red:'red',group:'seats',promo:'preference',wrong_film:'preference',incomplete:'preference',cancelled:'cancelled',combined:'screen',move:'screen',tv_wrong:'screen'}[c.caseType];
+        if(expected&&!ev.issues.some(i=>i.code===expected))return false;
+        return true;
+      },
+      finalizeCustomerAtWindow(c) {
+        if(c.proposedBooking) {
+          if(this.state.bookings[c.proposedBooking.serial]) throw new Error('Booking serial collision');
+          this.state.bookings[c.proposedBooking.serial]={...c.proposedBooking};
+        }
+        this.syncSeats();
+      },
+      nextCustomerFromQueue() {
+        if(!this.state.shiftActive || this.state.paused || this.state.modalDepth) return;
+        if(this.state.warnings>=this.state.maxWarnings) return this.endShift('SHIFT ENDED — PLEASE TRY AGAIN');
+        if(this.state.clockMins>=this.state.clockEndMins) return this.endShift('SHIFT COMPLETE');
+        this.state.decisionLocked=false; this.closeCorrectionDrawer();this.clearInspectSelection();
+        document.getElementById('nextCustomerBtn').classList.add('hidden');
+        document.getElementById('deskFeedbackBanner').classList.add('hidden');
+        document.getElementById('stampAnimationOverlay').classList.add('hidden');
+        if(!this.state.queue.length) this.spawnCustomerToQueue();
+        const visitor=this.state.queue.shift(), c=this.generateCustomerScenario(null,visitor.person);
+        this.finalizeCustomerAtWindow(c);this.state.currentCustomer=c;
+        UI.renderQueue();UI.renderCustomer(c);UI.renderTicketOnDesk(c);UI.renderScheduleBinder();UI.setDecisionButtons(false);
+      },
+
+      askCustomerQuestion(key, label) {
+        const c=this.state.currentCustomer;
+        if(!c || this.state.decisionLocked || this.state.paused || this.state.modalDepth) return;
+        SoundFX.click();c.questionedYet=true;
+        if(['which_film','are_you_sure','alternative'].includes(key)) {c.known.preference=structuredClone(c.intent);c.known.publicPlan=true;}
+        if(key==='other_ticket' && c.backupTicket) {c.ticket=c.backupTicket;delete c.backupTicket;c.requiredTicketQuestion=false;UI.renderTicketOnDesk(c);}
+        if(!c.asked.includes(key)) c.asked.push(key);
+        const reply=c.qaResponses[key]||"I'm here to watch a film.";
+        c.dialogue.push({question:label,reply});
+        const box=document.getElementById('customerFollowUpBox');
+        box.replaceChildren();
+        c.dialogue.slice(-3).forEach(turn=>{const p=document.createElement('p');p.textContent=`${turn.question} — ${turn.reply}`;box.append(p);});
+        box.classList.remove('hidden'); UI.updateCustomerSummary();
+      },
+
+      openCorrectionDrawer() {
+        if(!this.state.currentCustomer || this.state.decisionLocked || this.state.paused || this.state.modalDepth) return;
+        const c=this.state.currentCustomer;
+        if(this.state.day<2) return UI.showDeskFeedback('warn','The printer opens on Tuesday.');
+        if(!c.ticket.exists) return UI.showDeskFeedback('warn','You need a ticket to use the printer.');
+        if(c.ticket.ticketType.includes('PROMO') || c.ticket.ticketType.includes('VIP')) return UI.showDeskFeedback('warn','This pass cannot be changed.');
+        if(!c.known.preference) return UI.showDeskFeedback('warn','Ask which film the customer wants first.');
+        const select=document.getElementById('correctionScreeningSelect');select.replaceChildren();
+        const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a screening…';select.append(placeholder);
+        this.allScreenings().forEach(f=>{
+          const opt=document.createElement('option');opt.value=f.id;
+          const b=this.booking(c), available=this.freeSeats(f)+(b?.screeningId===f.id?b.seats:0);
+          opt.textContent=`${f.title} · ${f.genreLabel} · ${f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen} · ${f.time} · ${available} seats${f.status==='CANCELLED'?' · CANCELLED':''}`;
+          opt.disabled=f.status==='CANCELLED'||available<c.groupSize||(this.state.day>=2&&this.arrival(c)>f.timeMins+10);
+          select.append(opt);
+        });
+        // Printer only uses information already spoken, never hidden intent.
+        if(this.state.ownedUpgrades.includes('printer')) select.value=this.correctionOptions(c)[0]?.id||'';
+        document.getElementById('correctionPrinterDrawer').classList.remove('hidden');this.updateCorrectionPreview();
+      },
+
+      closeCorrectionDrawer() {
+        document.getElementById('correctionPrinterDrawer').classList.add('hidden');
+      },
+
+      updateCorrectionPreview() {
+        const f=this.screening(document.getElementById('correctionScreeningSelect').value),c=this.state.currentCustomer;
+        document.getElementById('printCorrectedTicketBtn').disabled=!f;
+        document.getElementById('correctionPreviewScreen').textContent=f?(f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen):'—';
+        document.getElementById('correctionPreviewTimeSeats').textContent=f?`${f.time} · ${c.groupSize} people`:'—';
+        document.getElementById('correctionPolicyNote').textContent='Check the customer’s plan and the rules before printing.';
+      },
+
+      confirmPrintAndCorrect() {
+        const f=this.screening(document.getElementById('correctionScreeningSelect').value);if(f) this.makeDecision('CORRECT',f);
+      },
+      // Validate first; make a complete booking copy; commit only a legitimate transaction.,
+
+      makeDecision(action, target=null) {
+        const s=this.state,c=s.currentCustomer;
+        if(!c || !s.shiftActive || s.paused || s.modalDepth || s.decisionLocked) return;
+        const before=structuredClone(c.ticket),result=this.applyDecision(c,action,target?.id),ev=result.evaluation;
+        if(result.blocked) {UI.showDeskFeedback('warn',c.requiredTicketQuestion?'Ask if there is another ticket.':'Ask the customer about their plan first.');return;}
+        s.decisionLocked=true;this.closeCorrectionDrawer();s.shiftStats.served++;
+        let message;
+        if(result.accepted && result.compliant) {
+          s.shiftStats.correct++;
+          const earn=(action==='ADMIT'?10:action==='CORRECT'?12:8)+(action==='CORRECT'&&s.ownedUpgrades.includes('printer')?3:0);
+          s.money+=earn;s.shiftStats.cashEarned+=earn;this.adjustReputation(s.ownedUpgrades.includes('handbook')?4:3);
+          message=`✓ ${action}. +€${earn}. ${ev.reason}`;SoundFX.cash();
+        } else if(result.exception) {
+          s.shiftStats.mistakes++;s.money+=6;s.shiftStats.cashEarned+=6;this.adjustReputation(4);
+          message='Mr Morris joins his daughter. +€6. They are happy, but the manager gives a late-entry warning.'+this.giveWarning();
+          s.shiftStats.dilemmaNotes.push('Mr Morris joined his daughter. Management recorded the late entry.');
+        } else {
+          s.shiftStats.mistakes++;const penalty=s.difficulty==='chaos'?8:5;s.money=Math.max(0,s.money-penalty);this.adjustReputation(-7);
+          message=`✕ ${action==='CORRECT'?'That replacement does not meet all the rules or the customer’s plan.':ev.reason} Use ${ev.validActions.join(' or ')}. −€${penalty}.`+this.giveWarning();SoundFX.buzzer();
+        }
+        const outcome=result.exception?'kind':result.accepted&&action!=='REFUSE'?'helped':result.accepted?'refused':'mistake';
+        if(c.person.id==='mr_morris') {
+          s.story.morris=outcome;
+          if(action==='REFUSE'&&result.accepted) {this.adjustReputation(-2);s.shiftStats.dilemmaNotes.push('Mr Morris could not enter. The manager accepted your decision.');}
+          if(action==='CORRECT'&&result.accepted) s.shiftStats.dilemmaNotes.push('Mr Morris and his daughter accepted another film.');
+        }
+        if(c.person.id==='leo') s.story.leo=outcome;
+        if(c.person.id==='sofia') s.story.sofia=outcome;
+        if(c.person.id==='mystery') s.shiftStats.dilemmaNotes.push(s.reputation>=80?'The inspector liked the service.':'The inspector asked the manager to improve the service.');
+        s.outcomes.push({customer:c.person.name,caseType:c.caseType,action,accepted:result.accepted,compliant:!!result.compliant,ticketBefore:before,ticketAfter:structuredClone(c.ticket),time:s.clockMins});
+        UI.renderTicketOnDesk(c);UI.animateStamp(action,null,c);SoundFX.stamp();
+        UI.showDeskFeedback(result.accepted?(result.exception?'warn':'ok'):'err',message);
+        UI.renderScheduleBinder();UI.renderSerialsBinder();UI.renderHeader();UI.setDecisionButtons(true);
+        const next=document.getElementById('nextCustomerBtn');next.textContent=s.warnings>=s.maxWarnings?'View shift report →':'Next customer →';next.classList.remove('hidden');
+        this.saveProgress();
+      },
+
+      applyDecision(c, action, targetId=null) {
+        const ev=this.evaluateCustomerCase(c);
+        if(ev.needsQuestion || (c.requiredTicketQuestion && !c.ticket.exists)) return {accepted:false,blocked:true,evaluation:ev};
+        const exception=action==='ADMIT'&&ev.discretionary;
+        const valid=ev.validActions.includes(action) && (action!=='CORRECT'||ev.options.some(f=>f.id===targetId));
+        if(!valid && !exception) return {accepted:false,evaluation:ev};
+        const bookings=structuredClone(this.state.bookings),used=[...this.state.usedSerials];
+        const t=c.ticket, b=bookings[t?.serial]; let replacement=null;
+        if(action==='ADMIT' || action==='CORRECT') {
+          if(!b || b.status!=='reserved') return {accepted:false,evaluation:ev};
+          if(action==='CORRECT') {
+            const f=this.screening(targetId);
+            b.status='cancelled';
+            const serial=this.makeUniqueSerial();
+            bookings[serial]={serial,screeningId:f.id,seats:c.groupSize,status:'admitted'};
+            replacement={exists:true,serial,filmId:f.id,filmTitle:f.title,genreLabel:f.genreLabel,screen:f.screen,time:f.time,date:this.today(),seats:c.groupSize,ticketType:f.screen==='TV Lounge'?'TV LOUNGE PASS':'REPLACEMENT PRINTED'};
+            used.push(t.serial,serial);
+          } else {b.status='admitted';used.push(t.serial);}
+        } else if(action==='REFUSE' && b?.status==='reserved') b.status='cancelled';
+        this.state.bookings=bookings;this.state.usedSerials=[...new Set(used)];
+        if(replacement) c.ticket=replacement;
+        this.syncSeats();
+        return {accepted:true,compliant:!exception,exception,evaluation:ev};
+      },
+
+      giveWarning() {
+        if(this.state.ownedUpgrades.includes('handbook')&&!this.state.forgivenWarningUsed) {this.state.forgivenWarningUsed=true;return ' Your handbook saved this warning.';}
+        this.state.warnings++;return '';
+      },
+
+      tick() {
+        const s=this.state;if(!s.shiftActive||s.paused||s.modalDepth||s.decisionLocked) return;
+        s.clockMins++;s.clockFormatted=this.formatMins(s.clockMins);UI.updateClockDisplay();
+        this.updateQueuePatience();
+        if(s.queue.length<4&&this.rng()<(s.difficulty==='chaos'?0.15:0.08))this.spawnCustomerToQueue();
+        if(s.day>=5 && s.clockMins>=1151 && !s.noticesSeen.red) {
+          s.noticesSeen.red=true;UI.openNotice('It is after 19:10. Screen 2 now needs red clothes. All other rules still apply.');
+        }
+        if(s.clockMins>=s.clockEndMins) {UI.showDeskFeedback('warn','Closing time. Finish this customer, then read your report.');s.closing=true;}
+        if(s.closing) this.stopShiftLoop();
+      },
+
+      validateLanguagePack(input) {
+        if(!input || typeof input!=='object'||Array.isArray(input))throw new Error('The pack must be a JSON object.');
+        const p=structuredClone(input);if(p.version!==undefined && p.version!==2)throw new Error('This pack needs version 2.');p.version=2;
+        const str=(x,path)=>{if(typeof x!=='string'||!x.trim()||x.length>300)throw new Error(path+' must be text (1–300 characters).');};
+        const list=(x,path)=>{if(!Array.isArray(x)||!x.length||x.length>100)throw new Error(path+' must be a non-empty array (up to 100 items).');x.forEach((v,i)=>str(v,path+'['+i+']'));};
+        str(p.unitTitle,'unitTitle');['filmGenres','tvProgrammes','adjectives'].forEach(k=>list(p[k],k));
+        const ids=new Set();
+        ['films','tvLoungeSchedule'].forEach(key=>{
+          if(!Array.isArray(p[key])||!p[key].length||p[key].length>50)throw new Error(key+' needs 1–50 entries.');
+          p[key].forEach((f,i)=>{
+            const where=key+'['+i+']';if(!f||typeof f!=='object')throw new Error(where+' must be an object.');
+            if(!/^[a-z][a-z0-9_]{0,49}$/.test(f.id)||ids.has(f.id)||f.id==='happy_penguins_late')throw new Error(where+'.id must be unique: lowercase letters, digits and underscores.');ids.add(f.id);
+            ['title','genre','genreLabel'].forEach(k=>str(f[k],where+'.'+k));
+            if(!(key==='films'?p.filmGenres:p.tvProgrammes).includes(f.genre))throw new Error(where+'.genre is not in the vocabulary list.');
+            if(key==='films') {if(![1,2,3].includes(f.screen))throw new Error(where+'.screen must be 1, 2 or 3.');list(f.descriptions,where+'.descriptions');list(f.purposePhrases,where+'.purposePhrases');f.purposePhrases.forEach(v=>{if(!/^to \S/.test(v))throw new Error(where+'.purposePhrases must start with “to ”.');});str(f.adjective,where+'.adjective');}
+            else {if(f.screen!=='TV Lounge')throw new Error(where+'.screen must be TV Lounge.');str(f.statement,where+'.statement');}
+            const mins=this.parseTime(f.time);
+            if(!Number.isFinite(mins)||mins<1065||mins>1335)throw new Error(where+'.time must be HH:MM from 17:45 to 22:15.');
+            if(f.timeMins!==undefined&&f.timeMins!==mins)throw new Error(where+'.timeMins does not match time.');f.timeMins=mins;
+            if(!Number.isInteger(f.capacity)||f.capacity<1||f.capacity>200)throw new Error(where+'.capacity must be a whole number from 1 to 200.');
+          });
+        });
+        if(p.scenarios!==undefined) throw new Error('Custom scenarios are not supported. Edit films, TV programmes and dialogue instead.');
+        return p;
+      },
+
+      restoreDefaultPack() {document.getElementById('languagePackJsonArea').value=JSON.stringify(DEFAULT_LANGUAGE_PACK,null,2);this.applyCustomLanguagePack();},
+
+      adjustReputation(delta) {
+        this.state.reputation = Math.max(0, Math.min(100, this.state.reputation + delta));
+      },
+
+      /*************************************************************************
+       * INTERACTIVE INSPECTION MODE (Compare two items visually)
+       *************************************************************************/
+      toggleInspectMode() {
+        this.state.inspectMode = !this.state.inspectMode;
+        const btn = document.getElementById('inspectModeBtn');
+        const txt = document.getElementById('inspectModeBtnText');
+        if (this.state.inspectMode) {
+          btn.className = "bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs px-3 py-1.5 rounded-lg shadow flex items-center gap-1.5 transition";
+          txt.textContent = "INSPECT MODE: ON";
+        } else {
+          btn.className = "bg-slate-700 hover:bg-slate-600 text-amber-200 font-bold text-xs px-3 py-1.5 rounded-lg shadow flex items-center gap-1.5 transition";
+          txt.textContent = "INSPECT MODE: OFF";
+          this.clearInspectSelection();
+        }
+      },
+
+      clearInspectSelection() {
+        this.state.inspectFirst = null;
+        document.querySelectorAll('.inspect-selected, .inspect-match, .inspect-mismatch').forEach(el => {
+          el.classList.remove('inspect-selected', 'inspect-match', 'inspect-mismatch');
+        });
+        const status = document.getElementById('inspectStatusText');
+        if (status) {
+          status.innerHTML = "🔍 Click any two fields (Ticket, Statement, Schedule, Clock, Rules) to compare them!";
+        }
+      },
+
+      handleCustomerPortraitInspect(el) {
+        if (!this.state.currentCustomer) return;
+        const p = this.state.currentCustomer.person;
+        this.handleInspectClick(
+          'portrait',
+          p.wearingRed ? 'WEARING RED' : 'NOT RED',
+          `${p.name} (${p.wearingRed ? 'Wearing RED Jacket' : 'Not wearing red'})`,
+          el
+        );
+      },
+
+      handleInspectClick(category,value,label,domEl) {
+        if(!this.state.inspectMode || !this.state.currentCustomer)return;
+        const first=this.state.inspectFirst,status=document.getElementById('inspectStatusText');
+        if(!first) {this.clearInspectSelection();this.state.inspectFirst={category,value,label,domEl};domEl?.classList.add('inspect-selected');status.textContent='Selected: '+label+'. Choose a second item.';}
+        else if(first.domEl===domEl)this.clearInspectSelection();
+        else {
+          const result=this.compareTwoInspectedItems(first,{category,value,label,domEl});
+          [first.domEl,domEl].forEach(el=>{el?.classList.remove('inspect-selected');if(result.isMatch!==null)el?.classList.add(result.isMatch?'inspect-match':'inspect-mismatch');});
+          status.textContent=(result.isMatch===null?'ℹ ':result.isMatch?'✓ ':'✕ ')+result.message;this.state.inspectFirst=null;
+        }
+        document.getElementById('compareStatus').textContent=status.textContent;
+      },
+
+      compareTwoInspectedItems(a,b) {
+        const c=this.state.currentCustomer,neutral=message=>({isMatch:null,message}),match=(ok,message)=>({isMatch:ok,message});
+        const pair=(x,y)=>a.category===x&&b.category===y||b.category===x&&a.category===y;
+        const field=cat=>a.category===cat?a:b;
+        if(pair('serial','serial_log')) {const serial=field('serial').value;return match(!this.state.usedSerials.includes(serial),this.state.usedSerials.includes(serial)?`${serial} is in the used-ticket log.`:`${serial} is not in the used-ticket log.`);}
+        if(pair('serial','vip_log')) {const serial=field('serial').value;return match(this.state.authorizedVips.includes(serial),this.state.authorizedVips.includes(serial)?'This number is on the VIP list. Other rules still apply.':'This number is not on the VIP list.');}
+        if(pair('ticket_date','today'))return match(a.value===b.value,`Ticket: ${c.ticket.date}. Today: ${this.today()}.`);
+        if(pair('ticket_seats','booking_seats'))return match(Number(a.value)===Number(b.value),`Ticket: ${c.ticket.seats}. Booking record: ${this.booking(c)?.seats??0}.`);
+        if(pair('ticket_time','clock')) {const time=this.parseTime(field('ticket_time').value),diff=this.arrival(c)-time;return match(this.state.day<2||diff<=10,`Arrival: ${this.formatMins(this.arrival(c))}. Printed start: ${field('ticket_time').value}. ${diff>0?diff+' minutes after start.':'Before the start.'}`);}
+        if(pair('portrait','rule'))return neutral(`${c.person.wearingRed?'Red clothes.':'No red clothes.'} Screen 2 requires red after 19:10. All other rules apply.`);
+        if(pair('statement','ticket_film')) {
+          if(!c.known.preference || !c.known.publicPlan)return neutral('The customer has not named a specific film or genre.');
+          const f=this.screening(field('ticket_film').value);if(!f)return neutral('No programme entry for this film.');
+          return match(this.accepts(c,f),`Ticket: ${f.title}. Customer: ${c.dialogue.at(-1)?.reply||c.statement}`);
+        }
+        if(a.category==='schedule_row'||b.category==='schedule_row') {
+          const f=this.screening(field('schedule_row').value),other=a.category==='schedule_row'?b:a;
+          if(!f)return neutral('No programme entry.');
+          const map={ticket_film:f.id,ticket_screen:f.screen,ticket_time:f.timeMins};
+          if(!(other.category in map))return neutral('Compare this row with a ticket film, room or time.');
+          if(other.category!=='ticket_film' && c.ticket.filmId!==f.id)return neutral('These are different films. Choose the row for this ticket.');
+          const v=other.category==='ticket_time'?this.parseTime(other.value):String(other.value);
+          const expected=other.category==='ticket_time'?map[other.category]:String(map[other.category]);
+          return match(v===expected,`${other.label}. Programme: ${f.title}, ${f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen}, ${f.time}.`);
+        }
+        return neutral('These fields are not related. Try a ticket field and its programme row.');
+      },
+
+      /*************************************************************************
+       * END OF SHIFT, UPGRADES & LOCALSTORAGE SAVE SYSTEM
+       *************************************************************************/
+      endShift(headline) {
+        this.state.shiftActive = false;
+        UI.setDecisionButtons(true);
+        this.stopShiftLoop();
+
+        const dismissed = this.state.warnings >= this.state.maxWarnings;
+        if (!dismissed && !this.state.completedDays.includes(this.state.day)) {
+          this.state.completedDays.push(this.state.day);
+        }
+        if (this.state.money > this.state.highScore) {
+          this.state.highScore = this.state.money;
+        }
+        this.saveProgress();
+        UI.openShiftReportModal(headline, dismissed);
+      },
+
+      buyUpgrade(upgId) {
+        const upg = UPGRADES_CATALOG.find(u => u.id === upgId);
+        if (!upg || this.state.ownedUpgrades.includes(upgId)) return;
+        if (this.state.money < upg.cost) {
+          SoundFX.buzzer();
+          return;
+        }
+        SoundFX.cash();
+        this.state.money -= upg.cost;
+        this.state.ownedUpgrades.push(upgId);
+        this.saveProgress();
+        UI.renderHeader();
+        UI.renderUpgradesStrip();
+        UI.renderUpgradeShop();
+      },
+
+      replayCurrentDay() {
+        UI.closeShiftReportModal();
+        this.prepareDaySchedule(this.state.day);
+        UI.openBriefingModal(this.state.day);
+      },
+
+      advanceToNextDay() {
+        UI.closeShiftReportModal();
+        if (this.state.day < 6) {
+          this.state.day += 1;
+        }
+        this.prepareDaySchedule(this.state.day);
+        UI.renderHeader();
+        UI.renderScheduleBinder();
+        UI.renderRulesBinder();
+        UI.renderSerialsBinder();
+        this.saveProgress();
+        UI.openBriefingModal(this.state.day);
+      },
+
+      saveProgress() {
+        const s=this.state, payload={version:2};
+        ['day','difficulty','money','reputation','ownedUpgrades','completedDays','highScore','showLanguageHints','enableTVContent','disableQueueWalkouts','story'].forEach(k=>payload[k]=s[k]);
+        payload.muted=SoundFX.muted;
+        try{localStorage.setItem('cinema_chaos_save_v2',JSON.stringify(payload));}catch(e){document.getElementById('saveNotice').textContent='Progress cannot be saved in this browser session.';}
+      },
+
+      loadProgress() {
+        try {
+          const pack=localStorage.getItem('cinema_chaos_pack_v2');if(pack)LANGUAGE_PACK=this.validateLanguagePack(JSON.parse(pack));
+        }catch(e){this.startupMessage='The saved language pack could not be loaded. The Unit 9 pack is ready.';}
+        try {
+          const current=localStorage.getItem('cinema_chaos_save_v2'),legacy=localStorage.getItem('cinema_chaos_save_v1'),raw=current||legacy;
+          if(!raw)return;
+          const d=JSON.parse(raw),s=this.state;
+          if(d.version && d.version!==2)throw new Error('version');
+          if(Number.isInteger(d.day)&&d.day>=1&&d.day<=6)s.day=d.day;
+          if(['relaxed','normal','chaos'].includes(d.difficulty))s.difficulty=d.difficulty;
+          for(const k of ['money','highScore','reputation'])if(Number.isFinite(d[k])&&d[k]>=0)s[k]=k==='reputation'?Math.min(100,d[k]):Math.floor(d[k]);
+          s.ownedUpgrades=Array.isArray(d.ownedUpgrades)?[...new Set(d.ownedUpgrades.filter(id=>UPGRADES_CATALOG.some(u=>u.id===id)))]:[];
+          s.completedDays=Array.isArray(d.completedDays)?d.completedDays.filter(n=>Number.isInteger(n)&&n>=1&&n<=6):[];
+          for(const k of ['showLanguageHints','enableTVContent','disableQueueWalkouts'])if(typeof d[k]==='boolean')s[k]=d[k];
+          s.story={};for(const k of ['morris','leo','sofia'])if(['kind','helped','refused','mistake'].includes(d.story?.[k]))s.story[k]=d.story[k];
+          SoundFX.muted=!!d.muted;document.getElementById('muteBtnIcon').textContent=SoundFX.muted?'🔇':'🔊';
+          if(!current&&legacy)this.startupMessage='Your campaign has been kept. This shift starts again with the new booking rules.';
+        }catch(e){this.startupMessage='Saved progress could not be loaded. A new campaign is ready.';}
+        this.state.maxWarnings={relaxed:4,normal:3,chaos:2}[this.state.difficulty];
+      },
+
+      resetCampaignConfirm() {
+        this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;
+        Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,ownedUpgrades:[],completedDays:[],story:{},outcomes:[]});
+        this.prepareDaySchedule(1);this.saveProgress();UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.openBriefingModal(1);
+      },
+    };
+
+    /***************************************************************************
+     * 6. USER INTERFACE & RENDERING SYSTEM
+     ***************************************************************************/
+    const UI = {
+      setDecisionButtons(disabled) { ['btnAdmit','btnCorrect','btnRefuse'].forEach(id=>document.getElementById(id).disabled=disabled); },
+      updateCustomerSummary() {
+        const c=Game.state.currentCustomer;
+        document.getElementById('mobileCustomerSummary').textContent=c?`${c.person.name}: ${c.dialogue.at(-1)?.reply||c.statement}`:'';
+      },
+      renderCustomer(c) {
+        document.getElementById('customerPortraitBox').innerHTML=CHARACTERS.renderPortraitSVG(c.person,'neutral');
+        document.getElementById('customerIdentityBar').textContent=`${c.person.name} · ${c.groupSize} ${c.groupSize===1?'person':'people'}`;
+        const traits=document.getElementById('customerTraitRow');traits.replaceChildren();
+        [c.person.wearingRed?'🧥 Red clothes':'',c.person.tag==='Cinema Visitor'?'':c.person.tag].filter(Boolean).forEach(text=>{
+          const badge=document.createElement('span');badge.className='bg-amber-900 text-amber-100 text-xs px-2 py-1 rounded-full';badge.textContent=text;traits.append(badge);
+        });
+        document.getElementById('customerStatementBox').textContent=c.statement;
+        const follow=document.getElementById('customerFollowUpBox');follow.replaceChildren();
+        c.dialogue.slice(-3).forEach(t=>{const p=document.createElement('p');p.textContent=`${t.question} — ${t.reply}`;follow.append(p);});
+        follow.classList.toggle('hidden',!c.dialogue.length);
+        const hint=document.getElementById('languageHintBar');hint.textContent=c.languageHint;hint.classList.toggle('hidden',!Game.state.showLanguageHints);
+        const questions=[['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?']];
+        const grid=document.getElementById('questionButtonsGrid');grid.replaceChildren();
+        questions.forEach(([key,label])=>{const button=document.createElement('button');button.className='bg-[#3d0d13] hover:bg-[#5c1620] text-amber-100 border border-amber-600/60 rounded-lg px-2.5 py-2 text-left text-xs font-medium';button.textContent=(c.asked.includes(key)?'✓ ':'▸ ')+label;button.onclick=()=>{Game.askCustomerQuestion(key,label);button.textContent='✓ '+label;};grid.append(button);});
+        this.updateCustomerSummary();
+      },
+      renderTicketOnDesk(c) {
+        const area=document.getElementById('deskDocumentArea'),t=c.ticket;area.replaceChildren();
+        if(!t.exists) {const card=document.createElement('div');card.className='ticket-slide bg-rose-950 border-2 border-dashed border-rose-400 rounded-xl p-5 text-center';card.textContent='🎟 No ticket on the desk.';area.append(card);return;}
+        const card=document.createElement('div');
+        card.className='cinema-ticket '+(t.ticketType.includes('VIP')?'ticket-vip':t.ticketType.includes('LOUNGE')?'ticket-lounge':t.ticketType==='REPLACEMENT PRINTED'?'ticket-corrected':'')+' ticket-slide p-4 font-ticket';
+        card.innerHTML='<div class="border-b-2 border-slate-800 pb-2 mb-3"><div class="font-marquee text-base text-red-950">THE GRAND CINEMA</div><div class="text-xs text-slate-600">Ticket · Check all fields</div></div><div class="ticket-fields grid grid-cols-2 gap-2.5"></div>';
+        const fields=[['serial',t.serial,'Ticket number',t.serial],['ticket_film',t.filmId,`Film / Programme · ${t.genreLabel}`,t.filmTitle],['ticket_screen',t.screen,'Screen / Room',t.screen==='TV Lounge'?'TV Lounge':'Screen '+t.screen],['ticket_time',t.time,'Start time',t.time],['ticket_date',t.date,'Day',t.date],['ticket_seats',t.seats,'Booked seats',t.seats],['ticket_type',t.ticketType,'Ticket type',t.ticketType]];
+        fields.forEach(([kind,value,label,display])=>{
+          const node=document.createElement('button');node.type='button';node.className='inspectable text-left bg-white/70 border border-slate-400/80 p-2 rounded '+(['serial','ticket_film','ticket_type'].includes(kind)?'col-span-2':'');
+          const name=document.createElement('span');name.className='text-[10px] uppercase text-slate-600 block font-sans font-bold';name.textContent=label;
+          const text=document.createElement('span');text.className='font-bold text-sm text-slate-950';text.textContent=display;
+          node.append(name,text);node.onclick=()=>Game.handleInspectClick(kind,value,label+': '+display,node);
+          card.querySelector('.ticket-fields').append(node);
+        });
+        const b=Game.booking(c), booking=document.createElement('button');booking.className='inspectable w-full mt-3 text-xs text-left border-t border-dashed border-slate-500 pt-2';
+        booking.textContent=`Booking record: ${b?b.seats+' seat(s) · '+b.status:'not found'} · Arrival ${Game.formatMins(c.arrivalTime)}`;
+        booking.onclick=()=>Game.handleInspectClick('booking_seats',b?.seats??0,'Booking record: '+(b?.seats??0)+' seats',booking);card.append(booking);
+        if(Game.state.ownedUpgrades.includes('computer')) {const note=document.createElement('div');note.className='text-xs mt-2 font-bold';note.textContent=Game.state.usedSerials.includes(t.serial)?'💻 USED ticket number':'💻 Ticket number not used';card.append(note);}
+        if(Game.state.ownedUpgrades.includes('scanner')) {const f=Game.screening(t.filmId);const scan=document.createElement('button');scan.className='mt-2 text-xs font-bold border border-amber-700 rounded p-2';scan.textContent='🔍 Scan printed fields';scan.onclick=()=>{
+          const fields=f?['filmTitle','screen','time'].filter(k=>String(t[k])!==String(f[k==='filmTitle'?'title':k])):[];
+          document.getElementById('inspectStatusText').textContent=!f?'No programme entry.':fields.length?'Printed fields differ: '+fields.join(', '):'Printed film, room and time match the programme.';
+        };card.append(scan);}
+        area.append(card);
+      },
+      renderScheduleBinder() {
+        const s=Game.state;document.getElementById('scheduleDayTag').textContent=Game.today();
+        const render=(id,items)=>{const list=document.getElementById(id);list.replaceChildren();items.forEach(f=>{
+          const node=document.createElement('button');node.type='button';node.className='inspectable w-full text-left p-2 rounded-lg border '+(f.status==='CANCELLED'?'bg-red-100 border-red-400':'bg-amber-50 border-amber-300');
+          node.innerHTML='<div class="flex justify-between gap-2"><strong class="text-xs text-slate-900"></strong><span class="room text-[10px] bg-red-900 text-amber-100 rounded px-1"></span></div><div class="details font-ticket text-[11px] text-slate-700"></div>';
+          node.querySelector('strong').textContent=f.title+' · '+f.genreLabel;
+          node.querySelector('.room').textContent=f.screen==='TV Lounge'?'TV Lounge':'Screen '+f.screen;
+          node.querySelector('.details').textContent=`${f.time} · ${Game.freeSeats(f)} free / ${f.capacity} total${f.status!=='ON TIME'?' · '+f.status:''}`;
+          node.onclick=()=>Game.handleInspectClick('schedule_row',f.id,`${f.title} · ${f.time}`,node);list.append(node);
+        });};
+        render('filmScheduleList',s.schedule);render('tvScheduleList',s.tvSchedule);
+        document.getElementById('tvLoungeScheduleSection').classList.toggle('hidden',!s.tvSchedule.length);
+      },
+      animateStamp(action) {
+        const overlay=document.getElementById('stampAnimationOverlay'),box=document.getElementById('stampMarkBox');overlay.classList.remove('hidden');
+        box.textContent={ADMIT:'ADMITTED',CORRECT:'CORRECTED',REFUSE:'REFUSED'}[action];box.style.color={ADMIT:'#15803d',CORRECT:'#b45309',REFUSE:'#b91c1c'}[action];
+        box.style.animation='none';void box.offsetWidth;box.style.animation='';
+      },
+      renderPause() {
+        const stopped=Game.state.paused||Game.state.modalDepth>0;
+        document.getElementById('pauseBtnIcon').textContent=stopped?'▶️':'⏸️';document.getElementById('pauseBtnText').textContent=stopped?'Resume':'Pause';
+        document.getElementById('manualPauseNote').classList.toggle('hidden',!Game.state.paused);
+      },
+      modalStack: new Set(),
+      showModal(id) {this.modalStack.add(id);Game.state.modalDepth=this.modalStack.size;document.getElementById(id).classList.remove('hidden');this.renderPause();},
+      hideModal(id) {this.modalStack.delete(id);Game.state.modalDepth=this.modalStack.size;document.getElementById(id).classList.add('hidden');this.renderPause();},
+      openTeacherModal() {
+        document.getElementById('teacherDiffSelect').value=Game.state.difficulty;
+        document.getElementById('teacherDaySelect').value=Game.state.day;
+        document.getElementById('teacherToggleHints').checked=Game.state.showLanguageHints;
+        document.getElementById('teacherToggleTV').checked=Game.state.enableTVContent;
+        document.getElementById('teacherToggleTimer').checked=Game.state.disableQueueWalkouts;
+        document.getElementById('languagePackJsonArea').value=JSON.stringify(LANGUAGE_PACK,null,2);this.showModal('teacherModal');
+      },
+      closeTeacherModal() {this.hideModal('teacherModal');},
+      openGuideModal() {this.showModal('guideModal');},
+      closeGuideModal() {this.hideModal('guideModal');},
+      openNotice(text) {document.getElementById('noticeText').textContent=text;this.showModal('noticeModal');},
+      openCompare() {
+        if(!Game.state.currentCustomer)return;
+        this.compareOrigins=[];
+        ['deskDocumentArea','filmScheduleList','tvLoungeScheduleSection'].forEach(id=>{
+          const el=document.getElementById(id),marker=document.createComment('document position');el.before(marker);this.compareOrigins.push([el,marker]);
+          document.getElementById(id==='deskDocumentArea'?'compareTicket':'compareSchedule').append(el);
+        });
+        document.getElementById('compareRequest').textContent=Game.state.currentCustomer.statement;
+        this.showModal('compareModal');
+      },
+      closeCompare() { (this.compareOrigins||[]).forEach(([el,marker])=>marker.replaceWith(el));this.compareOrigins=[];this.hideModal('compareModal'); },
+
+      renderHeader() {
+        const s = Game.state;
+        const dayCfg = CAMPAIGN_DAYS[s.day] || CAMPAIGN_DAYS[6];
+        document.getElementById('headerDayBadge').textContent = `DAY ${s.day}: ${dayCfg.dayName}`;
+        document.getElementById('headerDifficultyBadge').textContent =
+          s.difficulty === 'relaxed' ? 'Relaxed (A1)' : s.difficulty === 'normal' ? 'Normal Mode' : 'Chaos Mode';
+        document.getElementById('moneyDisplay').textContent = `€${s.money}`;
+        document.getElementById('reputationBar').style.width = `${s.reputation}%`;
+        document.getElementById('reputationText').textContent = `${s.reputation}%`;
+        document.getElementById('warningsDisplay').textContent = `${s.warnings} / ${s.maxWarnings}`;
+        document.getElementById('scannerUpgradeBadge').classList.toggle('hidden', !s.ownedUpgrades.includes('scanner'));
+        this.updateClockDisplay();
+      },
+
+      updateClockDisplay() {
+        document.getElementById('clockDisplay').textContent = Game.state.clockFormatted;
+      },
+
+      updateDifficultyButtons() {
+        const d = Game.state.difficulty;
+        const map = {
+          relaxed: document.getElementById('diffBtnRelaxed'),
+          normal: document.getElementById('diffBtnNormal'),
+          chaos: document.getElementById('diffBtnChaos')
+        };
+        Object.keys(map).forEach(k => {
+          const btn = map[k];
+          if (!btn) return;
+          if (k === d) {
+            btn.className = "px-3 py-1.5 rounded-lg text-xs font-extrabold border-2 border-amber-900 bg-amber-400 text-slate-950 shadow";
+          } else {
+            btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-400 bg-white text-slate-700 hover:bg-slate-100";
+          }
+        });
+      },
+
+      renderQueue() {
+        const q = Game.state.queue;
+        document.getElementById('queueCountBadge').textContent = `Waiting: ${q.length}`;
+        const container = document.getElementById('queueVisualContainer');
+        if (q.length === 0) {
+          container.innerHTML = `<span class="text-xs text-amber-200/50 italic">No customers waiting outside...</span>`;
+          return;
+        }
+        container.innerHTML = q.map(c => {
+          const barColor = c.patience > 60 ? 'bg-emerald-400' : c.patience > 30 ? 'bg-amber-400' : 'bg-rose-500';
+          return `
+            <div class="bg-slate-900/90 border border-amber-700/60 rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0">
+              <span class="w-3 h-3 rounded-full inline-block border border-white/50" style="background:${c.person.coatColor}"></span>
+              <div>
+                <div class="text-[10px] font-bold text-amber-100 leading-none">${c.person.name}</div>
+                <div class="w-12 h-1.5 bg-black rounded-full overflow-hidden mt-1">
+                  <div class="h-full ${barColor}" style="width:${Math.round(c.patience)}%"></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      },
+
+
+
+
+
+
+
+      showDeskFeedback(type, htmlMsg) {
+        const banner = document.getElementById('deskFeedbackBanner');
+        banner.classList.remove('hidden');
+        if (type === "ok") {
+          banner.className = "w-full max-w-md mx-auto mt-2 rounded-xl p-3 border-2 shadow-xl text-xs sm:text-sm bg-emerald-950/95 border-emerald-400 text-emerald-100 font-medium";
+        } else if (type === "warn") {
+          banner.className = "w-full max-w-md mx-auto mt-2 rounded-xl p-3 border-2 shadow-xl text-xs sm:text-sm bg-amber-950/95 border-amber-400 text-amber-100 font-medium";
+        } else {
+          banner.className = "w-full max-w-md mx-auto mt-2 rounded-xl p-3 border-2 shadow-xl text-xs sm:text-sm bg-rose-950/95 border-rose-400 text-rose-100 font-medium";
+        }
+        banner.textContent = htmlMsg;
+      },
+
+
+
+      renderRulesBinder() {
+        const dayCfg = CAMPAIGN_DAYS[Game.state.day] || CAMPAIGN_DAYS[6];
+        const list = document.getElementById('activeRulesList');
+        list.innerHTML = dayCfg.rulesSummary.map(r => `
+          <div onclick="Game.handleInspectClick('rule', '${r.title.replace(/'/g, "\\'")}', '${r.title}', this)"
+               class="inspectable bg-white p-2.5 rounded-lg border border-amber-400 shadow-sm">
+            <div class="font-bold text-red-900 uppercase text-xs">${r.title}</div>
+            <p class="font-ticket text-slate-700 text-xs mt-0.5">${r.text}</p>
+          </div>
+        `).join('');
+      },
+
+      renderSerialsBinder() {
+        const sContainer = document.getElementById('usedSerialsContainer');
+        sContainer.innerHTML = Game.state.usedSerials.map(ser => `
+          <span onclick="Game.handleInspectClick('serial_log', '${ser}', 'Used Serial: ${ser}', this)"
+                class="inspectable font-ticket text-xs font-bold bg-indigo-100 text-indigo-950 border border-indigo-400 px-2 py-1 rounded">
+            ${ser}
+          </span>
+        `).join('');
+
+        const vContainer = document.getElementById('vipListContainer');
+        vContainer.innerHTML = Game.state.authorizedVips.map(vip => `
+          <div onclick="Game.handleInspectClick('vip_log', '${vip}', 'Authorized VIP: ${vip}', this)"
+               class="inspectable p-1.5 rounded bg-purple-50 border border-purple-300 text-purple-950 font-bold">
+            ✅ ${vip} — Signed by The Manager
+          </div>
+        `).join('');
+      },
+
+      renderUpgradesStrip() {
+        const strip = document.getElementById('ownedUpgradesStrip');
+        if (Game.state.ownedUpgrades.length === 0) {
+          strip.innerHTML = `<span class="text-[11px] text-amber-200/50 italic">Standard Equipment</span>`;
+          return;
+        }
+        strip.innerHTML = Game.state.ownedUpgrades.map(id => {
+          const u = UPGRADES_CATALOG.find(item => item.id === id);
+          return u ? `<span class="bg-amber-900/90 border border-amber-400 text-amber-100 px-2 py-0.5 rounded text-[11px] font-bold" title="${u.desc}">${u.icon} ${u.name}</span>` : '';
+        }).join('');
+      },
+
+      switchBinderTab(tab) {
+        SoundFX.click();
+        const tabs = ['schedule', 'rules', 'serials'];
+        tabs.forEach(t => {
+          const panel = document.getElementById('binderTab' + t.charAt(0).toUpperCase() + t.slice(1));
+          const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+          if (t === tab) {
+            panel.classList.remove('hidden');
+            btn.className = "py-1.5 px-2 rounded-lg text-xs font-bold bg-[#e2b857] text-slate-950 shadow transition flex items-center justify-center gap-1";
+          } else {
+            panel.classList.add('hidden');
+            btn.className = "py-1.5 px-2 rounded-lg text-xs font-bold bg-transparent text-amber-200 hover:bg-white/10 transition flex items-center justify-center gap-1 relative";
+          }
+        });
+      },
+
+      switchMobileTab(col) {
+        SoundFX.click();
+        const map = {
+          window: { sec: 'colWindow', btn: 'mobTabWindow' },
+          desk: { sec: 'colDesk', btn: 'mobTabDesk' },
+          info: { sec: 'colInfo', btn: 'mobTabInfo' }
+        };
+        Object.keys(map).forEach(k => {
+          const secEl = document.getElementById(map[k].sec);
+          const btnEl = document.getElementById(map[k].btn);
+          if (k === col) {
+            secEl.classList.remove('hidden');
+            btnEl.className = "flex-1 py-1.5 rounded-md text-xs font-bold bg-[#e2b857] text-slate-950";
+          } else {
+            secEl.classList.add('hidden', 'lg:flex');
+            btnEl.className = "flex-1 py-1.5 rounded-md text-xs font-bold bg-[#3d0d13] text-amber-200 border border-amber-700/50";
+          }
+        });
+      },
+
+      openBriefingModal(dayNum) {
+        const cfg = CAMPAIGN_DAYS[dayNum] || CAMPAIGN_DAYS[6];
+        document.getElementById('briefingDaySubtitle').textContent = `THE GRAND CINEMA — ${cfg.dayName} SHIFT`;
+        document.getElementById('briefingDayTitle').textContent = cfg.title;
+        document.getElementById('briefingMemoText').textContent = cfg.memo;
+        document.getElementById('briefingLanguageFocus').textContent = cfg.languageFocus;
+
+        const ul = document.getElementById('briefingRulesChecklist');
+        ul.innerHTML = cfg.checklist.map(item => `
+          <li class="flex items-start gap-2">
+            <span class="text-emerald-700 font-bold">✔</span>
+            <span>${item}</span>
+          </li>
+        `).join('');
+
+        this.updateDifficultyButtons();
+        document.getElementById('briefingModal').classList.remove('hidden');
+      },
+
+      closeBriefingModal() {
+        document.getElementById('briefingModal').classList.add('hidden');
+      },
+
+      openShiftReportModal(headline, dismissed) {
+        const st = Game.state.shiftStats;
+        document.getElementById('reportModalTitle').textContent = headline;
+        document.getElementById('reportServed').textContent = st.served;
+        document.getElementById('reportCorrect').textContent = st.correct;
+        document.getElementById('reportMistakes').textContent = st.mistakes;
+        document.getElementById('reportTotalCash').textContent = `€${Game.state.money}`;
+
+        let comment = `"Acceptable work. Please work faster tomorrow, and remember the rules."`;
+        if (dismissed) {
+          comment = `"Too many mistakes! The Grand Cinema cannot survive this chaos. Please replay this shift and check the rules carefully."`;
+        } else if (st.mistakes === 0 && st.correct >= 4) {
+          comment = `"Magnificent! Zero mistakes! Even the Corporate Inspector is impressed. Have a cup of tea before tomorrow's shift."`;
+        } else if (Game.state.day === 5) {
+          comment = `"You survived all five days at The Grand Cinema! Thanks to your ticket inspections, the cinema is saved from bankruptcy!"`;
+        }
+        document.getElementById('reportManagerComment').textContent = comment;
+
+        const storyBox = document.getElementById('reportStoryNotes');
+        if (st.dilemmaNotes.length > 0) {
+          storyBox.innerHTML = `<strong>📖 Shift Story Notes:</strong><br/>` + st.dilemmaNotes.join('<br/>');
+          storyBox.classList.remove('hidden');
+        } else {
+          storyBox.innerHTML = `<strong>📖 Cinema Status:</strong> Reputation stands at <strong>${Game.state.reputation}%</strong>. High Score: <strong>€${Game.state.highScore}</strong>.`;
+          storyBox.classList.remove('hidden');
+        }
+
+        const nextBtn = document.getElementById('nextDayContinueBtn');
+        if (dismissed) {
+          nextBtn.classList.add('hidden');
+        } else {
+          nextBtn.classList.remove('hidden');
+          nextBtn.textContent = Game.state.day === 5
+            ? "🎉 ENTER ENDLESS MODE ➡️"
+            : Game.state.day >= 6
+            ? "PLAY ANOTHER ENDLESS SHIFT ➡️"
+            : `CONTINUE TO DAY ${Game.state.day + 1} ➡️`;
+        }
+
+        this.renderUpgradeShop();
+        document.getElementById('shiftReportModal').classList.remove('hidden');
+      },
+
+      closeShiftReportModal() {
+        document.getElementById('shiftReportModal').classList.add('hidden');
+      },
+
+      renderUpgradeShop() {
+        document.getElementById('shopAvailableCash').textContent = `Available Cash: €${Game.state.money}`;
+        const grid = document.getElementById('upgradeShopGrid');
+        grid.innerHTML = UPGRADES_CATALOG.map(u => {
+          const owned = Game.state.ownedUpgrades.includes(u.id);
+          const canAfford = Game.state.money >= u.cost;
+          return `
+            <div class="bg-white p-3 rounded-xl border ${owned ? 'border-emerald-500 bg-emerald-50/40' : 'border-slate-300'} flex items-center justify-between gap-2">
+              <div>
+                <div class="font-bold text-xs text-slate-900 flex items-center gap-1">
+                  <span>${u.icon}</span>
+                  <span>${u.name}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 mt-0.5">${u.desc}</p>
+              </div>
+              <button onclick="Game.buyUpgrade('${u.id}')"
+                      ${owned || !canAfford ? 'disabled' : ''}
+                      class="shrink-0 px-3 py-1.5 rounded-lg font-ticket text-xs font-bold transition ${
+                        owned
+                          ? 'bg-emerald-700 text-white cursor-default'
+                          : canAfford
+                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }">
+                ${owned ? 'OWNED' : '€' + u.cost}
+              </button>
+            </div>
+          `;
+        }).join('');
+      },
+
+
+
+
+
+
+
+
+    };
+
+    const baseRules = () => {
+      const day=Game.state.day;
+      const rules=[{id:'ticket',title:'Tickets and bookings',text:'You need a ticket for today. Check the film, room, time and seats. A booking keeps your seats, even when there are no free seats.'},
+        {id:'plan',title:'The customer’s plan',text:'Ask when the plan is not clear. Personal likes and dislikes do not cancel a booking.'}];
+      rules.push(day===1?{id:'printer',title:'Printer closed',text:'Today: admit correct tickets. Refuse tickets with errors.'}:{id:'printer',title:'Changes',text:'Standard tickets for today can be changed to a film the customer accepts. It must have enough seats. A changed ticket lets them enter.'});
+      if(day>=2)rules.push({id:'late',title:'Ten minutes',text:'No entry more than 10 minutes after the start. Use the arrival time on the booking record. You may help Mr Morris, but late entry still gets a warning.'});
+      if(day>=3)rules.push({id:'serial',title:'Used numbers and passes',text:'A ticket number can only be used once. PROMO and VIP passes cannot be changed. Tickets for another day cannot be changed.'});
+      if(day===3){const f=Game.screening('planet_x');if(f)rules.push({id:'move',title:'Room change',text:`${f.title} (${f.time}) is now in Screen 1. Change tickets with the old room.`});}
+      if(day>=4&&Game.state.tvSchedule.length)rules.push({id:'tv',title:'TV Lounge',text:'TV programmes need a TV Lounge pass. You can change a Standard ticket to a TV Lounge pass.'});
+      if(day>=5){
+        rules.push({id:'red',title:'Screen 2: red clothes',text:'After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule.'});
+        const f=Game.screening('happy_penguins_late');if(f)rules.push({id:'extra',title:'Extra show',text:`${f.title}: extra show at 19:15 in Screen 2. The earlier show stays at ${Game.screening('happy_penguins').time}.`});
+        const cancelled=Game.screening('love_in_paris');if(cancelled)rules.push({id:'cancel',title:'Cancelled',text:`${cancelled.title} (${cancelled.time}) is cancelled. Ask about another film.`});
+        rules.push({id:'vip',title:'VIP list',text:'VIP numbers must be on the list. A VIP still needs the right day, film, room, time and booking. Red clothes and the late rule still apply.'});
+      }
+      return rules;
+    };
+    UI.renderRulesBinder=function(){
+      const list=document.getElementById('activeRulesList');list.replaceChildren();
+      baseRules().forEach(r=>{
+        const node=document.createElement('button');node.className='inspectable w-full text-left bg-white p-2.5 rounded-lg border border-amber-400 shadow-sm';
+        const title=document.createElement('strong');title.className='text-red-900 block';title.textContent=r.title;
+        const text=document.createElement('p');text.className='font-ticket text-slate-700 text-xs mt-1';text.textContent=r.text;node.append(title,text);
+        node.onclick=()=>Game.handleInspectClick('rule',r.id,r.title,node);list.append(node);
+      });
+    };
+    const originalBriefing=UI.openBriefingModal;
+    UI.openBriefingModal=function(day){
+      const cfg=CAMPAIGN_DAYS[day], rules=baseRules();
+      cfg.memo=['Welcome to the Grand Cinema.','Read the programme. Check the ticket. Ask the customer.','After each decision, press Next customer.'].join('\n');
+      if(day===2)cfg.memo+='\nThe ticket printer is ready today. The new late limit is ten minutes.';
+      cfg.checklist=rules.map(r=>r.title+': '+r.text);
+      // Original template escapes checklist data here because titles can come from teacher imports.
+      const saved=cfg.checklist;cfg.checklist=saved.map(escapeHTML);originalBriefing.call(this,day);cfg.checklist=saved;
+    };
+    function escapeHTML(text){return String(text).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+    const oldInit=Game.init;
+    Game.init=function(){
+      oldInit.call(this);
+      const day=document.getElementById('scheduleDayTag');day.tabIndex=0;day.setAttribute('role','button');day.classList.add('inspectable');day.onclick=()=>Game.handleInspectClick('today',Game.today(),'Today: '+Game.today(),day);
+      document.getElementById('customerStatementBox').tabIndex=0;document.getElementById('clockInspectBox').tabIndex=0;
+      UI.setDecisionButtons(true);
+      if(innerWidth<1024)UI.switchMobileTab('window');
+    };
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Escape') {if(UI.modalStack.has('compareModal'))UI.closeCompare();else if(UI.modalStack.has('guideModal'))UI.closeGuideModal();else if(UI.modalStack.has('teacherModal'))UI.closeTeacherModal();return;}
+      if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey||e.repeat)return;
+      if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role="button"]')){e.preventDefault();e.target.click();return;}
+      if(!Game.state.shiftActive||Game.state.modalDepth)return;
+      const actions={a:()=>Game.makeDecision('ADMIT'),c:()=>Game.openCorrectionDrawer(),r:()=>Game.makeDecision('REFUSE'),q:()=>Game.askCustomerQuestion('which_film','Which film are you going to see?'),i:()=>Game.toggleInspectMode(),p:()=>Game.togglePause(),n:()=>{if(Game.state.decisionLocked)Game.nextCustomerFromQueue();}};
+      const fn=actions[e.key.toLowerCase()];if(fn){e.preventDefault();fn();}
+    });
+    // IDs supplied through a URL seed reproduce scenario choices for development.
+    window.CinemaDebug={setSeed(seed){Game.rngSeed=Math.max(1,Math.floor(seed)%2147483647);},get game(){return Game;},get ui(){return UI;}};
+
+    // Start game on window load
+    window.onload = function () {
+      Game.init();
+    };
+  </script>
+</body>
+</html>
