@@ -27,6 +27,9 @@
         <div id="headerDayBadge" class="bg-[#3d0d13] border border-[#e2b857] text-[#f7d983] px-2.5 py-1 rounded text-xs sm:text-sm font-bold">
           DAY 1: MONDAY
         </div>
+        <div id="headerLanguageBadge" class="hidden sm:inline-block bg-indigo-950/80 border border-indigo-500/60 text-indigo-200 px-2 py-0.5 rounded text-xs">
+          Elementary
+        </div>
         <div id="headerDifficultyBadge" class="hidden sm:inline-block bg-amber-950/80 border border-amber-700/60 text-amber-200 px-2 py-0.5 rounded text-xs">
           Normal Mode
         </div>
@@ -67,6 +70,9 @@
 
       <!-- Right Utility Controls -->
       <div class="flex items-center gap-1.5">
+        <button onclick="UI.openCampaignSelectModal()" id="mainMenuBtn" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Return to Campaign Selection Menu">
+          <span>🎟️</span> <span class="hidden md:inline">Main Menu</span>
+        </button>
         <button onclick="Game.togglePause()" id="pauseBtn" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition">
           <span id="pauseBtnIcon">⏸️</span> <span id="pauseBtnText" class="hidden md:inline">Pause</span>
         </button>
@@ -499,31 +505,55 @@
         </div>
 
         <p id="saveNotice" class="text-xs text-slate-600"></p>
-        <!-- Difficulty Selector on Day 1 -->
-        <div class="bg-slate-200/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <span class="text-xs font-bold text-slate-800 block">Shift Pacing / Difficulty:</span>
-            <span class="text-[11px] text-slate-600">Same A1 English level; adjusts queue patience & shift speed.</span>
+        <!-- Language Mode & Gameplay Difficulty Selectors -->
+        <div class="bg-slate-200/80 rounded-xl p-3 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span class="text-xs font-bold text-slate-800 block">Language Level:</span>
+              <span id="briefingLangNote" class="text-[11px] text-slate-600">Changes dialogue &amp; questions at the next encounter or shift.</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="Game.setLanguageMode('elementary')" id="langBtnElementary" class="px-2.5 py-1 rounded-lg text-xs font-bold border transition">
+                Elementary
+              </button>
+              <button onclick="Game.setLanguageMode('intermediate')" id="langBtnIntermediate" class="px-2.5 py-1 rounded-lg text-xs font-bold border transition">
+                Intermediate
+              </button>
+              <button onclick="Game.setLanguageMode('advanced')" id="langBtnAdvanced" class="px-2.5 py-1 rounded-lg text-xs font-bold border transition">
+                Advanced
+              </button>
+            </div>
           </div>
-          <div class="flex gap-1.5">
-            <button onclick="Game.setDifficulty('relaxed')" id="diffBtnRelaxed" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
-              Relaxed (A1)
-            </button>
-            <button onclick="Game.setDifficulty('normal')" id="diffBtnNormal" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
-              Normal
-            </button>
-            <button onclick="Game.setDifficulty('chaos')" id="diffBtnChaos" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
-              Chaos
-            </button>
+          <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 pt-2">
+            <div>
+              <span class="text-xs font-bold text-slate-800 block">Gameplay Difficulty:</span>
+              <span class="text-[11px] text-slate-600">Adjusts queue patience, shift speed &amp; warning limit.</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="Game.setDifficulty('relaxed')" id="diffBtnRelaxed" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
+                Relaxed
+              </button>
+              <button onclick="Game.setDifficulty('normal')" id="diffBtnNormal" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
+                Normal
+              </button>
+              <button onclick="Game.setDifficulty('chaos')" id="diffBtnChaos" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
+                Chaos
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Footer -->
-      <div class="bg-slate-900 px-5 py-3.5 flex items-center justify-between">
-        <button onclick="Game.resetCampaignConfirm()" class="text-xs text-slate-400 hover:text-red-400 underline">
-          Reset Saved Progress
-        </button>
+      <div class="bg-slate-900 px-5 py-3.5 flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-3">
+          <button onclick="UI.openCampaignSelectModal()" class="text-xs text-amber-300 hover:text-amber-200 font-semibold underline">
+            ← Choose Campaign
+          </button>
+          <button onclick="Game.resetCampaignConfirm()" class="text-xs text-slate-400 hover:text-red-400 underline">
+            Reset Saved Progress
+          </button>
+        </div>
         <button onclick="Game.startShift()" class="bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-extrabold px-6 py-2.5 rounded-xl shadow-lg text-sm flex items-center gap-2 transition">
           <span>🔔</span>
           <span>OPEN BOOTH & START SHIFT</span>
@@ -613,11 +643,20 @@
       </div>
 
       <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs sm:text-sm">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
-            <label class="font-bold text-amber-300 block mb-1">Difficulty / Reading Pace</label>
+            <label class="font-bold text-amber-300 block mb-1">Language Level</label>
+            <select id="teacherLangSelect" onchange="Game.setLanguageMode(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
+              <option value="elementary">Elementary</option>
+              <option value="intermediate">Intermediate (Coming Soon)</option>
+              <option value="advanced">Advanced (Coming Soon)</option>
+            </select>
+          </div>
+
+          <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
+            <label class="font-bold text-amber-300 block mb-1">Gameplay Difficulty</label>
             <select id="teacherDiffSelect" onchange="Game.setDifficulty(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
-              <option value="relaxed">Relaxed (Recommended for A1 — Slow Queue)</option>
+              <option value="relaxed">Relaxed (Slow Queue)</option>
               <option value="normal">Normal (Standard Pacing)</option>
               <option value="chaos">Chaos (Fast Queue & Strict Rules)</option>
             </select>
@@ -721,6 +760,65 @@
   </div>
   <div id="noticeModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Manager notice">
     <div class="cinema-ticket max-w-md p-6"><h2 class="font-marquee text-red-900 mb-3">Manager’s notice</h2><p id="noticeText"></p><button onclick="UI.hideModal('noticeModal')" class="mt-4 bg-red-900 text-amber-100 px-5 py-2 rounded">OK · Continue</button></div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 5: CAMPAIGN SELECTION SCREEN
+       ========================================================================= -->
+  <div id="campaignSelectModal" class="hidden fixed inset-0 bg-[#1b0507]/95 backdrop-blur-md z-50 overflow-y-auto p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Choose Your Campaign">
+    <div class="max-w-5xl mx-auto velvet-panel brass-frame p-5 sm:p-8 space-y-6">
+      <!-- Top Marquee Header -->
+      <div class="text-center border-b-2 border-[#e2b857]/60 pb-5">
+        <div class="inline-flex items-center gap-2 bg-gradient-to-b from-[#f7d983] to-[#b88928] text-[#1b0507] px-4 py-1 rounded-md shadow font-marquee text-2xl sm:text-3xl tracking-wider mb-2">
+          <span>🎬</span>
+          <span>CINEMA CHAOS</span>
+        </div>
+        <div class="font-ticket text-xs sm:text-sm uppercase tracking-[0.25em] text-[#f7d983] font-bold">
+          THE GRAND CINEMA
+        </div>
+        <h1 class="font-marquee text-xl sm:text-2xl text-white mt-2">
+          Choose Your Campaign
+        </h1>
+      </div>
+
+      <!-- Active Shift Banner (Visible if returning to menu mid-shift) -->
+      <div id="campaignMenuActiveShiftBanner" class="hidden bg-amber-950/90 border-2 border-[#e2b857] rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div class="text-xs sm:text-sm text-amber-100">
+          <strong class="text-[#f7d983] uppercase font-ticket block">⏸️ Shift Paused in Progress</strong>
+          <span id="campaignMenuActiveShiftInfo">Your current box-office shift is safely paused.</span>
+        </div>
+        <button onclick="UI.resumeActiveShiftFromMenu()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm px-4 py-2 rounded-lg shadow transition">
+          ▶️ Resume Active Shift
+        </button>
+      </div>
+
+      <!-- Global Language & Gameplay Difficulty Bar -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-black/50 border border-amber-700/60 rounded-xl p-4">
+        <div>
+          <label class="text-xs font-extrabold uppercase tracking-wider text-[#f7d983] block mb-1.5">
+            🗣️ Language Mode (Independent of Pacing)
+          </label>
+          <div id="campaignMenuLanguageButtons" class="flex flex-wrap gap-1.5"></div>
+          <p id="campaignMenuLanguageNotice" class="text-[11px] text-amber-200/80 mt-1.5 font-ticket">
+            Elementary content active. Changes take effect at the next encounter or shift boundary.
+          </p>
+        </div>
+        <div>
+          <label class="text-xs font-extrabold uppercase tracking-wider text-[#f7d983] block mb-1.5">
+            ⚡ Gameplay Difficulty (Queue &amp; Clock Pacing)
+          </label>
+          <div id="campaignMenuDifficultyButtons" class="flex flex-wrap gap-1.5"></div>
+          <p class="text-[11px] text-amber-200/80 mt-1.5 font-ticket">
+            Controls customer queue patience, clock speed, and maximum management warnings.
+          </p>
+        </div>
+      </div>
+
+      <!-- Registry-Driven Campaign Cards Grid -->
+      <div id="campaignCardsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- Populated dynamically from CampaignRegistry -->
+      </div>
+    </div>
   </div>
 
 

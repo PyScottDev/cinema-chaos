@@ -379,4 +379,219 @@ test("8. Save and Load compatibility preserves V2 and V1 legacy progress", () =>
   assert.strictEqual(Game.state.story.sofia, "helped");
 });
 
+test("9. Engine, UI, and Characters contain zero hard-coded First Week film or character identifiers", () => {
+  const engineCode = fs.readFileSync(path.join(ROOT, "js/engine.js"), "utf8");
+  const uiCode = fs.readFileSync(path.join(ROOT, "js/ui.js"), "utf8");
+  const charCode = fs.readFileSync(path.join(ROOT, "js/characters.js"), "utf8");
+
+  const forbiddenTokens = [
+    "laughing_bananas",
+    "happy_penguins",
+    "happy_penguins_late",
+    "the_dark_house",
+    "planet_x",
+    "wild_world",
+    "love_in_paris",
+    "the_last_train",
+    "mr_morris",
+    "Mr Morris",
+    "VIP-770-MORRIS",
+    "VIP-900-INSPECTOR"
+  ];
+
+  for (const token of forbiddenTokens) {
+    assert.ok(!engineCode.includes(token), `js/engine.js must not contain hard-coded token "${token}"`);
+    assert.ok(!uiCode.includes(token), `js/ui.js must not contain hard-coded token "${token}"`);
+    assert.ok(!charCode.includes(token), `js/characters.js must not contain hard-coded token "${token}"`);
+  }
+});
+
+test("10. Minimal disposable test campaign loads and runs without modifying engine.js or ui.js", () => {
+  const { Game, UI, sandbox } = createHarness(909);
+  const minimalCampaignCode = fs.readFileSync(path.join(ROOT, "tests/minimal-test-campaign.js"), "utf8");
+  vm.runInContext(minimalCampaignCode, sandbox);
+
+  const reg = sandbox.window.CinemaChaos.CampaignRegistry;
+  assert.strictEqual(reg.list().length, 2);
+  assert.ok(reg.get("festival-showcase"));
+
+  // Switch active campaign to festival-showcase
+  Game.selectCampaign("festival-showcase");
+  assert.strictEqual(Game.state.campaignId, "festival-showcase");
+  assert.strictEqual(Game.today(), "FESTIVAL DAY");
+  assert.strictEqual(Game.state.schedule.length, 2);
+
+  // Verify Day 1 relocation of cosmic_voyage from Screen 1 to Screen 2
+  const cosmic = Game.screening("cosmic_voyage");
+  assert.ok(cosmic);
+  assert.strictEqual(cosmic.screen, 2);
+  assert.strictEqual(cosmic.originalScreen, 1);
+  assert.strictEqual(cosmic.status, "MOVED TO SCR 2");
+
+  // Start shift in minimal campaign
+  Game.startShift();
+  assert.strictEqual(Game.state.shiftActive, true);
+  assert.ok(Game.state.currentCustomer, "First customer should be at the window");
+
+  // Case index 1 should trigger scripted encounter with Dr Vega for ocean_mysteries
+  const vegaCust = Game.generateCustomerScenario(null);
+  Game.finalizeCustomerAtWindow(vegaCust);
+  assert.strictEqual(vegaCust.person.id, "dr_vega");
+  assert.strictEqual(vegaCust.person.name, "Dr Vega");
+  assert.strictEqual(vegaCust.ticket.filmId, "ocean_mysteries");
+  assert.ok(vegaCust.ticket.serial.startsWith("FS-1-"), "Serial prefix should use campaign's FS prefix");
+  const evVega = Game.evaluateCustomerCase(vegaCust);
+  assert.deepEqual(evVega.validActions, ["ADMIT"]);
+
+  // Verify relocate case ('move') in minimal campaign requires CORRECT to Screen 2
+  const moveCust = Game.generateCustomerScenario("move");
+  Game.finalizeCustomerAtWindow(moveCust);
+  assert.strictEqual(moveCust.ticket.filmId, "cosmic_voyage");
+  assert.strictEqual(moveCust.ticket.screen, 1, "Relocated ticket should have old Screen 1 printed");
+  const evMove = Game.evaluateCustomerCase(moveCust);
+  assert.deepEqual(evMove.validActions, ["CORRECT"]);
+  assert.ok(evMove.issues.some(i => i.code === "screen"));
+  const correctRes = Game.applyDecision(moveCust, "CORRECT", "cosmic_voyage");
+  assert.strictEqual(correctRes.accepted, true);
+  assert.strictEqual(moveCust.ticket.screen, 2);
+
+  // Verify 5-minute late tolerance (18:00 cosmic_voyage closes after 18:05 = 1085 mins)
+  Game.state.clockMins = 1086; // 6 minutes after 18:00
+  const lateCust = Game.generateCustomerScenario("late");
+  Game.finalizeCustomerAtWindow(lateCust);
+  const evLate = Game.evaluateCustomerCase(lateCust);
+  assert.ok(evLate.issues.some(i => i.code === "late" && i.text.includes("5 minutes late")));
+  assert.strictEqual(UI.getActiveRules().some(r => r.id === "move" && r.text.includes("Cosmic Voyage")), true);
+});
+
+test("11. Per-campaign save isolation and Campaign Selection Screen rendering", () => {
+  const { Game, UI, sandbox } = createHarness(1010);
+  const minimalCampaignCode = fs.readFileSync(path.join(ROOT, "tests/minimal-test-campaign.js"), "utf8");
+  vm.runInContext(minimalCampaignCode, sandbox);
+
+  // Progress in 'the-first-week'
+  Game.selectCampaign("the-first-week");
+  Game.state.day = 4;
+  Game.state.money = 140;
+  Game.state.reputation = 95;
+  Game.state.ownedUpgrades = ["scanner", "handbook"];
+  Game.state.completedDays = [1, 2, 3];
+  Game.state.highScore = 140;
+  Game.state.story = { morris: "kind" };
+  Game.saveProgress();
+
+  // Switch to 'festival-showcase' and verify it starts fresh at Day 1
+  Game.selectCampaign("festival-showcase");
+  assert.strictEqual(Game.state.day, 1);
+  assert.strictEqual(Game.state.money, 0);
+  assert.strictEqual(Game.state.reputation, 80);
+  assert.deepEqual(Game.state.ownedUpgrades, []);
+  assert.deepEqual(Game.state.completedDays, []);
+
+  // Earn progress in 'festival-showcase'
+  Game.state.money = 35;
+  Game.state.reputation = 88;
+  Game.state.ownedUpgrades = ["scanner"];
+  Game.state.completedDays = [1];
+  Game.state.highScore = 35;
+  Game.saveProgress();
+
+  // Render Campaign Selection Screen and verify both campaign cards + Coming Soon card appear
+  UI.openCampaignSelectModal();
+  const cardsHtml = sandbox.document.getElementById("campaignCardsGrid").innerHTML;
+  assert.ok(cardsHtml.includes("The First Week"));
+  assert.ok(cardsHtml.includes("7 Days · Learn the Job"));
+  assert.ok(cardsHtml.includes("Festival Showcase"));
+  assert.ok(cardsHtml.includes("Coming Soon"));
+
+  // Switch back to 'the-first-week' and verify its saved progress is completely intact
+  Game.startOrContinueCampaign("the-first-week");
+  assert.strictEqual(Game.state.campaignId, "the-first-week");
+  assert.strictEqual(Game.state.day, 4);
+  assert.strictEqual(Game.state.money, 140);
+  assert.strictEqual(Game.state.reputation, 95);
+  assert.deepEqual(Game.state.ownedUpgrades, ["scanner", "handbook"]);
+  assert.deepEqual(Game.state.completedDays, [1, 2, 3]);
+  assert.strictEqual(Game.state.story.morris, "kind");
+
+  // Replay 'festival-showcase' and ensure 'the-first-week' is still untouched
+  Game.replayCampaign("festival-showcase");
+  assert.strictEqual(Game.state.day, 1);
+  assert.strictEqual(Game.state.money, 0);
+  const firstWeekSaved = Game.getCampaignSavedState("the-first-week");
+  assert.strictEqual(firstWeekSaved.day, 4);
+  assert.strictEqual(firstWeekSaved.money, 140);
+});
+
+test("12. Independent Language Mode and Gameplay Difficulty + encounter boundary rule", () => {
+  const { Game, sandbox } = createHarness(1111);
+  const minimalCampaignCode = fs.readFileSync(path.join(ROOT, "tests/minimal-test-campaign.js"), "utf8");
+  vm.runInContext(minimalCampaignCode, sandbox);
+
+  Game.selectCampaign("festival-showcase");
+  Game.setDifficulty("chaos");
+  Game.setLanguageMode("elementary");
+  assert.strictEqual(Game.state.difficulty, "chaos");
+  assert.strictEqual(Game.state.maxWarnings, 2);
+  assert.strictEqual(Game.state.languageMode, "elementary");
+  assert.strictEqual(Game.languagePack().unitTitle, "Festival Showcase — Elementary Pack");
+
+  // Start shift in Elementary mode
+  Game.startShift();
+  const activeCustomer = Game.state.currentCustomer;
+  const statementBefore = activeCustomer.statement;
+  const evBefore = Game.evaluateCustomerCase(activeCustomer);
+
+  // Change language mode mid-encounter to 'intermediate'
+  Game.setLanguageMode("intermediate");
+  assert.strictEqual(Game.state.selectedLanguageMode, "intermediate");
+  assert.strictEqual(Game.state.languageMode, "elementary", "Active languageMode must not change mid-encounter");
+  assert.strictEqual(Game.state.pendingLanguageMode, "intermediate", "Language change must be queued for next encounter/shift boundary");
+  assert.strictEqual(activeCustomer.statement, statementBefore, "Active customer's dialogue must not be rewritten mid-encounter");
+
+  const evAfterLangClick = Game.evaluateCustomerCase(activeCustomer);
+  assert.deepEqual(evAfterLangClick.validActions, evBefore.validActions, "Language selection must never alter gameplay decisions");
+
+  // Complete current customer and advance to next customer -> boundary applies pendingLanguageMode
+  if (evAfterLangClick.needsQuestion) {
+    Game.askCustomerQuestion("which_film", "Which film are you going to see?");
+  }
+  const evReady = Game.evaluateCustomerCase(activeCustomer);
+  Game.makeDecision(evReady.validActions[0], evReady.options[0] || null);
+  Game.nextCustomerFromQueue();
+
+  assert.strictEqual(Game.state.languageMode, "intermediate", "Next customer boundary must activate pending language mode");
+  assert.strictEqual(Game.state.pendingLanguageMode, null);
+  assert.strictEqual(Game.languagePack().unitTitle, "Festival Showcase — Intermediate Pack");
+});
+
+test("13. Main Menu navigation mid-shift pauses safely and resumes without duplicating state", () => {
+  const { Game, UI } = createHarness(1212);
+  Game.startShift();
+
+  const custBefore = Game.state.currentCustomer;
+  const serialBefore = custBefore.ticket.serial;
+  const queueLenBefore = Game.state.queue.length;
+  const clockBefore = Game.state.clockMins;
+  const casesCountBefore = Game.state.casesGeneratedCount;
+
+  // Open Campaign Selection Screen mid-shift
+  UI.openCampaignSelectModal();
+  assert.strictEqual(UI.modalStack.has("campaignSelectModal"), true);
+  assert.ok(Game.state.modalDepth > 0, "Opening Campaign Menu mid-shift must pause via modalDepth");
+
+  // Tick while menu is open must be a no-op
+  Game.tick();
+  assert.strictEqual(Game.state.clockMins, clockBefore, "Clock must not advance while Campaign Menu is open");
+
+  // Resume active shift
+  UI.resumeActiveShiftFromMenu();
+  assert.strictEqual(UI.modalStack.has("campaignSelectModal"), false);
+  assert.strictEqual(Game.state.modalDepth, 0);
+  assert.strictEqual(Game.state.currentCustomer, custBefore, "Active customer reference must be preserved");
+  assert.strictEqual(Game.state.currentCustomer.ticket.serial, serialBefore, "Active ticket must not be regenerated");
+  assert.strictEqual(Game.state.queue.length, queueLenBefore, "Queue must not duplicate customers on resume");
+  assert.strictEqual(Game.state.casesGeneratedCount, casesCountBefore, "No extra cases should be generated on resume");
+});
+
 console.log(`\nAll ${passed} test suites passed!`);

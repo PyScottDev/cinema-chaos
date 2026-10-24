@@ -15,6 +15,34 @@
       unlockRequirements: { type: "always" },
       serialPrefix: "GC",
       authorizedVips: ["VIP-770-MORRIS", "VIP-900-INSPECTOR"],
+      inspectorCharacterId: "mystery",
+      inspectorNotes: {
+        highRep: "The inspector liked the service.",
+        lowRep: "The inspector asked the manager to improve the service."
+      },
+      lateRuleText: "No entry more than 10 minutes after the start. Use the arrival time on the booking record. You may help Mr Morris, but late entry still gets a warning.",
+      vipRuleText: "VIP numbers must be on the list. A VIP still needs the right day, film, room, time and booking. Red clothes and the late rule still apply.",
+      dilemmaMessage: {
+        exceptionFeedback: "Mr Morris joins his daughter. +€6. They are happy, but the manager gives a late-entry warning.",
+        exceptionNote: "Mr Morris joined his daughter. Management recorded the late entry.",
+        refusedNote: "Mr Morris could not enter. The manager accepted your decision.",
+        correctedNote: "Mr Morris and his daughter accepted another film."
+      },
+      playerQuestions: [
+        ["which_film", "Which film are you going to see?"],
+        ["are_you_sure", "Are you going to watch this film?"],
+        ["why_see", "Why are you going to see it?"],
+        ["how_many", "How many people are there?"],
+        ["alternative", "Is another film OK?"],
+        ["other_ticket", "Do you have another ticket?"]
+      ],
+      vocabularyHints: {
+        scary: "Scary = makes you feel afraid.",
+        funny: "Funny = makes you laugh.",
+        interesting: "Interesting = you want to know more.",
+        fun: "Fun = you enjoy it.",
+        default: "“To learn” tells us why someone does something."
+      },
 
       languageModes: {
         elementary: { label: "Elementary", available: true },
@@ -384,8 +412,10 @@
               id: "sofia",
               trigger: { caseIndex: 2, requireOpenScreeningId: "wild_world" },
               characterId: "sofia",
+              storyKey: "sofia",
               caseType: "sofia",
-              targetScreeningId: "wild_world"
+              targetScreeningId: "wild_world",
+              statementTemplate: "I'm here to learn about animals. I'm going to see {title}."
             }
           ]
         },
@@ -424,20 +454,31 @@
               id: "morris",
               oncePerShift: true,
               trigger: { minClockMins: 1106, maxClockMins: 1115, requireLateScreeningId: "happy_penguins" },
-              characterId: "morris",
+              characterId: "mr_morris",
+              storyKey: "morris",
               caseType: "morris",
               targetScreeningId: "happy_penguins",
               dilemma: true,
               requiredQuestion: true,
-              intentGenres: ["animation", "comedy"]
+              intentGenres: ["animation", "comedy"],
+              statementTemplate: "I'm {lateMins} minutes late. My daughter is inside. Can you help me?",
+              qaOverrides: {
+                which_film: "A comedy or an animation is OK. My daughter can come out.",
+                alternative: "A comedy or an animation is OK. My daughter can come out.",
+                are_you_sure: "I can watch a comedy or an animation instead."
+              }
             },
             {
               id: "leo",
               trigger: { caseIndex: 2, requireOpenScreeningId: "laughing_bananas" },
               characterId: "leo",
+              personTagOverride: "Regular customer",
+              storyKey: "leo",
               caseType: "leo",
               targetScreeningId: "laughing_bananas",
-              intentGenres: ["comedy"]
+              wrongFilmTicket: true,
+              intentGenres: ["comedy"],
+              statementTemplate: "I'm not going to see a horror film. I want something funny."
             }
           ]
         },
@@ -490,7 +531,13 @@
               id: "leo_return",
               trigger: { caseIndex: 6, requireStoryFlag: "leo" },
               characterId: "leo",
-              caseType: "leo_return"
+              personTagOverride: "Regular customer",
+              storyKey: "leo",
+              caseType: "leo_return",
+              statementByStory: {
+                helped: "Thanks for your help! Today I'm going to try {title}.",
+                default: "Last time was difficult. Today I'm going to see {title}."
+              }
             }
           ]
         },
@@ -534,13 +581,25 @@
               id: "morris_return",
               trigger: { caseIndex: 3, requireStoryFlag: "morris" },
               characterId: "mr_morris",
-              caseType: "morris_return"
+              storyKey: "morris",
+              caseType: "morris_return",
+              statementByStory: {
+                kind: "Thank you for Tuesday! Today I'm going to see {title}.",
+                helped: "We liked the other film! Today I'm going to see {title}.",
+                default: "I was sad on Tuesday. Today I'm on time for {title}."
+              }
             },
             {
               id: "leo_return",
               trigger: { caseIndex: 6, requireStoryFlag: "leo" },
               characterId: "leo",
-              caseType: "leo_return"
+              personTagOverride: "Regular customer",
+              storyKey: "leo",
+              caseType: "leo_return",
+              statementByStory: {
+                helped: "Thanks for your help! Today I'm going to try {title}.",
+                default: "Last time was difficult. Today I'm going to see {title}."
+              }
             }
           ]
         },
@@ -576,7 +635,9 @@
                 screen: 2,
                 afterMins: 1150,
                 requiredPersonProp: "wearingRed",
-                issueText: "Screen 2: after 19:10, you need red clothes."
+                issueText: "Screen 2: after 19:10, you need red clothes.",
+                ruleTitle: "Screen 2: red clothes",
+                ruleText: "After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule."
               }
             ]
           },
@@ -617,13 +678,20 @@
               trigger: { caseIndex: 4, requireUnusedSerial: "VIP-900-INSPECTOR" },
               characterId: "mystery",
               caseType: "vip",
-              vipSerial: "VIP-900-INSPECTOR"
+              vipSerial: "VIP-900-INSPECTOR",
+              statementTemplate: "I'm going to watch {title} to check the cinema."
             },
             {
               id: "leo_return",
               trigger: { caseIndex: 6, requireStoryFlag: "leo" },
               characterId: "leo",
-              caseType: "leo_return"
+              personTagOverride: "Regular customer",
+              storyKey: "leo",
+              caseType: "leo_return",
+              statementByStory: {
+                helped: "Thanks for your help! Today I'm going to try {title}.",
+                default: "Last time was difficult. Today I'm going to see {title}."
+              }
             }
           ]
         },
@@ -713,7 +781,9 @@
               screen: 2,
               afterMins: 1150,
               requiredPersonProp: "wearingRed",
-              issueText: "Screen 2: after 19:10, you need red clothes."
+              issueText: "Screen 2: after 19:10, you need red clothes.",
+              ruleTitle: "Screen 2: red clothes",
+              ruleText: "After 19:10, only customers in red clothes can enter Screen 2. Their ticket must still meet every other rule."
             }
           ]
         },
@@ -754,13 +824,20 @@
             trigger: { caseIndex: 4, requireUnusedSerial: "VIP-900-INSPECTOR" },
             characterId: "mystery",
             caseType: "vip",
-            vipSerial: "VIP-900-INSPECTOR"
+            vipSerial: "VIP-900-INSPECTOR",
+            statementTemplate: "I'm going to watch {title} to check the cinema."
           },
           {
             id: "leo_return",
             trigger: { caseIndex: 6, requireStoryFlag: "leo" },
             characterId: "leo",
-            caseType: "leo_return"
+            personTagOverride: "Regular customer",
+            storyKey: "leo",
+            caseType: "leo_return",
+            statementByStory: {
+              helped: "Thanks for your help! Today I'm going to try {title}.",
+              default: "Last time was difficult. Today I'm going to see {title}."
+            }
           }
         ]
       }
@@ -769,16 +846,3 @@
     if (window.CinemaChaos && window.CinemaChaos.CampaignRegistry) {
       window.CinemaChaos.CampaignRegistry.register(THE_FIRST_WEEK_CAMPAIGN);
     }
-
-    // Legacy aliases preserved for Stage B compatibility prior to Stage C engine decoupling
-    let LANGUAGE_PACK = structuredClone(THE_FIRST_WEEK_CAMPAIGN.languagePack);
-    const DEFAULT_LANGUAGE_PACK = structuredClone(THE_FIRST_WEEK_CAMPAIGN.languagePack);
-    const CAMPAIGN_DAYS = {
-      1: THE_FIRST_WEEK_CAMPAIGN.days[1],
-      2: THE_FIRST_WEEK_CAMPAIGN.days[2],
-      3: THE_FIRST_WEEK_CAMPAIGN.days[3],
-      4: THE_FIRST_WEEK_CAMPAIGN.days[4],
-      5: THE_FIRST_WEEK_CAMPAIGN.days[5],
-      6: THE_FIRST_WEEK_CAMPAIGN.endlessDay
-    };
-    const UPGRADES_CATALOG = THE_FIRST_WEEK_CAMPAIGN.upgradesCatalog;

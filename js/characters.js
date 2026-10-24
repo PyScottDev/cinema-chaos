@@ -1,62 +1,8 @@
     /***************************************************************************
-     * 3. RECURRING CHARACTERS & EXPRESSIVE SVG PORTRAIT GENERATOR
+     * 3. EXPRESSIVE SVG PORTRAIT & RANDOM VISITOR GENERATOR
+     * Campaign-independent character rendering and random visitor creation.
      ***************************************************************************/
     const CHARACTERS = {
-      recurring: {
-        mr_morris: {
-          id: "mr_morris",
-          name: "Mr Morris",
-          tag: "Regular Customer",
-          isElderly: true,
-          coatColor: "#475569",
-          shirtColor: "#f8fafc",
-          hairColor: "#cbd5e1",
-          skinColor: "#f1c27d",
-          glasses: true,
-          hat: true,
-          wearingRed: false
-        },
-        sofia: {
-          id: "sofia",
-          name: "Sofia",
-          tag: "Documentary Fan",
-          isElderly: false,
-          coatColor: "#0f766e",
-          shirtColor: "#fef08a",
-          hairColor: "#3b1e08",
-          skinColor: "#e0ac69",
-          glasses: true,
-          hat: false,
-          wearingRed: false
-        },
-        leo: {
-          id: "leo",
-          name: "Leo",
-          tag: "Hates Scary Films",
-          isElderly: false,
-          coatColor: "#dc2626", // Wearing red!
-          shirtColor: "#ffffff",
-          hairColor: "#eab308",
-          skinColor: "#ffdbac",
-          glasses: false,
-          hat: false,
-          wearingRed: true
-        },
-        mystery: {
-          id: "mystery",
-          name: "The Mystery Customer",
-          tag: "VIP / Inspector?",
-          isElderly: false,
-          coatColor: "#311042",
-          shirtColor: "#fde047",
-          hairColor: "#111827",
-          skinColor: "#d2996c",
-          glasses: true,
-          hat: true,
-          wearingRed: false
-        }
-      },
-
       firstNames: [
         "Anna", "David", "Elena", "Marcus", "Clara", "Samir", "Nora", "Tom",
         "Lucia", "Ben", "Hannah", "Omar", "Eva", "Daniel", "Mei", "Victor"
