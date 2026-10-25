@@ -107,6 +107,15 @@
         return camp.languagePack;
       },
 
+      // Elementary fallback also preserves compatibility with older custom packs.
+      say(key, values = {}) {
+        const pack = this.languagePack();
+        const template = pack?.procedural?.[key] ?? FIRST_WEEK_ELEMENTARY.procedural[key];
+        if (typeof template !== 'string') throw new Error(`Missing dialogue: ${key}`);
+        return template.replace(/\{([A-Za-z0-9_]+)\}/g, (_, name) =>
+          Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : `{${name}}`);
+      },
+
       upgradesCatalog() {
         return this.campaign()?.upgradesCatalog || [];
       },
@@ -674,12 +683,12 @@
           card.docNumber = `CID-${num}`;
         }
         if (!card.issuingAuthority) {
-          card.issuingAuthority = 'City Civil Registry';
+          card.issuingAuthority = this.say('issuingAuthority');
         }
         if (!card.address) {
           // Fictional, stable address for procedural cards; campaigns may supply their own.
           const number = 1 + (Number(card.docNumber.replace(/\D/g, '').slice(-3)) || 0) % 120;
-          card.address = `${number} Market Street, City Centre`;
+          card.address = this.say('defaultAddress', { number });
         }
         return card;
       },
@@ -708,8 +717,10 @@
       getCustomerQuestions(c) {
         if (!c) return [];
         const pol = this.policies();
-        const defaults = [['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?'],['ask_age','How old are you?'],['ask_id','Can I see your ID, please?']];
-        const base = Array.isArray(this.campaign()?.playerQuestions) ? this.campaign().playerQuestions : defaults;
+        const defaults = Object.entries(this.languagePack()?.procedural?.questionLabels || FIRST_WEEK_ELEMENTARY.procedural.questionLabels).filter(([key]) => key !== 'ask_name');
+        const levelQuestions = this.languagePack()?.playerQuestions;
+        const base = Array.isArray(levelQuestions)
+          ? levelQuestions : (Array.isArray(this.campaign()?.playerQuestions) ? this.campaign().playerQuestions : defaults);
         // Available throughout age-restricted shifts; only the player decides whether to ask.
         const qs = base.filter(([key]) => key === 'ask_age' ? this.identityQuestionsRelevant(c) && (pol.checkAgeRestrictions || c.requiresAgeCheck)
           : key === 'ask_id' ? this.identityQuestionsRelevant(c) : true).map(q => [q[0], q[1]]);
@@ -724,10 +735,10 @@
         addAll(c.extraQuestions);
         addAll(c.unlockedQuestions);
         if (this.identityQuestionsRelevant(c)) {
-          addAll([['ask_id', 'Can I see your ID, please?']]);
-          if (this.policies().checkAgeRestrictions || c.requiresAgeCheck) addAll([['ask_age', 'How old are you?']]);
+          addAll([['ask_id', (this.languagePack()?.procedural?.questionLabels || FIRST_WEEK_ELEMENTARY.procedural.questionLabels).ask_id]]);
+          if (this.policies().checkAgeRestrictions || c.requiresAgeCheck) addAll([['ask_age', (this.languagePack()?.procedural?.questionLabels || FIRST_WEEK_ELEMENTARY.procedural.questionLabels).ask_age]]);
         }
-        if (!this.getKnownCustomerName(c)) addAll([['ask_name', 'What is your name?']]);
+        if (!this.getKnownCustomerName(c)) addAll([['ask_name', (this.languagePack()?.procedural?.questionLabels || FIRST_WEEK_ELEMENTARY.procedural.questionLabels).ask_name]]);
         return qs;
       },
       matchesStoryCondition(cond) {
@@ -1176,11 +1187,8 @@
 
         const group = scripted?.groupSize ?? ((type === 'group' || type === 'overbooked_group') ? 3 : 1);
         const ticketSeats = scripted?.ticketSeats ?? (type === 'group' || type === 'overbooked_group' ? 1 : group);
-        const statementChoices = [
-          { text: `One for ${f.title}, please.`, namesPlan: true },
-          { text: `I'm going to see ${f.title}.`, namesPlan: true },
-          { text: `Evening. Here you go.`, namesPlan: false }
-        ];
+        const statementChoices = (this.languagePack()?.procedural?.openings || FIRST_WEEK_ELEMENTARY.procedural.openings)
+          .map(opening => ({ ...opening, text: opening.text.replace(/\{title\}/g, f.title) }));
         const chosenStatement = this.pick(statementChoices);
 
         const c = {
@@ -1197,7 +1205,7 @@
           unlockedQuestions: [],
           questionedYet: false,
           requiredQuestion: false,
-          statement: chosenStatement ? chosenStatement.text : `One for ${f.title}, please.`,
+          statement: chosenStatement ? chosenStatement.text : this.say('defaultOpening', { title: f.title }),
           ticket: {
             exists: true,
             serial: this.makeUniqueSerial(),
@@ -1212,12 +1220,12 @@
           }
         };
 
-        const vocabulary = camp.vocabularyHints || {};
-        c.languageHint = vocabulary[f.adjective] || vocabulary.default || '“To learn” tells us why someone does something.';
+        const vocabulary = this.languagePack()?.vocabularyHints || camp.vocabularyHints || {};
+        c.languageHint = vocabulary[f.adjective] || vocabulary.default || '';
 
         if (['wrong_film', 'promo', 'change'].includes(type) || scripted?.wrongFilmTicket) {
           c.intent = c.known.preference = { genres: scripted?.intentGenres ? [...scripted.intentGenres] : [desired.genre] };
-          c.statement = `Wait, that's the wrong film. I asked for ${desired.genre === 'comedy' ? 'something funny' : `a ${desired.genreLabel.toLowerCase()}`}.`;
+          c.statement = this.say('wrongFilm', { request: desired.genre === 'comedy' ? this.say('comedyRequest') : this.say('genreRequest', { genre: desired.genreLabel.toLowerCase() }) });
           c.known.publicPlan = true;
         }
         if (type === 'screen' || type === 'combined' || type === 'tv_wrong') c.ticket.screen = f.screen === 1 ? 2 : 1;
@@ -1228,33 +1236,33 @@
           if (type === 'hidden_ticket') {
             c.backupTicket = { ...c.ticket };
             c.requiredTicketQuestion = true;
-            c.statement = "My ticket? Hold on, let me check my bag...";
+            c.statement = this.say('hiddenTicket');
           } else {
-            c.statement = "I haven't got a ticket.";
+            c.statement = this.say('noTicket');
           }
-          c.ticket = { exists: false, reason: 'No ticket on the desk.' };
+          c.ticket = { exists: false, reason: this.say('noTicketOnDesk') };
           c.known.publicPlan = false;
         }
         if (type === 'incomplete') {
           c.known.preference = null;
           c.known.publicPlan = false;
           c.requiredQuestion = true;
-          c.statement = "I'm meeting friends here, let me check which film we're seeing.";
+          c.statement = this.say('incomplete');
         }
         if (type === 'cancelled') {
           c.intent = { genres: [desired.genre] };
           c.known.preference = null;
           c.known.publicPlan = false;
           c.requiredQuestion = true;
-          c.statement = `Ticket for ${f.title}, please.`;
+          c.statement = this.say('cancelled', { title: f.title });
         }
-        if (type === 'group' || type === 'overbooked_group') { c.statement = `${group === 3 ? 'Three' : group} for ${f.title}, please.`; c.known.publicPlan = true; }
+        if (type === 'group' || type === 'overbooked_group') { c.statement = this.say('group', { count: group === 3 ? this.say('three') : group, title: f.title }); c.known.publicPlan = true; }
         if (type === 'duplicate') c.ticket.serial = this.pick(s.usedSerials);
         if (type === 'promo') c.ticket.ticketType = 'PROMO (NO CHANGE)';
-        if (type === 'late') { c.statement = `Sorry I'm late—one for ${f.title}, please.`; c.known.publicPlan = true; }
-        if (type === 'subjective') { c.statement = `One for ${f.title}, please.`; c.known.publicPlan = true; }
+        if (type === 'late') { c.statement = this.say('late', { title: f.title }); c.known.publicPlan = true; }
+        if (type === 'subjective') { c.statement = this.say('defaultOpening', { title: f.title }); c.known.publicPlan = true; }
         if (type === 'red' || type === 'no_red') {
-          c.statement = `One for ${f.title} at ${f.time}, please.`;
+          c.statement = this.say('redRule', { title: f.title, time: f.time });
           c.intent = c.known.preference = { ids: [f.id] };
           c.known.publicPlan = true;
         }
@@ -1266,7 +1274,7 @@
             c.claimedAge = validAge;
             c.trueAge = validAge;
             c.idCard = this.normalizeIdCard({ exists: true, presented: false, holderName: c.person.name, dob: validDob }, c.person.name, s.day);
-            c.statement = `One for ${f.title}, please.`;
+            c.statement = this.say('defaultOpening', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'underage') {
             const underageDob = (f.minAge || 12) >= 16 ? '2012-06-15' : '2016-06-15';
@@ -1275,14 +1283,14 @@
             c.trueAge = uAge;
             c.allowAgeCorrection = false;
             c.idCard = this.normalizeIdCard({ exists: true, presented: false, holderName: c.person.name, dob: underageDob }, c.person.name, s.day);
-            c.statement = `One for ${f.title}, please.`;
+            c.statement = this.say('defaultOpening', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'missing_id') {
             c.claimedAge = (f.minAge || 12) + 1;
             c.trueAge = (f.minAge || 12) - 2;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: false, presented: false, reason: 'No ID card presented.' };
-            c.statement = `One for ${f.title}, please.`;
+            c.idCard = { exists: false, presented: false, reason: this.say('missingIdReason') };
+            c.statement = this.say('defaultOpening', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'refused_id') {
             // Declining ID should not reveal the answer: some visitors are
@@ -1291,7 +1299,7 @@
             c.trueAge = this.rng() < 0.6 ? Math.max(9, minimumAge - 2) : minimumAge + 2;
             c.claimedAge = minimumAge + 2;
             c.idCard.refusesToShow = true;
-            c.idCard.refusalText = "I'd rather not show my ID.";
+            c.idCard.refusalText = this.say('refusal');
             c.allowAgeCorrection = false;
           } else if (type === 'fake_id') {
             const fakeDob = '2012-08-20';
@@ -1307,7 +1315,7 @@
               issueDate: '20/10/2026',
               expiryDate: '10/10/2025'
             }, c.person.name, s.day);
-            c.statement = `One for ${f.title}, please.`;
+            c.statement = this.say('defaultOpening', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'expired_id') {
             const validDob = '1998-04-12';
@@ -1323,7 +1331,7 @@
               issueDate: '01/05/2018',
               expiryDate: '01/05/2023'
             }, c.person.name, s.day);
-            c.statement = `One for ${f.title}, please.`;
+            c.statement = this.say('defaultOpening', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'false_identity') {
             // Young customer borrowing an older person's ID; visible casting invites inspection.
@@ -1334,16 +1342,16 @@
             c.idCard = this.normalizeIdCard({
               exists: true,
               presented: false,
-              holderName: 'Dr Alex Sterling',
+              holderName: this.say('fakeAgeAdultName'),
               dob: '1982-11-03',
               photoMismatch: true,
               portraitPerson: { ...c.person, isElderly: true, hairColor: '#cbd5e1', glasses: !c.person.glasses, hat: false },
-              photoMismatchText: 'The ID card photograph shows a much older person and the name does not match the ticket.'
-            }, 'Dr Alex Sterling', s.day);
-            c.statement = `One for ${f.title}, please.`;
+              photoMismatchText: this.say('photoMismatch')
+            }, this.say('fakeAgeAdultName'), s.day);
+            c.statement = this.say('defaultOpening', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'disguise') {
-            c.person = { ...c.person, fakeBeard: true, obviousDisguise: true, disguiseIssueText: 'The beard is attached with visible glue.' };
+            c.person = { ...c.person, fakeBeard: true, obviousDisguise: true, disguiseIssueText: this.say('obviousDisguise') };
             c.claimedAge = 24;
             c.trueAge = 14;
             c.allowAgeCorrection = false;
@@ -1353,17 +1361,17 @@
               holderName: c.person.name,
               dob: '2012-02-30'
             }, c.person.name, s.day);
-            c.statement = `Good evening. One adult ticket for ${f.title}, please.`;
+            c.statement = this.say('adultDisguise', { title: f.title });
             c.known.publicPlan = true;
           } else if (type === 'staff_impostor') {
-            c.person = { ...c.person, staffHat: true, staffBadge: true, obviousDisguise: true, disguiseIssueText: 'Customer is wearing a homemade staff badge with an unlisted pass.' };
+            c.person = { ...c.person, staffHat: true, staffBadge: true, obviousDisguise: true, disguiseIssueText: this.say('fakeStaffBadge') };
             c.ticket.ticketType = 'STAFF PASS';
             c.ticket.serial = 'STAFF-00-FAKE';
             c.claimedAge = 19;
             c.trueAge = 14;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: false, presented: false, reason: 'No ID card presented.' };
-            c.statement = `Staff pass for ${f.title}.`;
+            c.idCard = { exists: false, presented: false, reason: this.say('missingIdReason') };
+            c.statement = this.say('staffImpostor', { title: f.title });
             c.known.publicPlan = true;
           }
         }
@@ -1443,7 +1451,8 @@
             }
           } else if (scripted.statementByStory && typeof scripted.statementByStory === 'object') {
             const storyState = s.story[scripted.storyKey];
-            const tpl = scripted.statementByStory[storyState] || scripted.statementByStory.default || scripted.statementTemplate || `One for {title}, please.`;
+            const tpl = scripted.statementByStory[storyState] || scripted.statementByStory.default || scripted.statementTemplate
+              || this.languagePack()?.procedural?.defaultOpening || FIRST_WEEK_ELEMENTARY.procedural.defaultOpening;
             c.statement = formatTpl(tpl);
             if (!scripted.requiredQuestion) c.known.publicPlan = true;
           } else if (scripted.statementTemplate) {
@@ -1468,19 +1477,23 @@
           : null;
         const spokenAge = c.claimedAge ?? calcIdAge ?? 25;
         const formattedDob = c.idCard?.dob ? this.formatDateDMY(c.idCard.dob) : '';
+        const qaTemplates = this.languagePack()?.procedural?.answers || FIRST_WEEK_ELEMENTARY.procedural.answers;
+        const qa = (key, values = {}) => qaTemplates[key].replace(/\{([A-Za-z0-9_]+)\}/g, (_, name) =>
+          Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : `{${name}}`);
+        const genreList = c.intent.genres?.join(this.say('joinGenres'));
         c.qaResponses = {
-          which_film: c.intent.genres ? `I want a ${c.intent.genres.join(' or ')}. Any one is fine.` : `I'm going to see ${desired.title}.`,
-          why_see: `I'm here ${desired.purposePhrases?.[0] || 'to have fun'}.`,
-          are_you_sure: requiresPlanConfirmation ? `No. ${c.intent.genres ? `I want a ${c.intent.genres[0]}.` : `I want ${desired.title}.`}` : `Yes. I'm going to see ${f.title}.`,
-          how_many: `There ${group === 1 ? 'is one person' : 'are ' + group + ' people'}.`,
-          friends_coming: group > 1 ? "Yes, they are. We're going to watch together." : "No. He isn't going to come today.",
-          other_ticket: type === 'hidden_ticket' ? "Here it is! It was in my coat." : "No. I don't have another ticket.",
-          alternative: c.intent.genres ? `A ${c.intent.genres.join(' or ')} is OK.` : `Only ${desired.title}, please.`,
-          ask_age: `I'm ${spokenAge}.`,
-          ask_name: `I'm ${c.introducedName || c.person.name}.`,
-          ask_id: c.idCard?.exists
-            ? `Here is my ID card. My date of birth is ${formattedDob}.`
-            : "I haven't got my ID card with me."
+          which_film: c.intent.genres ? qa('whichGenre', { genres: genreList }) : qa('whichFilm', { title: desired.title }),
+          why_see: qa('purpose', { purpose: desired.purposePhrases?.[0] || this.say('genericPurpose') }),
+          are_you_sure: requiresPlanConfirmation
+            ? (c.intent.genres ? qa('wrongFilmGenre', { genre: c.intent.genres[0] }) : qa('wrongFilmTitle', { title: desired.title }))
+            : qa('confirmFilm', { title: f.title }),
+          how_many: group === 1 ? qa('groupOne') : qa('groupMany', { count: group }),
+          friends_coming: qa(group > 1 ? 'friendsYes' : 'friendsNo'),
+          other_ticket: qa(type === 'hidden_ticket' ? 'foundTicket' : 'noOtherTicket'),
+          alternative: c.intent.genres ? qa('alternativeGenre', { genres: genreList }) : qa('alternativeTitle', { title: desired.title }),
+          ask_age: qa('age', { age: spokenAge }),
+          ask_name: qa('name', { name: c.introducedName || c.person.name }),
+          ask_id: c.idCard?.exists ? qa('idShown', { dob: formattedDob }) : qa('noId')
         };
         if (scripted?.qaOverrides) {
           Object.assign(c.qaResponses, scripted.qaOverrides);
@@ -1498,7 +1511,7 @@
           Object.assign(c.qaResponses, packQaOverride);
         }
         if (type === 'cancelled') c.qaResponses.are_you_sure = c.qaResponses.alternative;
-        if (c.idCard?.refusesToShow) c.qaResponses.ask_id = c.idCard.refusalText || "I'd rather not show my ID.";
+        if (c.idCard?.refusesToShow) c.qaResponses.ask_id = c.idCard.refusalText || this.say('refusal');
 
         const ticket = c.backupTicket || c.ticket;
         c.proposedBooking = ticket.exists && !['date', 'duplicate', 'missing'].includes(type)
@@ -1704,7 +1717,7 @@
           }
         }
         if(!c.asked.includes(key)) c.asked.push(key);
-        const reply=qEff?.revealStatement || c.qaResponses[key]||"I'm here to watch a film.";
+        const reply=qEff?.revealStatement || c.qaResponses[key]||((this.languagePack()?.procedural?.answers || FIRST_WEEK_ELEMENTARY.procedural.answers).fallback);
         c.dialogue.push({question:label,reply});
         this.applyEvidenceEffects(c);
         const box=document.getElementById('customerFollowUpBox');
@@ -1763,7 +1776,7 @@
       },
 
       makeDecision(action, target=null) {
-        const s=this.state,c=s.currentCustomer,camp=this.campaign(),dm=camp.dilemmaMessage||{};
+        const s=this.state,c=s.currentCustomer,camp=this.campaign(),dm=this.languagePack()?.dilemmaMessage||camp.dilemmaMessage||{};
         if(!c || !s.shiftActive || s.paused || s.modalDepth || s.decisionLocked) return;
         const notesStart = s.shiftStats.dilemmaNotes.length;
         const before=structuredClone(c.ticket),result=this.applyDecision(c,action,target?.id),ev=result.evaluation;
@@ -1873,7 +1886,7 @@
           if(action==='CORRECT'&&result.accepted) s.shiftStats.dilemmaNotes.push(dm.correctedNote||`${c.person.name} accepted another film.`);
         }
         if(camp.inspectorCharacterId && c.person.id===camp.inspectorCharacterId && c.identityTitle) {
-          const notes=camp.inspectorNotes||{};
+          const notes=this.languagePack()?.inspectorNotes||camp.inspectorNotes||{};
           s.shiftStats.dilemmaNotes.push(s.reputation>=80?(notes.highRep||'The inspector liked the service.'):(notes.lowRep||'The inspector asked the manager to improve the service.'));
         }
         const visibleName = this.getKnownCustomerName(c) || 'the customer';

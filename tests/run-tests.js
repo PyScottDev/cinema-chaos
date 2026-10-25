@@ -80,6 +80,7 @@ function createHarness(seed = 12345, customScripts = null, savedStorage = null) 
 
   const scripts = customScripts || [
     "js/campaigns/registry.js",
+    "js/language/elementary.js",
     "js/campaigns/the-first-week.js",
     "js/sound.js",
     "js/portrait-registry.js",
