@@ -150,10 +150,10 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         name: 'Maya',
         tag: 'Junior Staff',
         isElderly: false,
-        skin: '#e0ac69',
-        skinColor: '#e0ac69',
-        hairColor: '#3b0764',
-        coatColor: '#065f46',
+        skin: '#f1c27d',
+        skinColor: '#f1c27d',
+        hairColor: '#d8c18b',
+        coatColor: '#233d60',
         shirtColor: '#d1fae5',
         glasses: true,
         hat: false,
@@ -172,8 +172,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         coatColor: '#111827',
         shirtColor: '#fca5a5',
         glasses: true,
-        hat: true,
-        moustache: true,
+        hat: false,
+        moustache: false,
         wearingRed: false
       }
     },
@@ -1583,7 +1583,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               editedMoustache: false,
               staffHat: false,
               staffBadge: false,
-              obviousDisguise: false
+              obviousDisguise: false,
+              portraitVariant: 'innocent'
             },
             idCard: {
               exists: true,

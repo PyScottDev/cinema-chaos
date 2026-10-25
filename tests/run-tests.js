@@ -2051,25 +2051,39 @@ test("38. All portrait assets exist; registry is campaign-independent and loaded
     assert.ok(fs.existsSync(path.join(ROOT, p.src)), `Visitor ${p.id} missing: ${p.src}`);
     assert.ok(['under18','youngAdult','adult','olderAdult'].includes(p.ageGroup));
   }
-  assert.strictEqual(reg.recurring.mr_blackwood, undefined, 'Manager artwork must not be mislabelled as Mr Blackwood');
+  assert.ok(reg.recurring.mr_blackwood.endsWith('/men/man-08.webp'));
+  assert.ok(reg.recurring.maya.endsWith('/women/woman-08.webp'));
+  assert.notStrictEqual(reg.recurring.mr_blackwood, 'assets/characters/recurring/manager.webp', 'Unrelated manager artwork must not be mislabelled');
+  assert.strictEqual(Object.keys(reg.costumeProfiles.leo.variants).length, 9);
+  for (const src of Object.values(reg.costumeProfiles.leo.variants)) assert.ok(fs.existsSync(path.join(ROOT, src)), `Missing Leo variant: ${src}`);
+  assert.ok(reg.reservedVisitorIds.includes('woman-08') && reg.reservedVisitorIds.includes('man-08'));
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.ok(html.indexOf('js/portrait-registry.js') < html.indexOf('js/characters.js'));
 });
 
-test("39. Named characters have fixed images, while unsupported roles and costumes use SVG", () => {
+test("39. Recurring characters use stable artwork and Leo's costume cues are visible", () => {
   const h = createHarness(3900);
   const html = (person) => vm.runInContext('CHARACTERS.renderPortrait('+ JSON.stringify(person) +')', h.sandbox);
   const named = h.Game.campaign().characters;
-  for (const [id, basename] of [['mr_morris','mr_morris.webp'],['sofia','sofia.webp'],['leo','leo_neutral.webp'],['mystery','mystery_customer.webp']]) {
+  for (const [id, basename] of [['mr_morris','mr_morris.webp'],['sofia','sofia.webp'],['leo','leo_neutral.webp'],['mystery','mystery_customer.webp'],['maya','woman-08.webp'],['mr_blackwood','man-08.webp']]) {
     const markup = html({...named[id], characterId:id});
     assert.ok(markup.includes(basename), id);
   }
-  assert.match(html({...named.maya, characterId:'maya'}), /<svg/);
-  assert.match(html({...named.mr_blackwood, characterId:'mr_blackwood'}), /<svg/);
-  for (const key of ['fakeBeard','oversizedSuit','sunglasses','staffHat','staffBadge','editedMoustache']) {
-    const person = {...named.leo, characterId:'leo', [key]:true};
-    assert.match(html(person), /<svg/, `Visible ${key} must not disappear`);
+  assert.match(html({...named.maya, characterId:'maya'}), /data-costume="staffBadge"/);
+  assert.ok(!html({...named.mr_blackwood, characterId:'mr_blackwood'}).includes('/recurring/manager.webp'));
+  const variants = [
+    [{fakeBeard:true},'leo_neutral.webp','fakeBeard'],
+    [{oversizedSuit:true,sunglasses:true},'leo_suit.webp','sunglasses'],
+    [{editedMoustache:true},'leo_moustache.webp',null],
+    [{staffHat:true,staffBadge:true},'leo_cap.webp','staffUniform']
+  ];
+  for (const [flags,basename,overlay] of variants) {
+    const markup = html({...named.leo, characterId:'leo', ...flags});
+    assert.ok(markup.includes(basename), `${basename}: matching image variant`);
+    if (overlay) assert.ok(markup.includes(`data-costume="${overlay}"`), `${overlay}: disguise cue present`);
   }
+  // Another campaign's characters must not silently lose costume cues.
+  assert.match(html({id:'visitor',name:'Visitor',skinColor:'#aaa',hairColor:'#222',coatColor:'#123',shirtColor:'#fff',fakeBeard:true}), /<svg/);
 });
 
 test("40. Ordinary portraits are stable and respect red-clothing and broad age casting", () => {
@@ -2090,6 +2104,10 @@ test("40. Ordinary portraits are stable and respect red-clothing and broad age c
   for (const [name, expectedGender] of [['Anna','female'],['David','male'],['Elena','female'],['Marcus','male']]) {
     const p = select({ id:`gender-${name}`, name, wearingRed:false, glasses:false }, 24);
     assert.strictEqual(roster.find(x => x.id === p.portraitId).genderPresentation, expectedGender);
+  }
+  for (const age of [14, 20, 35, 72]) for (let i=0;i<20;i++) {
+    const p=select({id:`extra-${i}-${age}`, name:'Visitor',wearingRed:i%2===0},age);
+    assert.ok(!vm.runInContext('PORTRAIT_REGISTRY.reservedVisitorIds',h.sandbox).includes(p.portraitId),'Named cast must not be reused as random customers');
   }
   const person = g.generateCustomerScenario('age_valid').person;
   const markup = vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify(person)+')',h.sandbox);
@@ -2114,6 +2132,97 @@ test("41. Genuine IDs reuse the customer's portrait; borrowed IDs use different 
   const markup=vm.runInContext('CHARACTERS.renderPortrait({id:"ghost",portraitId:"not-on-disk"})', h.sandbox);
   assert.ok(markup.includes('<svg'), 'Unregistered assets fall back');
   assert.ok(customerMarkup.includes('onerror="CHARACTERS.handlePortraitImageError(this)"'));
+});
+
+test("46. Every scripted Leo encounter receives its intended illustration", () => {
+  const expectations = [
+    [2,'leo_day2','leo_neutral.webp',null],
+    [3,'leo_day3','leo_neutral.webp','fakeBeard'],
+    [4,'leo_day4','leo_suit.webp','sunglasses'],
+    [5,'leo_day5','leo_moustache.webp',null],
+    [6,'leo_day6','leo_cap.webp','staffUniform'],
+    [7,'leo_day7','leo_innocent.webp',null]
+  ];
+  for (const [day,id,image,overlay] of expectations) {
+    const h=createHarness(4600+day),c=stageCase(h,id,day);
+    const markup=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
+    assert.ok(markup.includes(image),`${id}: uses ${image}`);
+    if (overlay) assert.ok(markup.includes(`data-costume="${overlay}"`),`${id}: shows ${overlay}`);
+    else assert.ok(!markup.includes('data-costume='),`${id}: no added costume`);
+  }
+});
+
+test("47. Named recasts stay distinct from visitors and preserve visible staff role", () => {
+  const h=createHarness(4700),r=vm.runInContext('PORTRAIT_REGISTRY',h.sandbox);
+  const named=h.Game.campaign().characters;
+  const maya=vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify({...named.maya,characterId:'maya'})+')',h.sandbox);
+  const manager=vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify({...named.mr_blackwood,characterId:'mr_blackwood'})+')',h.sandbox);
+  assert.ok(maya.includes('woman-08.webp') && maya.includes('data-costume="staffBadge"'));
+  assert.ok(manager.includes('man-08.webp') && !manager.includes('data-costume='));
+  assert.notStrictEqual(r.recurring.maya,r.recurring.sofia);
+  assert.notStrictEqual(r.recurring.mr_blackwood,r.recurring.mr_morris);
+  for(let i=0;i<100;i++) {
+    const p=vm.runInContext(`CHARACTERS.assignPortrait(${JSON.stringify({id:'roster-'+i,name:i%2?'David':'Anna',wearingRed:i%3===0})}, 30)`,h.sandbox);
+    assert.ok(!r.reservedVisitorIds.includes(p.portraitId));
+  }
+});
+
+test("48. Document portraits match Leo's current costume unless photo mismatch is authored", () => {
+  for(const [day,id] of [[3,'leo_day3'],[4,'leo_day4'],[5,'leo_day5'],[7,'leo_day7']]) {
+    const h=createHarness(4800+day),G=h.Game,c=stageCase(h,id,day);
+    if (!c.idCard?.exists) continue;
+    requestId(G,c);
+    h.UI.renderIdCardModal(c);
+    const photo=findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
+    const face=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
+    if(c.idCard.photoMismatch) {
+      assert.ok(!photo.innerHTML.includes(face),`${id}: borrowed ID must differ from Leo`);
+    } else {
+      assert.ok(photo.innerHTML.includes(face),`${id}: photo must match Leo's encounter appearance`);
+    }
+    if(c.idCard.photoAltered) assert.ok(photo.innerHTML.includes('id-photo-tape'));
+  }
+});
+
+test("49. New image overlays fall back to full costume SVG and cannot affect RNG", () => {
+  const h=createHarness(4900),G=h.Game;
+  const c=stageCase(h,'leo_day3',3);
+  const before=JSON.stringify(c),seed=G.state.rngState;
+  const markup=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
+  assert.ok(markup.includes('portrait-stage') && markup.includes('data-costume="fakeBeard"'));
+  const encoded=markup.match(/data-fallback-person="([^"]+)"/)?.[1];
+  assert.ok(encoded);
+  const wrapper={outerHTML:''};
+  const img={getAttribute:(k)=>k==='data-fallback-person'?encoded:k==='data-fallback-mood'?'neutral':null,closest:()=>wrapper};
+  h.sandbox.__testBrokenPortrait = img;
+  vm.runInContext('CHARACTERS.handlePortraitImageError(__testBrokenPortrait)',h.sandbox);
+  assert.match(wrapper.outerHTML,/<svg/);
+  assert.match(wrapper.outerHTML,/accessory-fake-beard/);
+  assert.ok(!wrapper.outerHTML.includes('portrait-stage'),'Do not leave a separate beard overlay on the SVG fallback');
+  assert.strictEqual(JSON.stringify(c),before);
+  assert.strictEqual(G.state.rngState,seed);
+});
+
+test("50. Variant selection accepts named keys only and preserves non-Leo SVG costumes", () => {
+  const h=createHarness(5000),render=p=>vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify(p)+')',h.sandbox);
+  const leo={...h.Game.campaign().characters.leo,characterId:'leo'};
+  assert.ok(render({...leo,portraitVariant:'glasses'}).includes('leo_glasses.webp'));
+  assert.ok(render({...leo,portraitVariant:'../../untrusted'}).includes('leo_neutral.webp'));
+  assert.ok(!render({...leo,portraitVariant:'../../untrusted'}).includes('../../untrusted.webp'));
+  const person={id:'extra',portraitId:'woman-10',name:'Extra',skinColor:'#aaa',hairColor:'#222',coatColor:'#555',shirtColor:'#fff',staffBadge:true};
+  assert.match(render(person),/<svg/,'Normal-customer costume still renders in SVG');
+  assert.match(render({...person,staffBadge:false}),/<img/);
+});
+
+test("51. Character renderer remains campaign-independent; profiles are data-driven", () => {
+  const src=fs.readFileSync(path.join(ROOT,'js/characters.js'),'utf8');
+  assert.ok(!src.includes("knownId === 'leo'") && !src.includes("knownId === 'maya'"));
+  const h=createHarness(5100);
+  const prof=vm.runInContext('PORTRAIT_REGISTRY.costumeProfiles',h.sandbox);
+  assert.ok(prof.leo.rules.some(r=>r.overlay==='fakeBeard'));
+  assert.strictEqual(prof.maya.overlayWhen,'staffBadge');
+  const image=vm.runInContext(`CHARACTERS.renderPortrait({id:'leo',characterId:'leo',fakeBeard:true,skinColor:'#a86',hairColor:'#999',coatColor:'#222',shirtColor:'#fff'})`,h.sandbox);
+  assert.ok(image.includes('leo_neutral.webp') && image.includes('fakeBeard'));
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

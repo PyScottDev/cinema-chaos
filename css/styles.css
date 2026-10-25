@@ -278,3 +278,8 @@
   box-shadow: 0 1px 3px rgba(30,24,16,.35);
   pointer-events: none;
 }
+
+/* Stage 2C: fitted costume overlays; keeps the existing booth/ID dimensions. */
+.portrait-stage { position:relative; isolation:isolate; overflow:hidden; }
+.portrait-stage > .portrait-image { display:block; }
+.portrait-costume { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }

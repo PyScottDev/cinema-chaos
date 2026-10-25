@@ -2,17 +2,49 @@
  * Stage 2A: visual assets live independently of any campaign or language pack.
  * These are relative URLs; they work offline via a local server or on a static host.
  * Generic roster age groups guide illustration casting, NEVER age verification.
- * "manager.webp" is deliberately unassigned: the image does not resemble
- * the currently scripted Mr Blackwood; an explicit portrait is still needed.
- * Maya likewise retains the original SVG until dedicated artwork exists.
+ * Stage 2C temporarily casts Maya and Mr Blackwood using distinct existing
+ * visitor illustrations. Their images are reserved from ordinary customer
+ * casting to avoid duplicates; the unrelated manager.webp is NOT Mr Blackwood.
+ * Their paths can later point to bespoke artwork without touching the engine.
  */
 const PORTRAIT_REGISTRY = Object.freeze({
   recurring: Object.freeze({
     mr_morris: 'assets/characters/recurring/mr_morris.webp',
     sofia: 'assets/characters/recurring/sofia.webp',
     leo: 'assets/characters/recurring/leo/leo_neutral.webp',
-    mystery: 'assets/characters/recurring/mystery_customer.webp'
+    mystery: 'assets/characters/recurring/mystery_customer.webp',
+    maya: 'assets/characters/customers/women/woman-08.webp',
+    mr_blackwood: 'assets/characters/customers/men/man-08.webp'
   }),
+  // Campaign character IDs live here, not inside the generic character renderer.
+  costumeProfiles: Object.freeze({
+    leo: Object.freeze({
+      variants: Object.freeze({
+        neutral: 'assets/characters/recurring/leo/leo_neutral.webp',
+        innocent: 'assets/characters/recurring/leo/leo_innocent.webp',
+        caught: 'assets/characters/recurring/leo/leo_caught.webp',
+        frustrated: 'assets/characters/recurring/leo/leo_frustrated.webp',
+        dyedHair: 'assets/characters/recurring/leo/leo_dyed_hair.webp',
+        cap: 'assets/characters/recurring/leo/leo_cap.webp',
+        glasses: 'assets/characters/recurring/leo/leo_glasses.webp',
+        suit: 'assets/characters/recurring/leo/leo_suit.webp',
+        moustache: 'assets/characters/recurring/leo/leo_moustache.webp'
+      }),
+      defaultVariant: 'neutral',
+      // Highest-priority visual cue first; special variants use existing WebP art.
+      rules: Object.freeze([
+        { whenAny: ['fakeBeard'], variant: 'neutral', overlay: 'fakeBeard' },
+        { whenAny: ['staffHat','staffBadge'], variant: 'cap', overlay: 'staffUniform' },
+        { whenAny: ['oversizedSuit'], variant: 'suit', overlay: 'sunglasses', overlayIf: 'sunglasses' },
+        { whenAny: ['editedMoustache'], variant: 'moustache' },
+        { whenAny: ['sunglasses'], variant: 'neutral', overlay: 'sunglasses' }
+      ])
+    }),
+    maya: Object.freeze({
+      overlayWhen: 'staffBadge', overlay: 'staffBadge', unless: ['fakeBeard','staffHat']
+    })
+  }),
+  reservedVisitorIds: Object.freeze(['woman-08', 'man-08']),
   visitors: Object.freeze([
   {
     "id": "man-01",

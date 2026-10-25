@@ -60,8 +60,9 @@
         const feminine = new Set(['anna','elena','clara','nora','lucia','hannah','eva','mei']);
         const masculine = new Set(['david','marcus','samir','tom','ben','omar','daniel','victor']);
         const gender = feminine.has(first) ? 'female' : masculine.has(first) ? 'male' : null;
-        let candidates = PORTRAIT_REGISTRY.visitors.filter(p => p.wearingRed === red && (!group || p.ageGroup === group) && (!gender || p.genderPresentation === gender));
-        if (!candidates.length) candidates = PORTRAIT_REGISTRY.visitors.filter(p => p.wearingRed === red && (!gender || p.genderPresentation === gender));
+        const available = PORTRAIT_REGISTRY.visitors.filter(p => !PORTRAIT_REGISTRY.reservedVisitorIds.includes(p.id));
+        let candidates = available.filter(p => p.wearingRed === red && (!group || p.ageGroup === group) && (!gender || p.genderPresentation === gender));
+        if (!candidates.length) candidates = available.filter(p => p.wearingRed === red && (!gender || p.genderPresentation === gender));
         // Prefer consistent accessories if possible without compromising red clothing or casting age.
         const withGlasses = candidates.filter(p => p.glasses === Boolean(person.glasses));
         if (withGlasses.length) candidates = withGlasses;
@@ -75,25 +76,81 @@
 
       portraitAsset(person) {
         if (!person || person.forceSvg || person.disablePortraitAsset) return null;
-        // Stage 2C will map individual Leo encounters. Until then, preserve all
-        // scripted costume cues using the existing SVG renderer instead of hiding them.
-        if (['fakeBeard','oversizedSuit','sunglasses','editedMoustache','staffHat','staffBadge'].some(k => person[k])) return null;
         const knownId = person.characterId || person.id;
+        // The portrait registry owns character-specific variant rules. This
+        // renderer knows only the generic profile schema, never campaign IDs.
+        const profile = PORTRAIT_REGISTRY.costumeProfiles[knownId];
+        if (profile?.rules && profile.variants && PORTRAIT_REGISTRY.recurring[knownId]) {
+          const rule = profile.rules.find(rule => rule.whenAny.some(flag => person[flag]));
+          const requested = person.portraitVariant;
+          const variant = rule?.variant || (
+            Object.prototype.hasOwnProperty.call(profile.variants, requested)
+              ? requested : profile.defaultVariant
+          );
+          return {
+            id: `${knownId}:${variant}`,
+            src: profile.variants[variant],
+            overlay: rule?.overlay && (!rule.overlayIf || person[rule.overlayIf]) ? rule.overlay : null
+          };
+        }
+        if (profile?.overlayWhen && person[profile.overlayWhen] &&
+            !(profile.unless || []).some(flag => person[flag]) && PORTRAIT_REGISTRY.recurring[knownId]) {
+          return { id: knownId, src: PORTRAIT_REGISTRY.recurring[knownId], overlay: profile.overlay };
+        }
+        if (['fakeBeard','oversizedSuit','sunglasses','editedMoustache','staffHat','staffBadge'].some(k => person[k])) return null;
         if (Object.prototype.hasOwnProperty.call(PORTRAIT_REGISTRY.recurring, knownId)) {
           return { id: knownId, src: PORTRAIT_REGISTRY.recurring[knownId] };
         }
         return PORTRAIT_REGISTRY.visitors.find(p => p.id === person.portraitId) || null;
       },
 
-      // A single renderer is used by the booth and by genuine identity cards.
+      // Artwork overlays are visual props only, not hidden gameplay evidence.
+      // They are positioned over the existing head-and-shoulders illustrations.
+      portraitOverlay(kind) {
+        if (!kind) return '';
+        const open = `<svg class="portrait-costume" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" data-costume="${kind}">`;
+        if (kind === 'fakeBeard') return open + `
+          <path d="M30 58 Q35 53 44 58 L51 61 Q61 53 71 61 Q72 82 59 87 Q49 94 41 84 Q30 80 30 58Z"
+                fill="#593014" stroke="#29160c" stroke-width="2.1" transform="rotate(-6 50 67)"/>
+          <path d="M38 60 Q45 56 50 62 Q58 55 64 61" fill="none" stroke="#2b180c" stroke-width="3"/>
+          <path d="M29 57 L25 49 M71 60 L75 51" stroke="#e8c49b" stroke-width="2.4" stroke-dasharray="3 2"/>
+          <path d="M35 76 L39 80 M62 80 L66 75" stroke="#815032" stroke-width="1.3" opacity=".8"/>
+        </svg>`;
+        if (kind === 'sunglasses') return open + `
+          <rect x="28" y="39" width="20" height="12" rx="4" fill="#111827" stroke="#b89a51" stroke-width="1.6" transform="rotate(-6 38 45)"/>
+          <rect x="53" y="39" width="20" height="12" rx="4" fill="#111827" stroke="#b89a51" stroke-width="1.6" transform="rotate(5 63 45)"/>
+          <path d="M48 43 Q50 41 53 43" stroke="#b89a51" stroke-width="2" fill="none"/>
+          <path d="M31 41 L23 40 M71 41 L77 40" stroke="#b89a51" stroke-width="1.6"/>
+          <path d="M31 41 L40 49 M56 41 L64 48" stroke="#fef3c7" stroke-width="1.1" opacity=".4"/>
+        </svg>`;
+        if (kind === 'staffUniform') return open + `
+          <path d="M4 100 L13 79 L29 76 L50 91 L69 76 L87 79 L96 100Z"
+                fill="#63131a" stroke="#e2b857" stroke-width="1.6"/>
+          <path d="M37 79 L50 91 L63 79" fill="none" stroke="#d7a343" stroke-width="2"/>
+          <rect x="61" y="84" width="24" height="10" rx="1.5" fill="#e2b857" stroke="#23100a" stroke-width="1.1"/>
+          <text x="73" y="90.7" font-size="5.4" text-anchor="middle" font-family="sans-serif" font-weight="bold" fill="#2b080e">STAFF</text>
+          <circle cx="51" cy="12" r="7" fill="#3d0d13" stroke="#e2b857" stroke-width="1.4"/>
+          <path d="M47 12 L55 12 M51 8 L51 16" stroke="#e2b857" stroke-width="1.3"/>
+        </svg>`;
+        if (kind === 'staffBadge') return open + `
+          <rect x="61" y="83" width="26" height="11" rx="1.5" fill="#e2b857" stroke="#3d0d13" stroke-width="1.2"/>
+          <text x="74" y="90.6" font-size="5.8" text-anchor="middle" font-family="sans-serif" font-weight="bold" fill="#2b080e">STAFF</text>
+        </svg>`;
+        return '';
+      },
+
+      // The booth and genuine IDs use the same asset, variant and costume.
+      // If the image fails, replace the WHOLE costume wrapper with original SVG.
       renderPortrait(person, mood = 'neutral') {
         const asset = this.portraitAsset(person);
         if (!asset) return this.renderPortraitSVG(person, mood);
         const fallbackData = encodeURIComponent(JSON.stringify(person));
-        return `<img class="portrait-image w-full h-full object-cover rounded-lg customer-enter"`
+        const img = `<img class="portrait-image w-full h-full object-cover"`
           + ` src="${asset.src}" data-portrait-id="${asset.id}" alt=""`
           + ` data-fallback-person="${fallbackData}" data-fallback-mood="${mood}"`
           + ` draggable="false" decoding="async" onerror="CHARACTERS.handlePortraitImageError(this)">`;
+        if (!asset.overlay) return img.replace('portrait-image w-full', 'portrait-image rounded-lg customer-enter w-full');
+        return `<div class="portrait-stage w-full h-full rounded-lg customer-enter">${img}${this.portraitOverlay(asset.overlay)}</div>`;
       },
 
       // Stage 2B: resolve document photos from the same image library without
@@ -108,7 +165,7 @@
         const different = p => p.src !== actual?.src;
         let borrowed = PORTRAIT_REGISTRY.visitors.find(p => p.id === requestedId && different(p));
         if (!borrowed) {
-          let choices = PORTRAIT_REGISTRY.visitors.filter(different);
+          let choices = PORTRAIT_REGISTRY.visitors.filter(p => different(p) && !PORTRAIT_REGISTRY.reservedVisitorIds.includes(p.id));
           // 'isElderly' describes the document photograph, not the actual
           // customer's legal age. Campaign packs may specify a portrait age group.
           const ageGroup = idCard.photoAgeGroup || supplied.ageGroup || (supplied.isElderly ? 'olderAdult' : null);
@@ -144,7 +201,8 @@
         try {
           const person = JSON.parse(decodeURIComponent(img.getAttribute('data-fallback-person')));
           const mood = img.getAttribute('data-fallback-mood') || 'neutral';
-          img.outerHTML = this.renderPortraitSVG(person, mood);
+          const wrapper = typeof img.closest === 'function' ? img.closest('.portrait-stage') : null;
+          (wrapper || img).outerHTML = this.renderPortraitSVG(person, mood);
         } catch (_) {
           img.style.display = 'none';
         }
