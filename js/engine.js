@@ -778,7 +778,8 @@
           if (c.introducedName && c.idCard.holderName && c.idCard.holderName !== c.introducedName && !c.identityTitle) return false;
           const age = this.calculateAge(c.idCard.dob, pol.currentDate);
           if (age === null || age < (f.minAge || 0)) return false;
-          if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== age && (c.statedAgeInOpening || c.ageRequested)) return false;
+          // A spoken age can be untruthful; eligibility is based on real age,
+          // not whether the customer gave an accurate answer to an optional question.
         }
         return true;
       },
@@ -843,9 +844,8 @@
                   } else if (c.idCard.expiryDate && this.compareDates(c.idCard.expiryDate, this.currentDateISO()) < 0) {
                     add('id_expired', `The ID card expired on ${this.formatDateDMY(c.idCard.expiryDate)}.`, true);
                   }
-                  if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== idAge && (c.statedAgeInOpening || c.ageRequested)) {
-                    add('age_mismatch', `Customer claims to be ${c.claimedAge}, but ID birth date (${this.formatDateDMY(c.idCard.dob)}) shows age ${idAge}.`, true);
-                  }
+                  // An incorrect spoken age is a clue for the player, not an
+                  // automatic refusal when the actual age meets the rating.
                   if (c.idCard.photoMismatch || c.idCard.photoAltered) {
                     add('id_forged', c.idCard.photoMismatchText || 'The ID card photograph does not match the customer.', true);
                   }
@@ -858,17 +858,12 @@
                     add('underage', `Customer is ${idAge} years old (DOB ${this.formatDateDMY(c.idCard.dob)}). ${f.title} requires minimum age ${f.minAge} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
                   }
                 }
-              } else if (c.idRequested && (c.idRefused || !c.idCard?.exists) && (f.minAge || 0) > 0) {
-                // A declined request is actionable evidence, but never an automatic prerequisite.
-                // Only an actually underage customer is incorrectly admitted.
-                if (Number.isFinite(c.trueAge) && c.trueAge < f.minAge) {
-                  add(c.idRefused ? 'id_refused' : 'missing_id', c.idRefused ? 'Customer declined to show ID.' : 'The customer cannot establish their age.', true);
-                }
               }
               if ((f.minAge || 0) > 0 && Number.isFinite(c.trueAge) && c.trueAge < f.minAge
-                  && !issues.some(i => i.code === 'underage' || i.code === 'id_refused' || i.code === 'missing_id')) {
-                // The real age controls scoring, whether or not the player asks for ID.
-                // Do not expose this detail on the ticket or before a decision.
+                  && !issues.some(i => i.code === 'underage')) {
+                // Refusing/missing ID is never itself grounds for refusal.
+                // The real age determines eligibility. Keep it hidden until
+                // the player finishes this decision.
                 add('underage', 'The customer is below the minimum age for this screening.', !c.allowAgeCorrection);
               }
             }
@@ -1290,8 +1285,11 @@
             c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'refused_id') {
-            c.trueAge = Math.max(9, (f.minAge || 16) - 2);
-            c.claimedAge = (f.minAge || 16) + 2;
+            // Declining ID should not reveal the answer: some visitors are
+            // old enough and simply prefer not to show a document.
+            const minimumAge = f.minAge || 16;
+            c.trueAge = this.rng() < 0.6 ? Math.max(9, minimumAge - 2) : minimumAge + 2;
+            c.claimedAge = minimumAge + 2;
             c.idCard.refusesToShow = true;
             c.idCard.refusalText = "I'd rather not show my ID.";
             c.allowAgeCorrection = false;
@@ -1539,7 +1537,7 @@
           screen:'screen',time:'time',date:'date',duplicate:'duplicate',late:'late',no_red:'red',
           group:'seats',overbooked_group:'seats',promo:'preference',wrong_film:'preference',
           incomplete:'preference',cancelled:'cancelled',combined:'screen',move:'screen',tv_wrong:'screen',
-          underage:'underage',missing_id:'missing_id',refused_id:'id_refused',fake_id:'id_forged',expired_id:'id_expired',false_identity:'id_name',
+          underage:'underage',missing_id:'underage',refused_id:(Number.isFinite(c.trueAge) && c.trueAge < (this.screening(c.ticket?.filmId)?.minAge || 0) ? 'underage' : null),fake_id:'id_forged',expired_id:'id_expired',false_identity:'id_name',
           disguise:'disguise',staff_impostor:'staff',manager_pressure:'vip'
         }[c.caseType];
         if(expected&&!ev.issues.some(i=>i.code===expected))return false;
@@ -1818,7 +1816,17 @@
           }
           const penalty=s.difficulty==='chaos'?8:5;s.money=Math.max(0,s.money-penalty);this.adjustReputation(-7);
           const warnRes = this.issueWarning(this.getWarningActionLabel(action, false));
-          const errDetail = action==='CORRECT'?'That replacement does not meet all the rules or the customer’s plan.':ev.reason;
+          const f=this.screening(c.ticket?.filmId);
+          const age = Number.isFinite(c.trueAge) ? c.trueAge : null;
+          let errDetail = action==='CORRECT'?'That replacement does not meet all the rules or the customer’s plan.':ev.reason;
+          if (f && (f.minAge || 0) > 0 && age !== null) {
+            const rating = `${f.minAge}+`;
+            if (action === 'ADMIT' && age < f.minAge) {
+              errDetail = `Underage customer admitted. The customer was actually ${age} years old; ${f.title} is rated ${rating}.`;
+            } else if (action === 'REFUSE' && age >= f.minAge && ev.validActions.includes('ADMIT')) {
+              errDetail = `Eligible customer refused. The customer was actually ${age} years old, old enough for ${f.title} (${rating}). Refusing or not having ID does not invalidate the ticket.`;
+            }
+          }
           message=`✕ Inspection mistake: ${errDetail} Use ${ev.validActions.join(' or ')}. ${warnRes.summaryText} (Cash −€${penalty}, Reputation −7)`;
           SoundFX.buzzer();
         }

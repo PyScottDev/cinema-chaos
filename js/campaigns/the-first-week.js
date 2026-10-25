@@ -377,9 +377,9 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               },
               incrementOnMistakeByAction: { ADMIT: { leo_admitted_underage: 1 } },
               dilemmaNoteByAction: {
-                REFUSE: 'You refused the customer entry to The Dark House [16] because no ID was provided.'
+                REFUSE: 'You refused the customer entry to The Dark House [16] because he was too young.'
               },
-              dilemmaNoteOnMistake: 'You admitted a customer to The Dark House [16] without ID.'
+              dilemmaNoteOnMistake: 'You admitted an underage customer to The Dark House [16].'
             }
           },
           {

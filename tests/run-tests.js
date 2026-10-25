@@ -239,7 +239,7 @@ test("3. Day 2 rules: film age classifications (G, 12, 16) enforced, Leo underag
   requestId(Game, leo);
   const evLeo = Game.evaluateCustomerCase(leo);
   assert.deepEqual(evLeo.validActions, ["REFUSE"]);
-  assert.ok(evLeo.issues.some(i => i.code === "missing_id"));
+  assert.ok(evLeo.issues.some(i => i.code === "underage"), "Actual age, not missing ID, determines refusal");
 
   // Ordinary adult horror customer with valid ID card must be admitted
   const adultHorror = Game.generateCustomerScenario("adult_horror_day2");
@@ -1582,7 +1582,9 @@ test("24. Player chooses ID checks; admission never blocked by unrequested ID", 
   for (const [type, evidence] of [['missing_id','id_missing'], ['refused_id','id_refused']]) {
     c = stageCase(h,type);
     assert.strictEqual(G.evaluateCustomerCase(c).needsQuestion, false);
-    assert.deepEqual(G.evaluateCustomerCase(c).validActions,['REFUSE']);
+    const film=G.screening(c.ticket.filmId);
+    const ageAction=c.trueAge < film.minAge ? 'REFUSE' : 'ADMIT';
+    assert.deepEqual(G.evaluateCustomerCase(c).validActions,[ageAction]);
     requestId(G);
     assert.ok(c.discoveredEvidence.includes(evidence));
     assert.ok(!c.idCard.presented);
@@ -1594,6 +1596,64 @@ test("24. Player chooses ID checks; admission never blocked by unrequested ID", 
   assert.ok(deskId(h),'ID may be displayed even when the ticket is missing');
   c = stageCase(h,'leo_day7',7);
   assert.deepEqual(G.evaluateCustomerCase(c).validActions,['ADMIT']);
+});
+
+test("59. Optional ID refusal is not a violation; wrong age decisions reveal actual age only afterward", () => {
+  const h=createHarness(5900), G=h.Game;
+  let c=stageCase(h,'refused_id',2);
+  const f=G.screening(c.ticket.filmId), minimum=f.minAge;
+  c.trueAge=minimum-2; // An underage customer declining identification.
+  requestId(G);
+  assert.strictEqual(c.idRefused,true);
+  assert.ok(!G.evaluateCustomerCase(c).reason.includes(String(c.trueAge)), 'Hidden age must not appear in pre-decision evaluation');
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions,['REFUSE']);
+  G.makeDecision('ADMIT');
+  let msg=h.elements.get('deskFeedbackBanner').textContent;
+  assert.ok(msg.includes(`actually ${c.trueAge} years old`),msg);
+  assert.ok(msg.includes(`rated ${minimum}+`),msg);
+  assert.ok(!msg.includes('Use REFUSE. Customer declined'),msg);
+
+  c=stageCase(h,'refused_id',2);
+  const eligibleFilm=G.screening(c.ticket.filmId);
+  c.trueAge=eligibleFilm.minAge+2;
+  requestId(G);
+  assert.strictEqual(c.idRefused,true);
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions,['ADMIT'], 'Eligible visitor may be admitted despite declining ID');
+  G.makeDecision('REFUSE');
+  msg=h.elements.get('deskFeedbackBanner').textContent;
+  assert.ok(msg.includes(`actually ${c.trueAge} years old`),msg);
+  assert.ok(msg.includes('does not invalidate the ticket'),msg);
+
+  c=stageCase(h,'refused_id',2);
+  c.trueAge=G.screening(c.ticket.filmId).minAge+2;
+  requestId(G);
+  const result=G.applyDecision(c,'ADMIT');
+  assert.strictEqual(result.accepted,true, 'Choosing to trust an eligible visitor is permitted');
+});
+
+test("60. A misleading age claim alone is not a reason to refuse an eligible customer", () => {
+  const h=createHarness(6000),G=h.Game;
+  const c=stageCase(h,'age_valid',2), actual=c.trueAge;
+  c.claimedAge=actual+3;
+  G.askCustomerQuestion('ask_age','How old are you?');
+  requestId(G);
+  const ev=G.evaluateCustomerCase(c);
+  assert.deepEqual(ev.validActions,['ADMIT']);
+  assert.ok(!ev.issues.some(i=>i.code==='age_mismatch'));
+  const f=G.screening(c.ticket.filmId);
+  assert.strictEqual(G.canEnter(f,c),true);
+});
+
+test("61. Declining ID does not reliably signal underage status", () => {
+  const h=createHarness(6100), G=h.Game;
+  G.state.day=2; G.startShift();
+  const ages = Array.from({length:40},()=>{
+    const c=G.generateCustomerScenario('refused_id');
+    const f=G.screening(c.ticket.filmId);
+    return c.trueAge >= f.minAge;
+  });
+  assert.ok(ages.includes(true), 'Some ID-refusing visitors should be old enough');
+  assert.ok(ages.includes(false), 'Some ID-refusing visitors should be underage');
 });
 
 test("25. Horizontal desk ID remains interactive without modal, with faithful photos", () => {
