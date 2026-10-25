@@ -53,7 +53,9 @@
         "age_valid",
         "underage",
         "missing_id",
+        "refused_id",
         "fake_id",
+        "expired_id",
         "false_identity",
         "disguise",
         "staff_impostor",
@@ -300,6 +302,16 @@
               }
               reqStr(enc.id, `${ePath}.id`);
               reqStr(enc.caseType, `${ePath}.caseType`);
+              for (const key of ['guaranteed', 'preventQueueWalkout', 'requiresIdentityCheck']) {
+                if (enc[key] !== undefined && typeof enc[key] !== 'boolean') throw new Error(`${ePath}.${key} must be boolean.`);
+              }
+              if (enc.idCard !== undefined) {
+                if (!enc.idCard || typeof enc.idCard !== 'object' || Array.isArray(enc.idCard)) throw new Error(`${ePath}.idCard must be a document object.`);
+                // Impossible printed dates are valid scenario content (forgeries), not schema errors.
+                for (const key of ['dob', 'issueDate', 'expiryDate']) {
+                  if (enc.idCard[key] !== undefined && typeof enc.idCard[key] !== 'string') throw new Error(`${ePath}.idCard.${key} must be printed text.`);
+                }
+              }
               dayScriptedCaseTypes.add(enc.caseType);
 
               if (enc.characterId !== undefined && enc.characterId !== null) {

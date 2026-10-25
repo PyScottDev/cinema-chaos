@@ -578,7 +578,7 @@
             Reset Saved Progress
           </button>
         </div>
-        <button onclick="Game.startShift()" class="bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-extrabold px-6 py-2.5 rounded-xl shadow-lg text-sm flex items-center gap-2 transition">
+        <button id="startShiftBtn" onclick="Game.startShift()" class="bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-extrabold px-6 py-2.5 rounded-xl shadow-lg text-sm flex items-center gap-2 transition">
           <span>🔔</span>
           <span>OPEN BOOTH & START SHIFT</span>
         </button>
@@ -807,6 +807,41 @@
   </div>
   <div id="noticeModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Manager notice">
     <div class="cinema-ticket max-w-md p-6"><h2 class="font-marquee text-red-900 mb-3">Manager’s notice</h2><p id="noticeText"></p><button onclick="UI.hideModal('noticeModal')" class="mt-4 bg-red-900 text-amber-100 px-5 py-2 rounded">OK · Continue</button></div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL: DEDICATED IDENTITY DOCUMENT INSPECTION POP-UP
+       ========================================================================= -->
+  <div id="idCardModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Identity Document Inspection">
+    <div class="max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-y-auto velvet-panel brass-frame rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3.5">
+      <div class="flex items-center justify-between border-b border-amber-600/60 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="text-xl" aria-hidden="true">🪪</span>
+          <div>
+            <h2 class="font-marquee text-base sm:text-lg text-amber-200 tracking-wide">IDENTITY DOCUMENT INSPECTION</h2>
+            <p class="text-[11px] text-amber-200/80 font-ticket">Shift paused while inspecting · Click fields to compare</p>
+          </div>
+        </div>
+        <button id="closeIdCardModalBtn" type="button" onclick="UI.closeIdCardModal()" class="bg-red-900 hover:bg-red-800 text-amber-100 text-xs font-extrabold px-3.5 py-1.5 rounded-lg border border-amber-500/60 shadow transition">
+          ✕ Close ID
+        </button>
+      </div>
+
+      <!-- Physical Identity Card Representation -->
+      <div id="idCardModalDocument" class="bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-slate-900 rounded-xl border-2 border-slate-500 shadow-xl p-4 font-ticket space-y-3">
+        <!-- Populated dynamically by UI.renderIdCardModal(c) -->
+      </div>
+
+      <!-- Quick Reference Context Bar for Cross-Comparison -->
+      <div id="idCardModalCompareRefs" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+        <!-- Populated dynamically by UI.renderIdCardModal(c) -->
+      </div>
+
+      <!-- Inspection Status Inside Pop-up -->
+      <div id="idModalInspectStatus" role="status" aria-live="polite" class="bg-slate-950/90 border border-amber-500/50 rounded-lg px-3 py-2 text-xs text-amber-100 font-medium">
+        🔍 Click any ID field above and compare it with another field or reference item.
+      </div>
+    </div>
   </div>
 
   <!-- =========================================================================

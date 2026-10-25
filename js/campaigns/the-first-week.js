@@ -191,7 +191,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         languageFocus: "Plans with 'be going to' + infinitive of purpose ('to laugh', 'to relax').",
         policies: {
           currentDate: '2026-10-12',
-          dateDisplay: '12 Oct 2026',
+          dateDisplay: '12/10/2026',
           allowCorrections: false,
           checkAgeRestrictions: false,
           lateToleranceMins: null,
@@ -220,8 +220,10 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             expectedAction: 'ADMIT',
             storyKey: 'morris_day1_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
-            statementTemplate: "Good evening! You must be the new ticket clerk. Today I'm going to see {title} to learn about penguins. Is everything in order on my ticket?",
+            statementTemplate: "One for {title}, please.",
             qaOverrides: {
               which_film: "I'm going to see Happy Penguins in Screen 2.",
               why_see: "I'm here to learn about animals. Penguins are marvellous creatures."
@@ -242,13 +244,17 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'valid',
             targetScreeningId: 'the_last_train',
             expectedAction: 'ADMIT',
+            revealsNameInOpening: true,
+            introducedName: 'Sofia',
             storyKey: 'sofia_day1_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
-            statementTemplate: "Hi! I'm Sofia—I study film at the college. I'm going to watch {title} tonight to study the suspense scenes.",
+            statementTemplate: "I'm Sofia. One for {title}, please.",
             qaOverrides: {
               which_film: "I'm going to see The Last Train at 20:30.",
-              why_see: "I'm here to see an exciting thriller for my cinema class."
+              why_see: "I'm here to see an exciting thriller for my film class."
             },
             storyEffects: {
               onAction: {
@@ -256,7 +262,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               },
               onMistake: { sofia_trust: 'wary', sofia_day1_outcome: 'mistake' },
               dilemmaNoteByAction: {
-                ADMIT: 'Sofia promised to share helpful cinema tips with you later in the week.'
+                ADMIT: 'You welcomed Sofia with her valid ticket.'
               }
             }
           },
@@ -266,13 +272,17 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'screen',
             targetScreeningId: 'laughing_bananas',
             expectedAction: 'REFUSE',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Blackwood',
             storyKey: 'blackwood_day1_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Ahem! I am Mr Blackwood, your manager. This is a spot check! Look closely at the screen number on this ticket for {title}. The printer is closed today—what is your decision?",
+            statementTemplate: "Mr Blackwood, your manager. Check this ticket for me.",
             qaOverrides: {
-              which_film: "This test ticket is for Laughing Bananas, which is in Screen 1—not Screen 2!",
-              are_you_sure: "I am testing whether you inspect the Screen field before stamping!"
+              which_film: "This test ticket is for Laughing Bananas in Screen 1.",
+              are_you_sure: "I am testing whether you check the Screen field when the printer is closed."
             },
             storyEffects: {
               onAction: {
@@ -292,18 +302,18 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: 'TUESDAY',
         title: 'Day 2 — Not Old Enough',
         briefingMemo: [
-          'Today is Tuesday, 13 October 2026. The town council is enforcing Film Age Classifications.',
+          'Today is Tuesday, 13/10/2026. The town council is enforcing Film Age Classifications.',
           'Check the age rating next to every film in the schedule: [G] Suitable for all ages, [12] Minimum age 12, [16] Minimum age 16.',
-          'Customers for [12] or [16] films must present a valid ID card. Check their date of birth against today’s date (13 Oct 2026). The printer is still closed—refuse underage customers or anyone without valid ID.'
+          'Customers for [12] or [16] films must present a valid ID card when asked. Check their date of birth against today’s date (13/10/2026). The printer is still closed—refuse underage customers or anyone without valid ID.'
         ].join('\n'),
         languageFocus: "Age verification ('How old are you?', 'Can I see your ID?') and date-of-birth checks.",
         policies: {
           currentDate: '2026-10-13',
-          dateDisplay: '13 Oct 2026',
+          dateDisplay: '13/10/2026',
           allowCorrections: false,
           checkAgeRestrictions: true,
-          ageRuleTitle: 'Age ratings & ID (13 Oct 2026)',
-          ageRuleText: 'Ratings: [G] all ages, [12] min age 12 (born on or before 13 Oct 2014), [16] min age 16 (born on or before 13 Oct 2010). Refuse [12] or [16] tickets if the customer is underage or has no valid ID.',
+          ageRuleTitle: 'Age ratings & ID (13/10/2026)',
+          ageRuleText: 'Ratings: [G] all ages, [12] min age 12 (born on or before 13/10/2014), [16] min age 16 (born on or before 13/10/2010). Request ID for [12] or [16] films and refuse underage customers or anyone without valid ID.',
           lateToleranceMins: null,
           checkDuplicates: false,
           allowPromoChanges: false,
@@ -313,12 +323,12 @@ const THE_FIRST_WEEK_CAMPAIGN = {
           conditionalScreenRules: []
         },
         scheduleChanges: [],
-        casePool: ['underage', 'missing_id', 'age_valid', 'wrong_film', 'screen', 'time', 'date', 'missing'],
+        casePool: ['underage', 'missing_id', 'refused_id', 'age_valid', 'wrong_film', 'screen', 'time', 'date', 'missing'],
         midShiftNotices: [
           {
             id: 'day2_age_notice',
             atMins: 1092,
-            text: 'Box Office Reminder: Not every horror fan is underage! Admit adults whose ID card and ticket are valid, but watch out for teenagers claiming to be 16 without ID.'
+            text: 'Box Office Reminder: Request ID when checking [12] and [16] screenings. Admit guests whose ID card and ticket are valid, and refuse anyone underage or without ID.'
           }
         ],
         scriptedEncounters: [
@@ -331,36 +341,42 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             claimedAge: 16,
             trueAge: 14,
             allowAgeCorrection: false,
+            requiresAgeCheck: true,
             idCard: {
               exists: false,
               presented: false,
               reason: 'Customer claims he left his ID card in his school locker.'
             },
+            questionEffects: {
+              ask_age: { evidence: ['age_claimed'] },
+              ask_id: { evidence: ['id_missing'], setStory: { leo_missing_id_spotted: 'yes' } }
+            },
             storyKey: 'leo_day2_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
-            statementTemplate: "Hey! I'm going to see {title} tonight to get scared! I'm sixteen years old—totally old enough for a [16] horror film. You don't need to see my ID, right?",
+            statementTemplate: "Hi! One for {title}, please.",
             qaOverrides: {
-              ask_age: "I'm sixteen! Definitely sixteen. Maybe even sixteen and a half.",
-              ask_id: "Er... my ID card? A dog ate my wallet on the way from school! Just trust me!",
-              which_film: "I'm going to watch The Dark House in Screen 3!",
+              ask_age: "I'm sixteen! Definitely sixteen.",
+              ask_id: "Er... my ID card? I left it in my school locker! Just trust me!",
+              which_film: "I'm going to watch The Dark House in Screen 3.",
               why_see: "I'm here to see the scariest horror film of the year!"
             },
             storyEffects: {
               onAction: {
                 REFUSE: { leo_day2_outcome: 'refused' }
               },
-              onMistake: { leo_day2_outcome: 'admitted' },
+              onMistake: { leo_day2_outcome: 'mistake' },
+              onMistakeByAction: { ADMIT: { leo_day2_outcome: 'admitted' } },
               incrementOnAction: {
                 REFUSE: { leo_caught_count: 1 }
               },
-              incrementOnMistake: {
-                leo_admitted_underage: 1
-              },
+              incrementOnMistakeByAction: { ADMIT: { leo_admitted_underage: 1 } },
               dilemmaNoteByAction: {
-                REFUSE: 'You refused 14-year-old Leo entry to The Dark House [16] when he had no ID.'
+                REFUSE: 'You refused the customer entry to The Dark House [16] because no ID was provided.'
               },
-              dilemmaNoteOnMistake: 'You let underage Leo into The Dark House [16] without an ID card!'
+              dilemmaNoteOnMistake: 'You admitted a customer to The Dark House [16] without ID.'
             }
           },
           {
@@ -372,9 +388,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             trueAge: 32,
             idCard: {
               exists: true,
-              presented: true,
+              presented: false,
               holderName: 'Elena',
-              dob: '1994-10-13'
+              dob: '13/10/1994',
+              issueDate: '10/04/2023',
+              expiryDate: '10/04/2028',
+              docNumber: 'CID-941013',
+              issuingAuthority: 'City Civil Registry'
             },
             personOverrides: {
               name: 'Elena',
@@ -383,11 +403,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               hat: 'none'
             },
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
-            statementTemplate: "Good evening. I'm going to see {title} at {time}. Today is actually my thirty-second birthday—here are my ticket and ID card.",
+            statementTemplate: "Evening. One for {title}, please.",
             qaOverrides: {
-              ask_age: "I'm thirty-two today—born on 13 October 1994.",
-              ask_id: "Here is my ID card. My date of birth is 1994-10-13."
+              ask_age: "I'm thirty-two today—born on 13/10/1994.",
+              ask_id: "Here is my ID card. My date of birth is 13/10/1994."
             }
           },
           {
@@ -399,9 +421,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             trueAge: 12,
             idCard: {
               exists: true,
-              presented: true,
+              presented: false,
               holderName: 'Sam',
-              dob: '2014-10-13'
+              dob: '13/10/2014',
+              issueDate: '15/09/2025',
+              expiryDate: '15/09/2028',
+              docNumber: 'STU-141013',
+              issuingAuthority: 'Grandview Schools'
             },
             personOverrides: {
               name: 'Sam',
@@ -409,11 +435,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               hat: 'cap'
             },
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Hi! I'm going to see {title}. It's rated [12], and today—13 October—is my twelfth birthday! Look at my ID card!",
+            statementTemplate: "One for {title}, please. It's my birthday!",
             qaOverrides: {
-              ask_age: "I turn twelve today, 13 October 2026!",
-              ask_id: "Here is my ID card—born 2014-10-13, exactly twelve years ago today!"
+              ask_age: "I turn twelve today, 13/10/2026!",
+              ask_id: "Here is my ID card—born 13/10/2014, twelve years ago today."
             }
           }
         ]
@@ -431,11 +459,11 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         languageFocus: "Ticket corrections, room relocations, and spotting suspicious disguises.",
         policies: {
           currentDate: '2026-10-14',
-          dateDisplay: '14 Oct 2026',
+          dateDisplay: '14/10/2026',
           allowCorrections: true,
           checkAgeRestrictions: true,
-          ageRuleTitle: 'Age ratings & ID (14 Oct 2026)',
-          ageRuleText: 'Check [G], [12] and [16] ratings. Customers for [12] or [16] films need valid ID and must not wear disguises.',
+          ageRuleTitle: 'Age ratings & ID (14/10/2026)',
+          ageRuleText: 'Check [G], [12] and [16] ratings. Customers for [12] or [16] films need valid ID with real calendar dates and must not wear disguises.',
           lateToleranceMins: null,
           checkDuplicates: false,
           allowPromoChanges: true,
@@ -467,29 +495,33 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'move',
             targetScreeningId: 'planet_x',
             expectedAction: 'CORRECT',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Morris',
             storyKey: 'morris_day3_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
             statementByStory: [
               {
-                condition: { key: 'morris_relationship', value: 'warm' },
-                text: "Hello again, my friend! You were so helpful on Monday. I booked {title} at {time}, but my ticket says Screen 3 and the lobby sign says the projector broke! Can you print me a new ticket for Screen 1?"
+                condition: { key: 'morris_day1_outcome', value: 'helped' },
+                text: "Mr Morris again. Is this still the right screen?"
               },
               {
-                condition: { key: 'morris_relationship', value: 'upset' },
-                text: "Oh, it's you again. After you turned me away on Monday, now the Screen 3 projector is broken! My ticket is for {title} at {time}. Are you going to fix it with your printer today?"
+                condition: { key: 'morris_day1_outcome', value: 'mistake' },
+                text: "Mr Morris. Could you check this one carefully, please?"
               },
               {
-                text: "Excuse me, dear. My ticket for {title} at {time} says Screen 3, but I heard the projector moved to Screen 1. Can you correct my ticket?"
+                text: "I'm Mr Morris. Is this the right screen?"
               }
             ],
             qaOverrides: {
-              which_film: "I'm going to see Planet X at 19:00. It moved to Screen 1.",
-              alternative: "I want to watch Planet X in Screen 1, please."
+              which_film: "I'm going to see Planet X at 19:00.",
+              alternative: "Screen 1 for Planet X is fine, thank you."
             },
             storyEffects: {
               onAction: {
-                CORRECT: { morris_relationship: 'loyal', morris_day3_outcome: 'helped' }
+                CORRECT: { morris_relationship: 'loyal', morris_day3_outcome: 'helped', known_char_mr_morris: 'yes' }
               },
               onMistake: { morris_relationship: 'cold', morris_day3_outcome: 'mistake' },
               dilemmaNoteByAction: {
@@ -507,20 +539,24 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'screen',
             targetScreeningId: 'wild_world',
             expectedAction: 'CORRECT',
+            revealsNameInOpening: true,
+            introducedName: 'Maya',
             storyKey: 'maya_day3_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
             ticketOverrides: {
               screen: 3
             },
-            statementTemplate: "Psst! It's me, Maya from the morning counter! I accidentally printed this guest's {title} ticket for Screen 3 instead of Screen 2. Please use CORRECT to reprint it for Screen 2 so Mr Blackwood doesn't dock my pay!",
+            statementTemplate: "I'm Maya from the morning counter. Could you check this ticket?",
             qaOverrides: {
               which_film: "The ticket is for Wild World at 19:30 in Screen 2.",
-              are_you_sure: "Yes! Please use the Correction Printer to move it to Screen 2!"
+              are_you_sure: "Yes, it just needs to be moved to Screen 2."
             },
             storyEffects: {
               onAction: {
-                CORRECT: { maya_relationship: 'helped', maya_day3_outcome: 'helped' }
+                CORRECT: { maya_relationship: 'helped', maya_day3_outcome: 'helped', known_char_maya: 'yes' }
               },
               onMistake: { maya_relationship: 'blamed', maya_day3_outcome: 'mistake' },
               dilemmaNoteByAction: {
@@ -541,6 +577,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             claimedAge: 24,
             trueAge: 14,
             allowAgeCorrection: false,
+            concealIdentity: true,
+            requiresAgeCheck: true,
             personTagOverride: '“Adult Gentleman”',
             personOverrides: {
               fakeBeard: true,
@@ -548,40 +586,53 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               disguiseIssueText: 'Customer is wearing a lopsided fake beard glued to his chin.'
             },
             idCard: {
-              exists: false,
+              exists: true,
               presented: false,
-              reason: 'Claims he left his wallet in his “other adult briefcase”.'
+              holderName: 'Leo',
+              dob: '30/02/2012',
+              issueDate: '01/04/2025',
+              expiryDate: '01/04/2030',
+              docNumber: 'TH-3002',
+              issuingAuthority: 'Town Hall'
+            },
+            questionEffects: {
+              ask_age: { evidence: ['age_claimed'] },
+              ask_id: { evidence: ['id_presented'] }
             },
             storyKey: 'leo_day3_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
             statementByStory: [
               {
-                condition: { key: 'leo_day2_outcome', value: 'admitted' },
-                text: "Good evening, fellow adult! That kid Leo told me {title} was awesome yesterday, so I—a completely different twenty-four-year-old man with a magnificent beard—am going to watch it tonight!"
+                condition: { key: 'leo_day2_outcome', value: 'refused' },
+                text: "Me again? No, no. One adult ticket, please."
               },
               {
-                text: "Good evening, fellow taxpayer! I am definitely not Leo from yesterday. I am a twenty-four-year-old man with a real beard, and I'm going to see {title}!"
+                text: "Good evening, fellow adult. One for {title}."
               }
             ],
             qaOverrides: {
-              ask_age: "I am twenty-four years old! Behold my luxurious adult beard!",
-              ask_id: "My ID? I left it in my... adult tax office! At the business factory!",
-              which_film: "I am going to see The Dark House [16] in Screen 3!"
+              ask_age: "I am twenty-four years old!",
+              ask_id: "Here you go.",
+              which_film: "I am going to see The Dark House [16] in Screen 3."
             },
             storyEffects: {
+              onEvidence: {
+                age_id_contradiction: { leo_contradiction_spotted: 'yes' }
+              },
               onAction: {
                 REFUSE: { leo_day3_outcome: 'refused', leo_beard_detected: 'yes' }
               },
-              onMistake: { leo_day3_outcome: 'admitted', leo_beard_detected: 'no' },
+              onMistake: { leo_day3_outcome: 'mistake', leo_beard_detected: 'no' },
+              onMistakeByAction: { ADMIT: { leo_day3_outcome: 'admitted' } },
               incrementOnAction: {
                 REFUSE: { leo_caught_count: 1 }
               },
-              incrementOnMistake: {
-                leo_admitted_underage: 1
-              },
+              incrementOnMistakeByAction: { ADMIT: { leo_admitted_underage: 1 } },
               dilemmaNoteByAction: {
-                REFUSE: 'You spotted Leo’s glued-on fake beard and refused him entry to The Dark House [16].'
+                REFUSE: 'You refused the visitor wearing a visibly attached fake beard.'
               }
             }
           }
@@ -595,16 +646,16 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         briefingMemo: [
           'Someone is cheating our box office! Scalpers outside are reselling duplicate ticket serials.',
           'Check every ticket number against the Used Serials log in the binder. Also enforce the 10-minute late arrival limit, and remember that PROMO (NO CHANGE) tickets cannot be reprinted if they have an error.',
-          'Watch ID cards carefully: the name and photo on the ID must match the customer and ticket.'
+          'Watch ID cards carefully: the name, dates, and photo on the ID must match the customer and ticket.'
         ].join('\n'),
         languageFocus: "Checking duplicate serial numbers, 10-minute late arrivals, and matching ID names.",
         policies: {
           currentDate: '2026-10-15',
-          dateDisplay: '15 Oct 2026',
+          dateDisplay: '15/10/2026',
           allowCorrections: true,
           checkAgeRestrictions: true,
-          ageRuleTitle: 'Age & identity check (15 Oct 2026)',
-          ageRuleText: 'Check [G], [12] and [16] ratings. The ID card name and photo must match the customer and ticket holder.',
+          ageRuleTitle: 'Age & identity check (15/10/2026)',
+          ageRuleText: 'Check [G], [12] and [16] ratings. The ID card name, dates and photo must match the customer and ticket holder.',
           lateToleranceMins: 10,
           lateRuleTitle: 'Ten-minute late rule',
           lateRuleText: 'No entry more than 10 minutes after the film starts. Check the arrival time on the booking record.',
@@ -632,29 +683,48 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'screen',
             targetScreeningId: 'love_in_paris',
             expectedAction: 'CORRECT',
+            revealsNameInOpening: true,
+            introducedName: 'Sofia',
+            extraQuestions: [
+              ['what_did_you_see', 'What did you see outside?']
+            ],
+            questionEffects: {
+              ask_receipts: { revealStatement: "I'll check the student society receipts before Saturday.", evidence: ['receipts_requested'], setStory: { sofia_receipts_requested: 'yes' } },
+              what_did_you_see: {
+                setStory: { sofia_whistleblower_clue: 'yes' },
+                evidence: ['sofia_clue'],
+                unlockQuestions: [['ask_receipts', 'Can you check the receipts?']]
+              }
+            },
             storyKey: 'sofia_day4_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
             statementByStory: [
               {
-                condition: { key: 'sofia_trust', value: 'trusted' },
-                text: "Hi again! My ticket for {title} has the wrong screen printed—could you correct it? Also, heads up: I saw Leo outside in a huge suit calling himself 'Mr Leonardo Smith', and scalpers peddling serial GC-4-109!"
+                condition: { key: 'sofia_day1_outcome', value: 'helped' },
+                text: "Sofia again. I saw something strange outside."
               },
               {
-                text: "Hello. I'm going to watch {title} at {time}, but the screen number on my ticket is wrong. Can you print a corrected ticket?"
+                text: "I'm Sofia. One for {title}. I saw something strange outside."
               }
             ],
             qaOverrides: {
               which_film: "I'm going to see Love in Paris at 20:00 in Screen 2.",
-              why_see: "I'm here to see a romantic film—and warn you about the ticket cheats outside!"
+              why_see: "I'm here to see a romantic film.",
+              what_did_you_see: "Scalpers are reselling serial GC-4-109, and I saw Mr Blackwood taking cash for unlisted VIP passes!"
             },
             storyEffects: {
               onAction: {
-                CORRECT: { sofia_trust: 'ally', sofia_day4_outcome: 'helped', sofia_whistleblower_clue: 'yes' }
+                CORRECT: { sofia_trust: 'ally', sofia_day4_outcome: 'helped' }
+              },
+              onEvidence: {
+                sofia_clue: { sofia_whistleblower_clue: 'yes' }
               },
               onMistake: { sofia_trust: 'distant', sofia_day4_outcome: 'mistake' },
               dilemmaNoteByAction: {
-                CORRECT: 'Sofia tipped you off about duplicate tickets and promised to investigate suspicious VIP passes for Saturday.'
+                CORRECT: 'You corrected Sofia’s ticket for Love in Paris.'
               }
             }
           },
@@ -667,6 +737,9 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             claimedAge: 40,
             trueAge: 14,
             allowAgeCorrection: false,
+            concealIdentity: true,
+            requiresAgeCheck: true,
+            introducedName: 'Mr Leonardo Smith',
             personTagOverride: '“Mr Leonardo Smith”',
             personOverrides: {
               oversizedSuit: true,
@@ -677,40 +750,53 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             },
             idCard: {
               exists: true,
-              presented: true,
+              presented: false,
               holderName: 'Leonardo Senior',
-              dob: '1985-11-20',
+              dob: '20/11/1985',
+              issueDate: '12/03/2022',
+              expiryDate: '12/03/2027',
+              docNumber: 'CID-851120',
+              issuingAuthority: 'City Civil Registry',
               photoMismatch: true,
-              photoMismatchText: 'The ID card belongs to Leo’s father (“Leonardo Senior”) and does not match the teenager in the oversized suit.'
+              portraitPerson: { skinColor: '#f1c27d', hairColor: '#cbd5e1', coatColor: '#334155', shirtColor: '#ffffff', isElderly: true, glasses: true },
+              photoMismatchText: 'The ID card belongs to Leonardo Senior (born 20/11/1985) and does not match the teenager or the ticket holder name Leo.'
+            },
+            questionEffects: {
+              ask_age: { evidence: ['age_claimed'] },
+              ask_id: { evidence: ['id_presented'] }
             },
             storyKey: 'leo_day4_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
             statementByStory: [
               {
                 condition: { key: 'leo_beard_detected', value: 'yes' },
-                text: "Good evening. Forget that bearded imposter from Wednesday! My name is Mr Leonardo Smith, a forty-year-old businessman in a normal suit. I'm going to see {title}!"
+                text: "Forget that beard. I'm Mr Leonardo Smith. One ticket, please."
               },
               {
-                text: "Greetings! I am Mr Leonardo Smith, an important forty-year-old executive. I'm going to watch {title} in Screen 3. Here is my totally real adult ID!"
+                text: "Mr Leonardo Smith. One for {title}, please."
               }
             ],
             qaOverrides: {
-              ask_age: "I am forty years old. Born in 1985, just like my dad's—I mean MY—ID card says!",
-              ask_id: "Look at the card: 'Leonardo Senior, DOB 1985-11-20'. Don't look at the 'Leo' name on the ticket!",
-              which_film: "I'm going to see The Dark House [16]!"
+              ask_age: "I am forty years old. Born in 1985!",
+              ask_id: "Here is my ID card: Leonardo Senior, DOB 20/11/1985.",
+              which_film: "I'm going to see The Dark House [16]."
             },
             storyEffects: {
+              onEvidence: {
+                age_id_contradiction: { leo_contradiction_spotted: 'yes' }
+              },
               onAction: {
                 REFUSE: { leo_day4_outcome: 'refused' }
               },
-              onMistake: { leo_day4_outcome: 'admitted' },
+              onMistake: { leo_day4_outcome: 'mistake' },
+              onMistakeByAction: { ADMIT: { leo_day4_outcome: 'admitted' } },
               incrementOnAction: {
                 REFUSE: { leo_caught_count: 1 }
               },
-              incrementOnMistake: {
-                leo_admitted_underage: 1
-              },
+              incrementOnMistakeByAction: { ADMIT: { leo_admitted_underage: 1 } },
               dilemmaNoteByAction: {
                 REFUSE: 'You caught Leo wearing an oversized suit and using his father’s ID card (“Leonardo Senior”).'
               }
@@ -726,17 +812,26 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             trueAge: 44,
             idCard: {
               exists: true,
-              presented: true,
-              holderName: 'Mystery Customer',
-              dob: '1982-05-14'
+              presented: false,
+              holderName: 'V. Vance',
+              dob: '14/05/1982',
+              issueDate: '01/02/2023',
+              expiryDate: '01/02/2028',
+              docNumber: 'CID-820514',
+              issuingAuthority: 'City Civil Registry'
+            },
+            personOverrides: {
+              name: 'V. Vance'
             },
             storyKey: 'inspector_day4_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Good evening. I'm going to see {title} at {time}. Please inspect my ticket and identification just as you would for any other guest.",
+            statementTemplate: "Evening. One for {title}, please.",
             qaOverrides: {
               ask_age: "I am forty-four years old.",
-              ask_id: "Certainly. My date of birth is 1982-05-14."
+              ask_id: "Certainly. Here is my ID card—born 14/05/1982."
             },
             storyEffects: {
               onAction: {
@@ -752,19 +847,27 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'valid',
             targetScreeningId: 'happy_penguins',
             expectedAction: 'ADMIT',
+            revealsNameInOpening: true,
+            introducedName: 'Maya',
             storyKey: 'maya_day4_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: {
               minCaseIndex: 3,
               requireStoryValue: { key: 'maya_relationship', value: 'helped' }
             },
-            statementTemplate: "Thanks again for saving me on Wednesday! I checked this guest's {title} ticket twice so it's 100% valid. By the way, that woman in the fedora is an undercover Corporate Inspector!",
+            statementTemplate: "Maya again. Thanks for your help on Wednesday!",
+            extraQuestions: [['ask_observer', 'Who is that quiet visitor?']],
+            questionEffects: {
+              ask_observer: { revealStatement: "I think the visitor in the fedora is from Head Office.", evidence: ['observer_tip'], setStory: { maya_inspector_tip: 'yes' } }
+            },
             qaOverrides: {
-              which_film: "It's for Happy Penguins at 18:15 in Screen 2—all checked and ready!"
+              which_film: "It's for Happy Penguins at 18:15 in Screen 2."
             },
             storyEffects: {
               onAction: {
-                ADMIT: { maya_day4_outcome: 'helped', maya_inspector_tip: 'yes' }
+                ADMIT: { maya_day4_outcome: 'helped' }
               }
             }
           },
@@ -776,10 +879,22 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             targetScreeningId: 'happy_penguins',
             expectedAction: 'CORRECT',
             requiredQuestion: true,
+            revealsNameInOpening: true,
+            introducedName: 'Maya',
             storyKey: 'maya_day4_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 3 },
-            statementTemplate: "Um, hello... Mr Blackwood yelled at me yesterday, and my hands are shaking so badly I printed the wrong film on this ticket. Can you ask which film is needed and correct it?",
+            statementByStory: [
+              {
+                condition: { key: 'maya_relationship', value: 'blamed' },
+                text: "I'm Maya. It's been a rough day. Could you check this?"
+              },
+              {
+                text: "I'm Maya from the morning counter. Could you check this?"
+              }
+            ],
             qaOverrides: {
               which_film: "I need Happy Penguins in Screen 2, please.",
               alternative: "Happy Penguins is the one we need."
@@ -801,11 +916,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             discretionaryIssueCode: 'late',
             storyKey: 'morris_day4_late',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: {
               minCaseIndex: 4,
               requireLateScreeningId: 'happy_penguins'
             },
-            statementTemplate: "Oh dear, I'm {lateMins} minutes late for {title}! I stopped to help a lost family find the bus stop. I know the rule is 10 minutes, and I only want to see {title}... could you possibly let me in?",
+            statementTemplate: "Sorry I'm late. I stopped to help someone. Can I still go in?",
             qaOverrides: {
               which_film: "I only want to see Happy Penguins. I've been looking forward to it.",
               alternative: "No thank you, dear—only Happy Penguins tonight."
@@ -831,16 +948,16 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         briefingMemo: [
           'Friday night brings VIP guests and schedule changes—and pressure from Mr Blackwood.',
           'Love in Paris (20:00) is CANCELLED; ask affected customers about another film and use CORRECT. An extra show of Happy Penguins runs at 19:15 in Screen 2.',
-          'Official VIP passes must appear on the Authorised VIP List in the binder. Watch out for forged IDs where the printed age contradicts the birth date!'
+          'Official VIP passes must appear on the Authorised VIP List in the binder. Check ID dates and compare them with what the customer tells you.'
         ].join('\n'),
         languageFocus: "Handling cancelled screenings, verifying VIP pass numbers, and spotting forged IDs.",
         policies: {
           currentDate: '2026-10-16',
-          dateDisplay: '16 Oct 2026',
+          dateDisplay: '16/10/2026',
           allowCorrections: true,
           checkAgeRestrictions: true,
-          ageRuleTitle: 'Age & forged ID check (16 Oct 2026)',
-          ageRuleText: 'Verify that the birth date on every ID card matches the customer’s claimed age and printed age, and that the photo has not been altered.',
+          ageRuleTitle: 'Age & forged ID check (16/10/2026)',
+          ageRuleText: 'Verify that the birth date, issue date and expiry date on every ID card are valid and consistent with the customer’s age.',
           lateToleranceMins: 10,
           checkDuplicates: true,
           initialUsedSerials: ['GC-5-204', 'GC-5-211', 'GC-5-219'],
@@ -886,20 +1003,33 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             managerComplyRepDelta: -3,
             managerRefuseRepDelta: 4,
             expectedAction: 'REFUSE',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Blackwood',
+            extraQuestions: [
+              ['challenge_vip', "Why isn't this VIP pass on the authorised list?"]
+            ],
+            questionEffects: {
+              challenge_vip: {
+                setStory: { blackwood_questioned: 'yes', whistleblower_identified: 'yes' },
+                evidence: ['vip_challenged']
+              }
+            },
             storyKey: 'blackwood_day5_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
-            statementTemplate: "Listen closely. This VIP pass—VIP-000-CASH for {title}—belongs to a personal friend who paid me cash in my office. It isn't on the Head Office VIP list, but I am your manager and I order you to stamp ADMIT!",
+            statementTemplate: "Blackwood here. This guest is with me. Admit them.",
             qaOverrides: {
-              which_film: "It's for The Dark House at 21:00. Stop asking questions and stamp ADMIT!",
-              are_you_sure: "Of course I'm sure! Obey your manager, not the Head Office binder!"
+              which_film: "It's for The Dark House at 21:00.",
+              are_you_sure: "Obey your manager, not the Head Office binder!",
+              challenge_vip: "Because they paid me cash in my office! Never mind the Head Office list—stamp ADMIT!"
             },
             storyEffects: {
               onAction: {
                 ADMIT: { blackwood_day5_outcome: 'complied' },
                 REFUSE: { blackwood_day5_outcome: 'refused' }
               },
-              onQuestioned: { blackwood_questioned: 'yes' },
               dilemmaNoteByAction: {
                 ADMIT: 'You obeyed Mr Blackwood and admitted unlisted pass VIP-000-CASH.',
                 REFUSE: 'You refused Mr Blackwood’s unlisted VIP-000-CASH pass and upheld the official VIP list.'
@@ -919,41 +1049,54 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             claimedAge: 17,
             trueAge: 14,
             allowAgeCorrection: false,
+            concealIdentity: true,
+            requiresAgeCheck: true,
             personTagOverride: '“Seventeen-Year-Old Leo”',
             personOverrides: {
               editedMoustache: true
             },
             idCard: {
               exists: true,
-              presented: true,
+              presented: false,
               holderName: 'Leo',
-              dob: '2012-09-10',
-              statedAge: 17,
+              dob: '10/09/2012',
+              issueDate: '20/10/2026',
+              expiryDate: '10/10/2025',
+              docNumber: 'SCH-2012-99',
+              issuingAuthority: 'School Print Club',
               photoAltered: true,
-              photoMismatchText: 'Someone drew a black marker moustache onto the ID card photograph, and DOB 2012-09-10 is age 14, not 17.'
+              photoMismatchText: 'Tape covers the photograph border and the printed stamp is interrupted.'
+            },
+            questionEffects: {
+              ask_age: { evidence: ['age_claimed'] },
+              ask_id: { evidence: ['id_presented'] }
             },
             storyKey: 'leo_day5_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
-            statementTemplate: "Aha! Today I have my own official ID card for {title}! See? It says 'Printed Age: 17' right there on the plastic, and the moustache in the photo matches my face!",
+            statementTemplate: "Evening. One for {title}, please.",
             qaOverrides: {
-              ask_age: "I'm seventeen! Look at the 'Printed Age: 17' box—don't do the maths on 2012-09-10!",
-              ask_id: "Here is my card! Totally laminated! Definitely not drawn on with a permanent marker!",
-              which_film: "I'm going to see The Dark House [16]!"
+              ask_age: "I'm seventeen!",
+              ask_id: "Here is my ID card.",
+              which_film: "I'm going to see The Dark House [16]."
             },
             storyEffects: {
+              onEvidence: {
+                age_id_contradiction: { leo_contradiction_spotted: 'yes' }
+              },
               onAction: {
                 REFUSE: { leo_day5_outcome: 'refused' }
               },
-              onMistake: { leo_day5_outcome: 'admitted' },
+              onMistake: { leo_day5_outcome: 'mistake' },
+              onMistakeByAction: { ADMIT: { leo_day5_outcome: 'admitted' } },
               incrementOnAction: {
                 REFUSE: { leo_caught_count: 1 }
               },
-              incrementOnMistake: {
-                leo_admitted_underage: 1
-              },
+              incrementOnMistakeByAction: { ADMIT: { leo_admitted_underage: 1 } },
               dilemmaNoteByAction: {
-                REFUSE: 'You caught Leo’s forged ID card (DOB 2012-09-10 = age 14, with a marker moustache on the photo).'
+                REFUSE: 'You refused the altered ID with inconsistent validity dates.'
               }
             }
           },
@@ -968,16 +1111,25 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             trueAge: 44,
             idCard: {
               exists: true,
-              presented: true,
-              holderName: 'Mystery Customer',
-              dob: '1982-05-14'
+              presented: false,
+              holderName: 'V. Vance',
+              dob: '14/05/1982',
+              issueDate: '01/02/2023',
+              expiryDate: '01/02/2028',
+              docNumber: 'CID-820514',
+              issuingAuthority: 'City Civil Registry'
+            },
+            personOverrides: {
+              name: 'V. Vance'
             },
             storyKey: 'inspector_day5_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Good evening. I am attending {title} at {time} with VIP pass VIP-900-INSPECTOR. Please verify my pass against your authorised VIP list.",
+            statementTemplate: "Evening. Here's my pass for {title}.",
             qaOverrides: {
-              ask_id: "Here is my ID card (DOB 1982-05-14). My VIP pass is VIP-900-INSPECTOR."
+              ask_id: "Here is my ID card (DOB 14/05/1982). My VIP pass is VIP-900-INSPECTOR."
             },
             storyEffects: {
               onAction: {
@@ -1001,11 +1153,11 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         languageFocus: "Group bookings ('There are three of us'), seat capacity, and combined rule verification.",
         policies: {
           currentDate: '2026-10-17',
-          dateDisplay: '17 Oct 2026',
+          dateDisplay: '17/10/2026',
           allowCorrections: true,
           checkAgeRestrictions: true,
-          ageRuleTitle: 'Age, ID & Staff Pass check (17 Oct 2026)',
-          ageRuleText: 'All [12] and [16] age rules, ID photo/name checks, and staff pass rules apply on Premiere Night.',
+          ageRuleTitle: 'Age, ID & Staff Pass check (17/10/2026)',
+          ageRuleText: 'All [12] and [16] age rules, ID checks, and authorised staff pass rules apply on Premiere Night.',
           lateToleranceMins: 10,
           checkDuplicates: true,
           initialUsedSerials: ['GC-6-301', 'GC-6-308', 'GC-6-315'],
@@ -1046,15 +1198,19 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             groupSize: 3,
             ticketSeats: 3,
             expectedAction: 'ADMIT',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Morris',
             storyKey: 'morris_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: {
               minCaseIndex: 0,
               requireStoryValue: { key: 'morris_relationship', value: 'loyal' }
             },
-            statementTemplate: "Happy Saturday, my friend! Because you helped me so kindly earlier this week, I brought my two grandchildren to see {title}. There are three of us, and I booked all 3 seats properly!",
+            statementTemplate: "Mr Morris again. Three for {title}, please.",
             qaOverrides: {
-              how_many: "There are three of us—me and my two grandchildren, all booked for 3 seats!",
+              how_many: "There are three of us—me and my two grandchildren.",
               which_film: "We're going to see Wild World at 19:30 in Screen 2."
             },
             storyEffects: {
@@ -1078,8 +1234,10 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             expectedAction: 'CORRECT',
             storyKey: 'morris_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
-            statementTemplate: "Good evening. I brought my grandchildren to see an animal documentary—there are three of us—but I got confused at the machine and printed the wrong screen. Can you check our plan and reprint our 3-seat ticket?",
+            statementTemplate: "Three tickets, please. I'm here with my grandchildren.",
             qaOverrides: {
               which_film: "We're going to see Wild World at 19:30 in Screen 2.",
               how_many: "There are three of us."
@@ -1099,13 +1257,21 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             groupSize: 3,
             ticketSeats: 1,
             expectedAction: 'CORRECT',
+            revealsNameInOpening: true,
+            introducedName: 'Maya',
             storyKey: 'maya_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: {
               minCaseIndex: 1,
               requireStoryValue: { key: 'maya_relationship', value: 'helped' }
             },
-            statementTemplate: "Hey! Because you had my back earlier this week, I unlocked the extra balcony row in Screen 1 (+4 seats for {title})! This group of 3 only has 1 seat on their ticket—use CORRECT to upgrade them to 3 seats!",
+            statementTemplate: "Maya again. Three of us for {title}, please.",
+            extraQuestions: [['ask_balcony', 'Is the balcony open?']],
+            questionEffects: {
+              ask_balcony: { revealStatement: "Yes. I opened the extra row for tonight. Thanks for helping me on Wednesday.", evidence: ['balcony_open'] }
+            },
             qaOverrides: {
               how_many: "There are three people in this premiere group.",
               which_film: "We're going to see Planet X at 19:00!"
@@ -1128,10 +1294,14 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             groupSize: 3,
             ticketSeats: 1,
             expectedAction: 'REFUSE',
+            revealsNameInOpening: true,
+            introducedName: 'Maya',
             storyKey: 'maya_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
-            statementTemplate: "This group of 3 wants to see {title}, and their ticket only has 1 seat. I didn't have time to open the balcony row after getting in trouble on Wednesday, so Screen 1 only has 2 seats total—you'll have to refuse them.",
+            statementTemplate: "I'm Maya. Three for {title}, please.",
             qaOverrides: {
               how_many: "There are three of us, and we only want Planet X.",
               alternative: "Only Planet X tonight—we came for the sci-fi premiere."
@@ -1154,12 +1324,14 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             claimedAge: 19,
             trueAge: 14,
             allowAgeCorrection: false,
+            concealIdentity: true,
+            requiresAgeCheck: true,
             personTagOverride: '“Assistant Projectionist”',
             personOverrides: {
               staffHat: true,
               staffBadge: true,
               obviousDisguise: true,
-              disguiseIssueText: 'Leo is wearing a homemade cardboard staff badge that says “CHIEF HORROR TESTER”.'
+              disguiseIssueText: 'Customer is wearing a homemade cardboard staff badge and presenting an unlisted staff pass.'
             },
             ticketOverrides: {
               ticketType: 'STAFF PASS',
@@ -1170,28 +1342,36 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               presented: false,
               reason: 'Claims cinema employees do not need ID cards.'
             },
+            questionEffects: {
+              ask_age: { evidence: ['age_claimed'] },
+              ask_id: { evidence: ['id_missing'] }
+            },
             storyKey: 'leo_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Hello, fellow colleague! I work here now! I'm the new Assistant Projectionist, and I need to enter Screen 3 immediately to inspect {title} from the front row with popcorn!",
+            statementTemplate: "New projection assistant. Here's my staff pass.",
             qaOverrides: {
-              ask_age: "I'm nineteen! Old enough to operate a projector AND watch a [16] horror movie!",
-              ask_id: "Look at my badge—it says STAFF-99-LEO in genuine red crayon!",
-              which_film: "I'm inspecting The Dark House [16], obviously!"
+              ask_age: "I'm nineteen!",
+              ask_id: "I don't carry an ID card—just my pass STAFF-99-LEO!",
+              which_film: "I'm inspecting The Dark House [16] in Screen 3."
             },
             storyEffects: {
+              onEvidence: {
+                age_id_contradiction: { leo_contradiction_spotted: 'yes' }
+              },
               onAction: {
                 REFUSE: { leo_day6_outcome: 'refused' }
               },
-              onMistake: { leo_day6_outcome: 'admitted' },
+              onMistake: { leo_day6_outcome: 'mistake' },
+              onMistakeByAction: { ADMIT: { leo_day6_outcome: 'admitted' } },
               incrementOnAction: {
                 REFUSE: { leo_caught_count: 1 }
               },
-              incrementOnMistake: {
-                leo_admitted_underage: 1
-              },
+              incrementOnMistakeByAction: { ADMIT: { leo_admitted_underage: 1 } },
               dilemmaNoteByAction: {
-                REFUSE: 'You thwarted Leo’s attempt to sneak into The Dark House [16] disguised as a cinema employee.'
+                REFUSE: 'You thwarted Leo’s attempt to sneak into The Dark House [16] with unlisted pass STAFF-99-LEO.'
               }
             }
           },
@@ -1202,23 +1382,41 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'valid',
             targetScreeningId: 'the_last_train',
             expectedAction: 'ADMIT',
+            revealsNameInOpening: true,
+            introducedName: 'Sofia',
+            extraQuestions: [
+              ['what_did_you_see', 'What did you find in the receipts?']
+            ],
+            questionEffects: {
+              what_did_you_see: {
+                setStory: { sofia_evidence: 'yes', whistleblower_identified: 'yes' },
+                evidence: ['sofia_vip_evidence']
+              }
+            },
             storyKey: 'sofia_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: {
               minCaseIndex: 3,
               requireStoryValue: { key: 'sofia_trust', value: 'ally' }
             },
-            statementTemplate: "Hi! My ticket and ID for {title} are all in order. Listen: I checked the student society receipts—Mr Blackwood has been pocketing cash for fake 'VIP-000' passes! Refuse his passes and tell the Inspector tomorrow!",
+            statementTemplate: "Sofia here. I've found some unusual receipts.",
             qaOverrides: {
               which_film: "I'm going to see The Last Train at 20:30.",
-              why_see: "I'm here to watch the thriller—and give you the evidence on Mr Blackwood's VIP-000 passes!"
+              why_see: "I'm here to watch the thriller.",
+              what_did_you_see: "Mr Blackwood has been pocketing cash for unlisted 'VIP-000' passes! Refuse them and tell the Inspector tomorrow."
             },
             storyEffects: {
               onAction: {
-                ADMIT: { sofia_day6_outcome: 'helped', sofia_evidence: 'yes', whistleblower_identified: 'yes' }
+                ADMIT: { sofia_day6_outcome: 'helped' }
               },
+              onEvidence: {
+                sofia_vip_evidence: { sofia_evidence: 'yes', whistleblower_identified: 'yes' }
+              },
+              noteByEvidence: { sofia_vip_evidence: 'Sofia shared her receipt evidence about the unlisted VIP passes.' },
               dilemmaNoteByAction: {
-                ADMIT: 'Sofia handed you evidence of Mr Blackwood’s off-the-books VIP-000 pass scheme.'
+                ADMIT: 'You admitted Sofia with her valid ticket.'
               }
             }
           },
@@ -1232,17 +1430,34 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             requiredQuestion: true,
             intentGenres: ['thriller'],
             expectedAction: 'CORRECT',
+            revealsNameInOpening: true,
+            introducedName: 'Sofia',
+            extraQuestions: [
+              ['what_did_you_see', 'What did you find about the VIP passes?']
+            ],
+            questionEffects: {
+              what_did_you_see: {
+                setStory: { sofia_evidence: 'yes', whistleblower_identified: 'yes' },
+                evidence: ['sofia_vip_evidence']
+              }
+            },
             storyKey: 'sofia_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 3 },
-            statementTemplate: "Hi. The machine printed the wrong film on my ticket—I want a thriller tonight. Ask me about my plan and reprint it, and I'll tell you what I discovered about Mr Blackwood's VIP passes.",
+            statementTemplate: "I'm Sofia. I wanted a thriller. Also, I found something odd.",
             qaOverrides: {
-              which_film: "I want a thriller—The Last Train at 20:30. Also, watch out for Mr Blackwood's 'VIP-000' passes!",
-              alternative: "The Last Train in Screen 3, please."
+              which_film: "I want a thriller—The Last Train at 20:30.",
+              alternative: "The Last Train in Screen 3, please.",
+              what_did_you_see: "Mr Blackwood has been selling unlisted 'VIP-000' passes for cash!"
             },
             storyEffects: {
               onAction: {
-                CORRECT: { sofia_day6_outcome: 'helped', sofia_evidence: 'yes' }
+                CORRECT: { sofia_day6_outcome: 'helped' }
+              },
+              onEvidence: {
+                sofia_vip_evidence: { sofia_evidence: 'yes', whistleblower_identified: 'yes' }
               }
             }
           },
@@ -1257,20 +1472,33 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             managerComplyRepDelta: -3,
             managerRefuseRepDelta: 4,
             expectedAction: 'REFUSE',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Blackwood',
+            extraQuestions: [
+              ['challenge_vip', "Why isn't this VIP pass on the authorised list?"]
+            ],
+            questionEffects: {
+              challenge_vip: {
+                setStory: { blackwood_questioned: 'yes', whistleblower_identified: 'yes' },
+                evidence: ['vip_challenged']
+              }
+            },
             storyKey: 'blackwood_day6_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 4 },
-            statementTemplate: "Another special premiere guest of mine! Pass number VIP-000-PREMIERE for {title}. Never mind that it isn't on the Head Office list—stamp ADMIT if you want to be Management Material!",
+            statementTemplate: "Blackwood. Another guest of mine. Let them through.",
             qaOverrides: {
-              which_film: "The Last Train at 20:30! Don't lecture me about the VIP list—stamp ADMIT!",
-              are_you_sure: "I am the manager of this cinema! Do as I say!"
+              which_film: "The Last Train at 20:30.",
+              are_you_sure: "I am the manager of this cinema—do as I say!",
+              challenge_vip: "Because it's my private premiere guest! Don't lecture me about the authorised list!"
             },
             storyEffects: {
               onAction: {
                 ADMIT: { blackwood_day6_outcome: 'complied' },
                 REFUSE: { blackwood_day6_outcome: 'refused' }
               },
-              onQuestioned: { blackwood_questioned: 'yes' },
               dilemmaNoteByAction: {
                 ADMIT: 'You obeyed Mr Blackwood and admitted unlisted premiere pass VIP-000-PREMIERE.',
                 REFUSE: 'You refused Mr Blackwood’s unlisted VIP-000-PREMIERE pass.'
@@ -1285,17 +1513,17 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: 'SUNDAY',
         title: 'Day 7 — The Final Inspection',
         briefingMemo: [
-          'Today is Sunday, 18 October 2026—your seventh day and the Final Corporate Inspection.',
+          'Today is Sunday, 18/10/2026—your seventh day and the Final Corporate Inspection.',
           'All cinema rules are active today: age classifications ([G], [12], [16]) and ID checks, Planet X moved to Screen 1, Love in Paris cancelled, Happy Penguins 19:15 extra show, 10-minute late limit, used serials, and official VIP/Staff lists.',
           'Every choice you have made this week—with Leo, Mr Morris, Sofia, Maya, Mr Blackwood, and the Inspector—comes to a head tonight!'
         ].join('\n'),
         languageFocus: "Complete cinema inspection mastery—evaluating every rule, character, and clue.",
         policies: {
           currentDate: '2026-10-18',
-          dateDisplay: '18 Oct 2026',
+          dateDisplay: '18/10/2026',
           allowCorrections: true,
           checkAgeRestrictions: true,
-          ageRuleTitle: 'Final Inspection: Age & ID (18 Oct 2026)',
+          ageRuleTitle: 'Final Inspection: Age & ID (18/10/2026)',
           ageRuleText: 'Enforce [G], [12] and [16] ratings strictly. Admit honest customers whose age and ID satisfy the film’s rating.',
           lateToleranceMins: 10,
           checkDuplicates: true,
@@ -1345,6 +1573,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             expectedAction: 'ADMIT',
             claimedAge: 14,
             trueAge: 14,
+            revealsNameInOpening: true,
+            introducedName: 'Leo',
             personTagOverride: 'Honest Filmgoer',
             personOverrides: {
               fakeBeard: false,
@@ -1357,26 +1587,32 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             },
             idCard: {
               exists: true,
-              presented: true,
+              presented: false,
               holderName: 'Leo',
-              dob: '2012-09-10'
+              dob: '10/09/2012',
+              issueDate: '01/09/2025',
+              expiryDate: '01/09/2028',
+              docNumber: 'STU-120910',
+              issuingAuthority: 'Grandview High School'
             },
             storyKey: 'leo_day7_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 0 },
             statementByStory: [
               {
                 condition: { key: 'leo_day2_outcome', value: 'refused' },
-                text: "Okay, you win! No fake beard, no giant suit, no marker moustache, no crayon badge. I'm really fourteen, here is my real school ID, and I bought a real ticket for {title}. It's rated [G] for all ages! Can I go in?"
+                text: "I'm Leo. No fake beard today. One for {title}, please."
               },
               {
-                text: "Hey! No disguises today, I promise! I'm fourteen, here is my real ID card (DOB 2012-09-10), and I bought a valid ticket for {title} in Screen 1. It's rated [G]! Can I watch the comedy?"
+                text: "I'm Leo. One for {title}, please."
               }
             ],
             qaOverrides: {
-              ask_age: "I'm fourteen years old—born 10 September 2012. Tell the truth, right?",
-              ask_id: "Here is my real student ID card: Leo, DOB 2012-09-10. And Laughing Bananas is rated [G]!",
-              which_film: "I'm going to see Laughing Bananas at 18:00 in Screen 1!",
+              ask_age: "I'm fourteen years old—born 10/09/2012.",
+              ask_id: "Here is my real student ID card: Leo, DOB 10/09/2012.",
+              which_film: "I'm going to see Laughing Bananas at 18:00 in Screen 1.",
               why_see: "I'm here to laugh! Disguises are exhausting."
             },
             storyEffects: {
@@ -1390,7 +1626,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               dilemmaNoteOnMistake: 'You refused Leo even when he had a completely valid ticket for a G-rated comedy!'
             },
             customFeedback: {
-              ADMIT: 'Leo beamed! With a valid ticket for G-rated Laughing Bananas and his real ID, he headed happily into Screen 1.'
+              ADMIT: 'Leo headed happily into Screen 1 with his valid comedy ticket.'
             }
           },
           {
@@ -1399,16 +1635,20 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             caseType: 'valid',
             targetScreeningId: 'happy_penguins',
             expectedAction: 'ADMIT',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Morris',
             storyKey: 'morris_day7_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 1 },
             statementByStory: [
               {
                 condition: { key: 'morris_relationship', value: 'loyal' },
-                text: "Good evening, my dear friend! I'm going to see {title} once more. I just spoke with the Corporate Inspector in the foyer and told her you are the kindest, finest employee The Grand Cinema has ever had!"
+                text: "Mr Morris again. Thank you for your help. One ticket, please."
               },
               {
-                text: "Good evening. I'm going to see {title} at {time} in Screen 2. Everything on my ticket and ID is in order today."
+                text: "I'm Mr Morris. One for {title}, please."
               }
             ],
             qaOverrides: {
@@ -1420,7 +1660,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
                 ADMIT: { morris_day7_outcome: 'helped' }
               },
               dilemmaNoteByAction: {
-                ADMIT: 'Mr Morris praised your service to the Corporate Inspector.'
+                ADMIT: 'You admitted Mr Morris with his valid ticket.'
               }
             }
           },
@@ -1435,20 +1675,33 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             managerComplyRepDelta: -4,
             managerRefuseRepDelta: 5,
             expectedAction: 'REFUSE',
+            revealsNameInOpening: true,
+            introducedName: 'Mr Blackwood',
+            extraQuestions: [
+              ['challenge_vip', "Why isn't this VIP pass on the authorised list?"]
+            ],
+            questionEffects: {
+              challenge_vip: {
+                setStory: { blackwood_questioned: 'yes', whistleblower_identified: 'yes' },
+                evidence: ['vip_challenged']
+              }
+            },
             storyKey: 'blackwood_day7_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Quick—before the Corporate Inspector reaches the window! Stamp ADMIT on VIP-000-AUDIT for {title} so my private cash ledger balances! If you refuse this pass, I'll know you're siding with the auditors!",
+            statementTemplate: "Blackwood. One last guest. Quickly, let them in.",
             qaOverrides: {
-              which_film: "The Dark House at 21:00! Stamp ADMIT now and I'll recommend you for Assistant Manager!",
-              are_you_sure: "If you refuse VIP-000-AUDIT, the Inspector will uncover my side business!"
+              which_film: "The Dark House at 21:00.",
+              are_you_sure: "If you refuse VIP-000-AUDIT, the Inspector will uncover my side business!",
+              challenge_vip: "Keep your voice down! The Corporate Inspector is right behind me—stamp ADMIT so my ledger balances!"
             },
             storyEffects: {
               onAction: {
                 ADMIT: { blackwood_day7_outcome: 'complied' },
-                REFUSE: { blackwood_day7_outcome: 'refused', whistleblower_identified: 'yes' }
+                REFUSE: { blackwood_day7_outcome: 'refused' }
               },
-              onQuestioned: { whistleblower_identified: 'yes' },
               dilemmaNoteByAction: {
                 ADMIT: 'You stamped Mr Blackwood’s final unlisted pass (VIP-000-AUDIT) to cover his tracks.',
                 REFUSE: 'You refused Mr Blackwood’s VIP-000-AUDIT cover-up pass right in front of the audit!'
@@ -1464,32 +1717,52 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             expectedAction: 'ADMIT',
             claimedAge: 44,
             trueAge: 44,
+            revealsNameInOpening: true,
+            introducedName: 'Corporate Inspector',
+            identityTitle: true,
+            extraQuestions: [{ key: 'report_vip', label: 'Can I report the unlisted VIP passes?', condition: { anyOf: [{ key: 'sofia_evidence', value: 'yes' }, { key: 'blackwood_questioned', value: 'yes' }] } }],
+            questionEffects: {
+              report_vip: {
+                condition: { anyOf: [{ key: 'sofia_evidence', value: 'yes' }, { key: 'blackwood_questioned', value: 'yes' }] },
+                revealStatement: "Thank you. I'll record your evidence and check Mr Blackwood's ledger.",
+                evidence: ['vip_reported'], setStory: { vip_reported: 'yes' }
+              }
+            },
             personTagOverride: 'Corporate Inspector',
             idCard: {
               exists: true,
-              presented: true,
-              holderName: 'Mystery Customer',
-              dob: '1982-05-14'
+              presented: false,
+              holderName: 'V. Vance',
+              dob: '14/05/1982',
+              issueDate: '01/02/2023',
+              expiryDate: '01/02/2028',
+              docNumber: 'AUD-9001',
+              issuingAuthority: 'Head Office Audit Board'
+            },
+            personOverrides: {
+              name: 'V. Vance'
             },
             storyKey: 'inspector_day7_outcome',
             oncePerShift: true,
+            guaranteed: true,
+            preventQueueWalkout: true,
             trigger: { minCaseIndex: 3 },
             statementByStory: [
               {
-                condition: { key: 'whistleblower_identified', value: 'yes' },
-                text: "I am the Corporate Cinema Inspector. Thank you for flagging Mr Blackwood's unauthorised VIP-000 passes! Please verify my official pass VIP-900-INSPECTOR for {title} to conclude the audit."
+                condition: { key: 'sofia_evidence', value: 'yes' },
+                text: "Corporate Inspector. I hear you have something to report."
               },
               {
                 condition: { key: 'morris_commendation', value: 'yes' },
-                text: "I am the Corporate Cinema Inspector. Regular guests like Mr Morris have spoken very highly of you this week. Please verify my official pass VIP-900-INSPECTOR for {title}."
+                text: "Corporate Inspector. Mr Morris spoke well of you. Here's my pass."
               },
               {
-                text: "Good evening. I am the Corporate Cinema Inspector conducting the Sunday audit. Here is my authorised pass VIP-900-INSPECTOR and ID for {title}."
+                text: "Corporate Inspector. Here's my pass for tonight."
               }
             ],
             qaOverrides: {
-              ask_age: "I am forty-four years old (DOB 1982-05-14).",
-              ask_id: "Here is my official Inspector ID and pass VIP-900-INSPECTOR.",
+              ask_age: "I am forty-four years old (born 14/05/1982).",
+              ask_id: "Here is my official Inspector ID (DOB 14/05/1982) and pass VIP-900-INSPECTOR.",
               which_film: "I am inspecting The Dark House [16] at 21:00 in Screen 3."
             },
             storyEffects: {
@@ -1518,7 +1791,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       languageFocus: "Full mastery of plans ('be going to'), purpose ('to + verb'), age checks, and ticket corrections.",
       policies: {
         currentDate: '2026-10-19',
-        dateDisplay: '19 Oct 2026',
+        dateDisplay: '19/10/2026',
         allowCorrections: true,
         checkAgeRestrictions: true,
         lateToleranceMins: 10,
@@ -1555,8 +1828,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       casePool: [
         'wrong_film', 'screen', 'time', 'date', 'missing', 'hidden_ticket',
         'incomplete', 'late', 'move', 'duplicate', 'promo', 'group',
-        'cancelled', 'combined', 'underage', 'missing_id', 'fake_id',
-        'false_identity', 'disguise', 'staff_impostor', 'age_valid'
+        'cancelled', 'combined', 'underage', 'missing_id', 'refused_id', 'fake_id',
+        'expired_id', 'false_identity', 'disguise', 'staff_impostor', 'age_valid'
       ],
       midShiftNotices: [],
       scriptedEncounters: []
@@ -1567,9 +1840,9 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         id: 'youre_fired',
         title: "You're Fired!",
         badge: 'ENDING 5 OF 5 · DISMISSED',
-        summary: 'Between mountaintops of management warnings, unverified age restrictions, and box-office blunders, both Mr Blackwood and the Corporate Inspector agreed that your chaotic week behind the glass must come to an immediate end.',
-        managerQuote: '"Pack up your stamps! With this many warnings and inspection errors, even I cannot save your job!"',
-        inspectorQuote: '"The audit uncovered serious compliance failures in age verification and ticket control. Immediate termination is required."',
+        summary: 'Your warnings, inspection record or loss of public trust fell below the cinema’s minimum standard. Head Office ended your probation.',
+        managerQuote: '"Pack up your stamps. Head Office has ended your probation."',
+        inspectorQuote: '"Your record did not meet the standard required to continue in this role."',
         conditions: {
           anyOf: [
             { requireDismissed: true },
@@ -1583,17 +1856,17 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         id: 'the_whistleblower',
         title: 'The Whistleblower',
         badge: 'ENDING 4 OF 5 · CORRUPTION EXPOSED',
-        summary: 'You refused to rubber-stamp Mr Blackwood’s off-the-books VIP-000 cash passes, pieced together Sofia’s audit evidence, and handed the truth directly to the Corporate Inspector. Mr Blackwood was escorted out of his office, and Head Office appointed a new reform team with you as Senior Box Office Supervisor!',
+        summary: 'You refused Mr Blackwood’s unlisted VIP passes, investigated the scheme and reported your evidence directly to the Corporate Inspector. Head Office removed him from his post and appointed you Senior Box Office Supervisor.',
         managerQuote: '"You—you reported my VIP-000 passes to Head Office?! Wait until my lawyers hear about this!"',
         inspectorQuote: '"Your integrity in refusing unauthorised manager passes and documenting the fraud saved The Grand Cinema from a major scandal. Exemplary work."',
         conditions: {
           forbidDismissed: true,
           storyMin: { manager_conflict: 2 },
           storyMax: { manager_compliance: 0 },
+          storyEquals: { vip_reported: 'yes', inspector_day7_outcome: 'helped' },
           anyOf: [
-            { storyEquals: { whistleblower_identified: 'yes' } },
-            { storyEquals: { sofia_evidence: 'yes' } },
-            { storyMin: { manager_conflict: 3 } }
+            { storyEquals: { blackwood_questioned: 'yes' } },
+            { storyEquals: { sofia_evidence: 'yes' } }
           ]
         }
       },
@@ -1601,7 +1874,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         id: 'management_material',
         title: 'Management Material',
         badge: 'ENDING 3 OF 5 · THE MANAGER’S PROTEGE',
-        summary: 'Whenever Mr Blackwood demanded "special treatment" for his off-the-books VIP-000 guests, you stamped ADMIT without flinching. While the Corporate Inspector raised an eyebrow at the ledger, Mr Blackwood took full credit for the week’s profits and promoted you to his right-hand Assistant Manager.',
+        summary: 'Repeatedly, when Mr Blackwood demanded "special treatment" for his off-the-books VIP-000 guests, you stamped ADMIT without flinching. While the Corporate Inspector raised an eyebrow at the ledger, Mr Blackwood took full credit for the week’s profits and promoted you to his right-hand Assistant Manager.',
         managerQuote: '"Splendid loyalty! You understand how business really works at The Grand Cinema. Welcome to management!"',
         inspectorQuote: '"Your booth stayed profitable, though several unlisted VIP admissions remain under Head Office review."',
         conditions: {
@@ -1613,20 +1886,22 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         id: 'peoples_champion',
         title: "The People's Champion",
         badge: 'ENDING 2 OF 5 · BELOVED BY REGULARS',
-        summary: 'You put human kindness and loyal cinema-goers first all week: helping Mr Morris and his grandchildren, saving Maya’s job so she could open the balcony on Premiere Night, earning Sofia’s trust, and welcoming Leo when he finally bought an honest ticket. The local community rallied behind you as the heart and soul of The Grand Cinema!',
-        managerQuote: '"You bent my rules more than I liked, but half the town wrote letters praising your kindness—I suppose we have to keep you!"',
+        summary: 'You helped Mr Morris and his grandchildren, supported Maya and seated her premiere group, and welcomed Leo with his honest Sunday ticket. The regulars celebrated your patient, helpful service.',
+        managerQuote: '"The regulars keep asking for you. I suppose good service counts for something!"',
         inspectorQuote: '"Customer satisfaction scores are the highest in the district. Guests specifically commended your empathy and fairness."',
         conditions: {
           forbidDismissed: true,
           storyEquals: {
             morris_day3_outcome: 'helped',
+            morris_day6_outcome: 'helped',
+            maya_day3_outcome: 'helped',
+            maya_day6_outcome: 'helped',
             maya_relationship: 'helped',
             leo_day7_outcome: 'helped'
           },
           anyOf: [
             { storyMin: { total_exceptions: 1 } },
-            { storyEquals: { people_champion_path: 'yes' } },
-            { storyEquals: { morris_commendation: 'yes' } }
+            { storyEquals: { people_champion_path: 'yes' } }
           ]
         }
       },
@@ -1635,8 +1910,27 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         title: 'Employee of the Week',
         badge: 'ENDING 1 OF 5 · GOLD STANDARD',
         summary: 'Across seven demanding shifts, you balanced strict age-restriction enforcement, accurate ticket corrections, and fair customer service without succumbing to corruption or carelessness. Your framed portrait now hangs in the foyer of The Grand Cinema!',
-        managerQuote: '"Flawless numbers, clean books, and a full cinema. Even I have nothing to complain about!"',
+        managerQuote: '"Accurate decisions and clean books. Even I have nothing to complain about!"',
         inspectorQuote: '"Precision, fairness, and complete mastery of every regulation from Monday to Sunday. You are officially named Employee of the Week."',
+        conditions: {
+          forbidDismissed: true,
+          minReputation: 75,
+          storyMax: {
+            manager_compliance: 0,
+            total_mistakes: 0,
+            total_exceptions: 0,
+            leo_admitted_underage: 0,
+            inspection_violations: 0
+          }
+        }
+      },
+      {
+        id: 'probation_passed',
+        title: 'Probation Completed',
+        badge: 'CAMPAIGN COMPLETE · STANDARD PASS',
+        summary: 'You survived all seven shifts behind the box-office window. While your week had a few rough edges and missed details along the way, you kept the cinema running and passed your first-week probation.',
+        managerQuote: '"You made it through Sunday without getting us shut down. Report back on Monday—and try to be sharper next week."',
+        inspectorQuote: '"Box-office operations met minimum corporate standards, though several procedures require closer attention."',
         conditions: {
           forbidDismissed: true
         }
@@ -1647,20 +1941,47 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       {
         characterName: 'Mr Morris',
         role: 'Regular Visitor',
-        conditions: { storyEquals: { morris_relationship: 'loyal' } },
-        text: 'Wrote a glowing letter to Head Office thanking you for reprinting his Wednesday ticket and welcoming his grandchildren on Saturday.'
+        conditions: {
+          storyEquals: {
+            morris_day3_outcome: 'helped',
+            morris_day6_outcome: 'helped'
+          }
+        },
+        text: 'Appreciated your Wednesday ticket correction and Saturday welcome for his grandchildren.'
+      },
+      {
+        characterName: 'Mr Morris',
+        role: 'Regular Visitor',
+        conditions: {
+          storyEquals: {
+            morris_day3_outcome: 'helped',
+            morris_day6_outcome: 'mistake'
+          }
+        },
+        text: 'Thanked you warmly for helping him when the Screen 3 projector broke down.'
       },
       {
         characterName: 'Mr Morris',
         role: 'Regular Visitor',
         conditions: { storyEquals: { morris_relationship: ['upset', 'cold'] } },
-        text: 'Left the cinema disappointed after his tickets were turned away earlier in the week.'
+        text: 'Was disappointed by an earlier mistake with his ticket.'
       },
       {
         characterName: 'Leo',
         role: 'Former Master of Disguise',
-        conditions: { storyEquals: { leo_day7_outcome: 'helped' } },
-        text: 'Retired his fake beard, oversized suit, and crayon staff badge after you admitted him honestly to Laughing Bananas [G] on Sunday.'
+        conditions: {
+          storyEquals: { leo_day7_outcome: 'helped' },
+          storyMin: { leo_caught_count: 1 }
+        },
+        text: 'Returned without a disguise on Sunday after an earlier refusal, and you admitted his valid comedy ticket.'
+      },
+      {
+        characterName: 'Leo',
+        role: 'Horror Fan',
+        conditions: {
+          storyMin: { leo_admitted_underage: 1 }
+        },
+        text: 'Bragged to his school friends that he managed to sneak past the box office into The Dark House [16] underage.'
       },
       {
         characterName: 'Leo',
@@ -1671,7 +1992,12 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       {
         characterName: 'Maya',
         role: 'Junior Employee',
-        conditions: { storyEquals: { maya_relationship: 'helped' } },
+        conditions: {
+          storyEquals: {
+            maya_day3_outcome: 'helped',
+            maya_day6_outcome: 'helped'
+          }
+        },
         text: 'Kept her job thanks to your Wednesday ticket correction and unlocked the Screen 1 balcony row for Saturday’s premiere.'
       },
       {
@@ -1684,7 +2010,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         characterName: 'Sofia',
         role: 'Film Student',
         conditions: { storyEquals: { sofia_evidence: 'yes' } },
-        text: 'Shared the crucial audit clues that exposed the unauthorized VIP-000 pass scheme.'
+        text: 'Shared her findings about unlisted VIP-000 passes when you asked about the receipts.'
       }
     ],
 

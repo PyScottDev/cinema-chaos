@@ -11,6 +11,7 @@
         customLanguagePack: null,
         day: 1,
         story: {}, bookings: {}, outcomes: [], modalDepth: 0, serialCounter: 400,
+        resolvedEncounters: {},
         difficulty: "normal", // 'relaxed' | 'normal' | 'chaos'
         money: 0,
         reputation: 80,
@@ -114,7 +115,7 @@
         UI.openBriefingModal(this.state.day);
         UI.openCampaignSelectModal({ isInitialLaunch: true });
         document.getElementById('languagePackJsonArea').value = JSON.stringify(this.languagePack(), null, 2);
-        document.getElementById('saveNotice').textContent=this.startupMessage||'Progress saves between customers. Reloading starts this shift again.';
+        document.getElementById('saveNotice').textContent=this.startupMessage||'Progress saves automatically. Continue resumes your saved shift.';
         const day=document.getElementById('scheduleDayTag');day.tabIndex=0;day.setAttribute('role','button');day.classList.add('inspectable');day.onclick=()=>Game.handleInspectClick('today',Game.today(),'Today: '+Game.today(),day);
         document.getElementById('customerStatementBox').tabIndex=0;document.getElementById('clockInspectBox').tabIndex=0;
         UI.setDecisionButtons(true);
@@ -287,6 +288,8 @@
         }
         this.state.pendingCampaignAction = null;
         this.selectCampaign(campaignId);
+        this.pendingShift = null;
+        this.dayStartSnapshot = null;
         Object.assign(this.state, {
           day: 1,
           money: 0,
@@ -296,6 +299,7 @@
           completedDays: [],
           totalCustomersLost: 0,
           story: {},
+          resolvedEncounters: {},
           outcomes: []
         });
         this.prepareDaySchedule(1);
@@ -335,6 +339,7 @@
       },
 
       teacherJumpToDay() {
+        this.pendingShift = null; this.dayStartSnapshot = null;
         this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;this.state.decisionLocked=false;
         this.state.day=Number(document.getElementById('teacherDaySelect').value)||1;
         this.applyPendingLanguageMode();
@@ -360,9 +365,47 @@
         } catch(e){msg.textContent='Pack not changed: '+e.message;msg.className='text-xs text-rose-400';}
       },
 
+      shiftSaveKeys: ['clockMins','clockEndMins','clockFormatted','warnings','forgivenWarningUsed',
+        'schedule','tvSchedule','scheduleSnapshot','bookings','usedSerials','authorizedVips','authorizedStaff',
+        'queue','currentCustomer','casesGeneratedCount','serialCounter','scriptedDone','encounterGroupsDone',
+        'scriptedEncountersState','encounterArrivalTimes','noticesSeen','decisionLocked','closing','outcomes','shiftStats',
+        'languageMode','pendingLanguageMode'],
+      dayStartKeys: ['money','reputation','ownedUpgrades','completedDays','totalCustomersLost','story','resolvedEncounters','highScore'],
+      captureShift() {
+        if (!this.state.shiftActive) return this.pendingShift || null;
+        const data = { day: this.state.day, campaignId: this.state.campaignId, rngSeed: this.rngSeed };
+        for (const key of this.shiftSaveKeys) if (this.state[key] !== undefined) data[key] = structuredClone(this.state[key]);
+        return data;
+      },
+      restoreShift(saved) {
+        for (const key of this.shiftSaveKeys) if (saved[key] !== undefined) this.state[key] = structuredClone(saved[key]);
+        this.rngSeed = saved.rngSeed;
+        Object.assign(this.state, { shiftActive: true, paused: false, modalDepth: 0, inspectFirst: null });
+        this.pendingShift = null;
+        const c = this.state.currentCustomer;
+        if (c) { UI.renderCustomer(c); UI.renderTicketOnDesk(c); }
+        UI.renderQueue(); UI.renderHeader(); UI.renderScheduleBinder(); UI.renderRulesBinder(); UI.renderSerialsBinder(); UI.renderUpgradesStrip();
+        UI.setDecisionButtons(this.state.decisionLocked);
+        document.getElementById('nextCustomerBtn').classList.toggle('hidden', !this.state.decisionLocked);
+        document.getElementById('deskFeedbackBanner').classList.add('hidden');
+        document.getElementById('stampAnimationOverlay').classList.add('hidden');
+        if (!c) this.nextCustomerFromQueue();
+        this.startShiftLoop(); UI.renderPause();
+      },
+
       startShift() {
         this.stopShiftLoop();this.state.modalDepth=0;UI.modalStack.clear();UI.closeBriefingModal();UI.closeCampaignSelectModal();UI.clearDepartureBanner();
+        UI.closeIdCardModal();
+        if (this.pendingShift?.day === this.state.day && this.pendingShift.campaignId === this.state.campaignId) {
+          this.restoreShift(this.pendingShift);
+          return;
+        }
+        this.pendingShift = null;
         this.applyPendingLanguageMode();
+        if (!this.dayStartSnapshot || this.dayStartSnapshot.day !== this.state.day) {
+          this.dayStartSnapshot = { day: this.state.day, rngSeed: this.rngSeed };
+          for (const key of this.dayStartKeys) this.dayStartSnapshot[key] = structuredClone(this.state[key]);
+        }
         this.prepareDaySchedule(this.state.day);
         Object.assign(this.state,{shiftActive:true,paused:false,clockMins:1065,clockFormatted:'17:45',warnings:0,lastShiftDismissed:false,queue:[],casesGeneratedCount:0,
           forgivenWarningUsed:false,currentCustomer:null,decisionLocked:false,closing:false,outcomes:[],
@@ -413,8 +456,16 @@
         const departed = [];
         if (decay > 0) {
           this.state.queue = this.state.queue.filter(c => {
+            if (c.preventQueueWalkout !== false && (c.scriptedId || c.guaranteedEncounter)) {
+              c.patience = Math.max(15, c.patience - decay);
+              return true;
+            }
             c.patience = Math.max(0, c.patience - decay);
             if (c.patience > 0) return true;
+            const encounterId = c.queuedEncounterId || c.scriptedId;
+            if (encounterId && this.state.scriptedEncountersState) {
+              this.state.scriptedEncountersState[encounterId] = 'scheduled';
+            }
             departed.push(c);
             this.state.shiftStats.customersLost = (this.state.shiftStats.customersLost || 0) + 1;
             this.state.totalCustomersLost = (this.state.totalCustomersLost || 0) + 1;
@@ -440,6 +491,15 @@
       screening(id) { return this.allScreenings().find(f => f.id === id); },
       today() { return this.dayConfig().dayName; },
       currentDateISO(day = this.state.day) { return this.policies(day).currentDate || '2026-05-05'; },
+      formatDateDMY(str) {
+        if (typeof str !== 'string') return str || '';
+        const trimmed = str.trim();
+        const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+        if (isoMatch) {
+          return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+        }
+        return trimmed;
+      },
       parseCalendarDate(str) {
         if (typeof str !== 'string') return null;
         let year, month, day;
@@ -457,9 +517,18 @@
         const daysInMonths = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         if (day > daysInMonths[month - 1]) return null;
         const iso = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        return { year, month, day, iso };
+        const dmy = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${String(year).padStart(4, '0')}`;
+        return { year, month, day, iso, dmy };
       },
       isValidCalendarDate(str) { return Boolean(this.parseCalendarDate(str)); },
+      compareDates(dateStrA, dateStrB) {
+        const a = this.parseCalendarDate(dateStrA);
+        const b = this.parseCalendarDate(dateStrB);
+        if (!a || !b) return null;
+        if (a.iso < b.iso) return -1;
+        if (a.iso > b.iso) return 1;
+        return 0;
+      },
       calculateAge(dobStr, refDateStr = this.currentDateISO()) {
         const dob = this.parseCalendarDate(dobStr);
         const ref = this.parseCalendarDate(refDateStr);
@@ -470,8 +539,88 @@
         }
         return age;
       },
+      normalizeIdCard(idCard, personName = 'Visitor', day = this.state.day) {
+        if (!idCard) return null;
+        const card = { ...idCard };
+        // Legacy age annotations are not identity-document fields. Keep age claims in dialogue.
+        delete card.statedAge;
+        card.presented = Boolean(card.presented);
+        if (!card.exists) return card;
+        card.holderName = card.holderName || personName || 'Visitor';
+        const refDate = this.parseCalendarDate(this.currentDateISO(day)) || { year: 2026, month: 10, day: 12 };
+        if (!card.issueDate) {
+          const birthYear = this.parseCalendarDate(card.dob)?.year;
+          const issYear = Math.max(birthYear || 0, refDate.year - 2);
+          card.issueDate = `15/06/${issYear}`;
+        }
+        if (!card.expiryDate) {
+          const expYear = refDate.year + 3;
+          card.expiryDate = `15/06/${expYear}`;
+        }
+        if (!card.docNumber) {
+          const seedStr = `${card.holderName}|${card.dob || ''}`;
+          let hash = 0;
+          for (let i = 0; i < seedStr.length; i++) {
+            hash = ((hash << 5) - hash + seedStr.charCodeAt(i)) | 0;
+          }
+          const num = String(100000 + (Math.abs(hash) % 899999));
+          card.docNumber = `CID-${num}`;
+        }
+        if (!card.issuingAuthority) {
+          card.issuingAuthority = 'City Civil Registry';
+        }
+        return card;
+      },
+      getKnownCustomerName(c) {
+        if (!c) return null;
+        if (c.introducedName) return c.introducedName;
+        if (c.identityRevealed && c.person?.name) return c.person.name;
+        if (c.revealsNameInOpening && c.person?.name) return c.person.name;
+        if (c.idCard?.presented && c.idCard?.exists && c.idCard?.holderName) return c.idCard.holderName;
+        if (c.ticket?.exists && c.ticket?.holderName) return c.ticket.holderName;
+        const charId = c.person?.characterId || c.characterId;
+        if (!c.concealIdentity && charId && this.state.story?.[`known_char_${charId}`] === 'yes' && c.person?.name) {
+          return c.person.name;
+        }
+        return null;
+      },
+      needsIdFor(c, f = this.screening(c.ticket?.filmId)) {
+        return Boolean(c.requiresIdentityCheck || (this.policies().checkAgeRestrictions && (f?.minAge || 0) > 0));
+      },
+      identityQuestionsRelevant(c) {
+        const alternatives = (c.intent?.genres ? this.allScreenings().filter(f => c.intent.genres.includes(f.genre) && f.status !== 'CANCELLED') : []);
+        return this.needsIdFor(c) || Boolean(c.requiresAgeCheck) ||
+          alternatives.some(f => this.needsIdFor(c, f)) ||
+          (c.intent?.ids || []).some(id => this.needsIdFor(c, this.screening(id)));
+      },
+      getCustomerQuestions(c) {
+        if (!c) return [];
+        const pol = this.policies();
+        const defaults = [['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?'],['ask_age','How old are you?'],['ask_id','Can I see your ID, please?']];
+        const base = Array.isArray(this.campaign()?.playerQuestions) ? this.campaign().playerQuestions : defaults;
+        // Age and ID questions are only offered while age restrictions apply. Neither is a prerequisite for the other.
+        const qs = base.filter(([key]) => key === 'ask_age' ? this.identityQuestionsRelevant(c) && (pol.checkAgeRestrictions || c.requiresAgeCheck)
+          : key === 'ask_id' ? this.identityQuestionsRelevant(c) : true).map(q => [q[0], q[1]]);
+        const addAll = (list) => {
+          for (const q of (Array.isArray(list) ? list : [])) {
+            if (!Array.isArray(q) && q?.condition && !this.matchesStoryCondition(q.condition)) continue;
+            const key = Array.isArray(q) ? q[0] : q?.key;
+            const label = Array.isArray(q) ? q[1] : q?.label;
+            if (key && label && !qs.some(existing => existing[0] === key)) qs.push([key, label]);
+          }
+        };
+        addAll(c.extraQuestions);
+        addAll(c.unlockedQuestions);
+        if (this.identityQuestionsRelevant(c)) {
+          addAll([['ask_id', 'Can I see your ID, please?']]);
+          if (this.policies().checkAgeRestrictions || c.requiresAgeCheck) addAll([['ask_age', 'How old are you?']]);
+        }
+        if (!this.getKnownCustomerName(c)) addAll([['ask_name', 'What is your name?']]);
+        return qs;
+      },
       matchesStoryCondition(cond) {
         if (!cond) return true;
+        if (cond.anyOf) return cond.anyOf.some(part => this.matchesStoryCondition(part));
         const reqs = Array.isArray(cond) ? cond : [cond];
         for (const r of reqs) {
           const actual = this.state.story[r.key];
@@ -489,7 +638,7 @@
         return f.capacity - Object.values(this.state.bookings).filter(b => b.screeningId === f.id && b.status !== 'cancelled').reduce((n,b) => n+b.seats,0);
       },
       syncSeats() { this.allScreenings().forEach(f => { f.unallocatedSeats = this.freeSeats(f); }); },
-      canEnter(f, c) {
+      canEnter(f, c, { ignoreIdentity = false } = {}) {
         if (!f || f.status === 'CANCELLED') return false;
         const pol = this.policies();
         if (pol.lateToleranceMins !== null && pol.lateToleranceMins !== undefined && this.arrival(c) > f.timeMins + pol.lateToleranceMins) {
@@ -502,16 +651,22 @@
             }
           }
         }
-        if (pol.checkAgeRestrictions && (f.minAge || 0) > 0) {
+        if (this.needsIdFor(c, f) && !ignoreIdentity) {
           if (c.person?.obviousDisguise) return false;
-          if (!c.idCard || !c.idCard.exists) return false;
+          if (!c.idCard?.exists || !c.idCard.presented) return false;
           if (!this.isValidCalendarDate(c.idCard.dob)) return false;
+          if (c.idCard.issueDate && !this.isValidCalendarDate(c.idCard.issueDate)) return false;
+          if (c.idCard.expiryDate && !this.isValidCalendarDate(c.idCard.expiryDate)) return false;
+          if (c.idCard.issueDate && c.idCard.expiryDate && this.compareDates(c.idCard.issueDate, c.idCard.expiryDate) > 0) return false;
+          if (c.idCard.issueDate && this.compareDates(c.idCard.issueDate, this.currentDateISO()) > 0) return false;
+          if (c.idCard.issueDate && this.compareDates(c.idCard.dob, c.idCard.issueDate) > 0) return false;
+          if (c.idCard.expiryDate && this.compareDates(c.idCard.expiryDate, this.currentDateISO()) < 0) return false;
           if (c.idCard.photoMismatch || c.idCard.photoAltered) return false;
-          if (c.idCard.holderName && c.person?.name && c.idCard.holderName !== c.person.name) return false;
+          if (c.ticket?.holderName && c.idCard.holderName && c.ticket.holderName !== c.idCard.holderName) return false;
+          if (c.introducedName && c.idCard.holderName && c.idCard.holderName !== c.introducedName && !c.identityTitle) return false;
           const age = this.calculateAge(c.idCard.dob, pol.currentDate);
           if (age === null || age < f.minAge) return false;
-          if (c.idCard.statedAge !== undefined && c.idCard.statedAge !== age) return false;
-          if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== age) return false;
+          if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== age && (c.statedAgeInOpening || c.ageRequested)) return false;
         }
         return true;
       },
@@ -520,11 +675,11 @@
         return (!requirements.ids || requirements.ids.includes(f.id)) && (!requirements.genres || requirements.genres.includes(f.genre))
           && (!requirements.notGenres || !requirements.notGenres.includes(f.genre)) && (!requirements.latest || f.timeMins <= requirements.latest);
       },
-      correctionOptions(c) {
+      correctionOptions(c, { ignoreIdentity = false } = {}) {
         const t = c.ticket, b = this.booking(c), pol = this.policies();
         if (!pol.allowCorrections || !t?.exists || t.date !== this.today() || this.state.usedSerials.includes(t.serial)
           || !b || b.status !== 'reserved' || (!pol.allowPromoChanges && t.ticketType.includes('PROMO')) || t.ticketType.includes('VIP') || t.ticketType === 'STAFF PASS' || !c.known.preference) return [];
-        return this.allScreenings().filter(f => this.canEnter(f,c) && this.accepts(c,f)
+        return this.allScreenings().filter(f => this.canEnter(f,c,{ ignoreIdentity }) && this.accepts(c,f)
           && this.freeSeats(f)+(b.screeningId===f.id ? b.seats:0) >= c.groupSize);
       },
       evaluateCustomerCase(c) {
@@ -553,35 +708,45 @@
                 add(rule.id || 'conditional', rule.issueText || `Screen ${rule.screen} conditional rule not met.`);
               }
             }
-            if (pol.checkAgeRestrictions) {
+            if (pol.checkAgeRestrictions || c.requiresIdentityCheck) {
               if (c.person?.obviousDisguise) {
                 add('disguise', c.person.disguiseIssueText || 'Customer is wearing an obvious disguise.', true);
               }
-              if (c.idCard?.exists) {
+              if (this.needsIdFor(c, f) && c.idCard?.exists && c.idCard.presented) {
                 if (!this.isValidCalendarDate(c.idCard.dob)) {
-                  add('id_forged', 'The birth date on the ID card is not a real calendar date.', true);
+                  add('id_forged', `The birth date on the ID card (${this.formatDateDMY(c.idCard.dob)}) is not a real calendar date.`, true);
                 } else {
                   const idAge = this.calculateAge(c.idCard.dob, pol.currentDate);
-                  if (c.idCard.statedAge !== undefined && c.idCard.statedAge !== idAge) {
-                    add('id_forged', `ID card states age ${c.idCard.statedAge}, which contradicts birth date ${c.idCard.dob} (age ${idAge}).`, true);
+                  if (c.idCard.issueDate && !this.isValidCalendarDate(c.idCard.issueDate)) {
+                    add('id_forged', `The ID card issue date (${this.formatDateDMY(c.idCard.issueDate)}) is invalid.`, true);
+                  } else if (c.idCard.expiryDate && !this.isValidCalendarDate(c.idCard.expiryDate)) {
+                    add('id_forged', `The ID card expiry date (${this.formatDateDMY(c.idCard.expiryDate)}) is invalid.`, true);
+                  } else if (c.idCard.issueDate && c.idCard.expiryDate && this.compareDates(c.idCard.issueDate, c.idCard.expiryDate) > 0) {
+                    add('id_forged', `The ID card issue date (${this.formatDateDMY(c.idCard.issueDate)}) is after its expiry date (${this.formatDateDMY(c.idCard.expiryDate)}).`, true);
+                  } else if (c.idCard.issueDate && this.compareDates(c.idCard.issueDate, this.currentDateISO()) > 0) {
+                    add('id_forged', `The ID card issue date (${this.formatDateDMY(c.idCard.issueDate)}) is in the future.`, true);
+                  } else if (c.idCard.issueDate && this.compareDates(c.idCard.dob, c.idCard.issueDate) > 0) {
+                    add('id_forged', 'The ID was issued before the date of birth.', true);
+                  } else if (c.idCard.expiryDate && this.compareDates(c.idCard.expiryDate, this.currentDateISO()) < 0) {
+                    add('id_expired', `The ID card expired on ${this.formatDateDMY(c.idCard.expiryDate)}.`, true);
                   }
-                  if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== idAge) {
-                    add('age_mismatch', `Customer claims to be ${c.claimedAge}, but ID birth date shows age ${idAge}.`, true);
+                  if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== idAge && (c.statedAgeInOpening || c.ageRequested)) {
+                    add('age_mismatch', `Customer claims to be ${c.claimedAge}, but ID birth date (${this.formatDateDMY(c.idCard.dob)}) shows age ${idAge}.`, true);
                   }
                   if (c.idCard.photoMismatch || c.idCard.photoAltered) {
-                    add('id_forged', c.idCard.photoMismatchText || 'The ID card photograph has been altered.', true);
+                    add('id_forged', c.idCard.photoMismatchText || 'The ID card photograph does not match the customer.', true);
                   }
                   if (t.holderName && c.idCard.holderName && t.holderName !== c.idCard.holderName) {
                     add('id_name', `Ticket name (${t.holderName}) does not match ID card (${c.idCard.holderName}).`, true);
-                  } else if (c.idCard.holderName && c.person?.name && c.idCard.holderName !== c.person.name) {
-                    add('id_name', `ID card name (${c.idCard.holderName}) does not match customer (${c.person.name}).`, true);
+                  } else if (c.idCard.holderName && c.introducedName && !c.identityTitle && c.idCard.holderName !== c.introducedName) {
+                    add('id_name', `ID card name (${c.idCard.holderName}) does not match the name given (${c.introducedName}).`, true);
                   }
                   if ((f.minAge || 0) > 0 && idAge !== null && idAge < f.minAge) {
-                    add('underage', `Customer is ${idAge} years old. ${f.title} requires minimum age ${f.minAge} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
+                    add('underage', `Customer is ${idAge} years old (DOB ${this.formatDateDMY(c.idCard.dob)}). ${f.title} requires minimum age ${f.minAge} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
                   }
                 }
-              } else if ((f.minAge || 0) > 0) {
-                add('missing_id', `No valid ID card presented for ${f.title} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
+              } else if (this.needsIdFor(c, f) && c.idRequested) {
+                add(c.idRefused ? 'id_refused' : 'missing_id', c.idRefused ? 'Customer declined to provide identification.' : `No ID card provided for ${f.title} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
               }
             }
             if(b && (b.screeningId!==f.id || b.seats!==t.seats || t.seats<c.groupSize)) add('seats',`Booking: ${b.seats} seat(s). People: ${c.groupSize}.`);
@@ -589,16 +754,23 @@
             if(c.known.preference && !this.accepts(c,f)) add('preference','The ticket does not match the customer’s plan.');
           }
         }
-        const hard=issues.some(i=>i.hard), needsQuestion=!!(c.requiredTicketQuestion&&!t?.exists)||(!hard && !!c.requiredQuestion && !c.known.preference);
+        const hard=issues.some(i=>i.hard);
         const options=hard ? [] : this.correctionOptions(c);
+        const identityUnknown = this.identityQuestionsRelevant(c) && !c.idRequested && !c.idCard?.presented;
+        // A visible, unfixable ticket error already justifies refusal. A correction to
+        // an unrestricted film also needs no ID. Do not demand unrelated evidence.
+        const visibleRefusal = issues.length > 0 && (!c.requiredQuestion || c.known.preference) &&
+          (hard || (identityUnknown && this.correctionOptions(c, { ignoreIdentity: true }).length === 0));
+        const needsIdentification = !hard && !visibleRefusal && identityUnknown && (issues.length ? !options.length : this.needsIdFor(c));
+        const needsQuestion=!!(c.requiredTicketQuestion&&!t?.exists)||(!hard && !!c.requiredQuestion && !c.known.preference)||needsIdentification;
         let validActions=[];
         if(needsQuestion) validActions=['QUESTION'];
         else if(!issues.length) validActions=['ADMIT'];
         else validActions=options.length ? ['CORRECT'] : ['REFUSE'];
         // Discretionary dilemma customers may decline an alternative. A compassionate admission is recorded separately, not scored as compliant.
         if(c.dilemma && !needsQuestion && issues.length && !hard && !validActions.includes('REFUSE')) validActions.push('REFUSE');
-        const discretionary=Boolean(c.dilemma && !hard && issues.length===1 && (!c.discretionaryIssueCode || issues[0].code===c.discretionaryIssueCode));
-        return {validActions,issues,options,needsQuestion,discretionary,reason:issues.map(i=>i.text).join(' ') || 'The booking and ticket match.'};
+        const discretionary=Boolean(c.dilemma && !identityUnknown && !hard && issues.length===1 && (!c.discretionaryIssueCode || issues[0].code===c.discretionaryIssueCode));
+        return {validActions,issues,options,needsQuestion,needsIdentification,discretionary,reason:issues.map(i=>i.text).join(' ') || 'The booking and ticket match.'};
       },
       parseTime(t) { if(!/^\d{2}:\d{2}$/.test(t||'')) return NaN; const [h,m]=t.split(':').map(Number); return h<24 && m<60 ? h*60+m:NaN; },
       pick(list) { return list.length ? list[Math.floor(this.rng()*list.length)] : null; },
@@ -653,16 +825,63 @@
         this.state.schedule.sort((a,b)=>a.timeMins-b.timeMins);this.state.tvSchedule.sort((a,b)=>a.timeMins-b.timeMins);
         this.state.usedSerials=[...(pol.initialUsedSerials || [])];
         this.state.scriptedDone={}; this.state.encounterGroupsDone={}; this.state.noticesSeen={};
+        this.state.scriptedEncountersState={};
+        this.state.encounterArrivalTimes={};
+        for (const enc of (dayCfg.scriptedEncounters || [])) {
+          // Guaranteed visitors join during the shift, even if a busy clerk serves them later.
+          if (enc.guaranteed) this.state.encounterArrivalTimes[enc.id] = Math.max(1065, enc.trigger?.minClockMins || 0, enc.advanceClockToMins || 0);
+          if (this.state.resolvedEncounters?.[day]?.[enc.id]) {
+            this.state.scriptedEncountersState[enc.id] = 'resolved';
+            this.state.scriptedDone[enc.id] = true;
+            if (enc.encounterGroup) this.state.encounterGroupsDone[enc.encounterGroup] = true;
+          } else {
+            this.state.scriptedEncountersState[enc.id] = 'scheduled';
+          }
+        }
         this.state.clockEndMins=Math.max(...this.allScreenings().map(f=>f.timeMins))+10;
         this.state.scheduleSnapshot=this.allScreenings().map(f=>[f.id,f.time,f.timeMins,f.screen,f.status]);
       },
       // Queue visitors have no invented tickets yet: cases are constructed from the live state at the window.
-      spawnCustomerToQueue() {
-        this.state.queue.push({person:CHARACTERS.createRandomPerson(()=>this.rng()),patience:100}); UI.renderQueue();
+      spawnCustomerToQueue(forcedEncounterId = null) {
+        if (forcedEncounterId && (this.state.queue.some(c => c.queuedEncounterId === forcedEncounterId) ||
+            ['presented','resolved'].includes(this.state.scriptedEncountersState?.[forcedEncounterId]))) return;
+        const entry = {
+          person: CHARACTERS.createRandomPerson(() => this.rng()),
+          patience: 100
+        };
+        if (forcedEncounterId) {
+          const enc = (this.dayConfig().scriptedEncounters || []).find(e => e.id === forcedEncounterId);
+          entry.queuedEncounterId = forcedEncounterId;
+          entry.guaranteedEncounter = true;
+          entry.preventQueueWalkout = enc?.preventQueueWalkout !== false;
+          entry.arrivalTime = this.state.encounterArrivalTimes?.[forcedEncounterId] ?? this.state.clockMins;
+          if (!this.state.scriptedEncountersState) this.state.scriptedEncountersState = {};
+          if (this.state.scriptedEncountersState[forcedEncounterId] !== 'resolved') {
+            this.state.scriptedEncountersState[forcedEncounterId] = 'queued';
+          }
+        }
+        this.state.queue.push(entry);
+        UI.renderQueue();
       },
-      generateCustomerScenario(forcedType=null, person=null) {
+      nextGuaranteedEncounter(closing = false) {
+        const s = this.state;
+        return (this.dayConfig().scriptedEncounters || []).find(enc => {
+          if (!enc.guaranteed || s.scriptedDone[enc.id] || ['presented','resolved'].includes(s.scriptedEncountersState?.[enc.id])) return false;
+          if (enc.encounterGroup && s.encounterGroupsDone[enc.encounterGroup]) return false;
+          const tr = enc.trigger || {};
+          if (tr.requireStoryValue && !this.matchesStoryCondition(tr.requireStoryValue)) return false;
+          if (tr.requireStoryFlag && !s.story[tr.requireStoryFlag]) return false;
+          if (tr.requireUnusedSerial && s.usedSerials.includes(tr.requireUnusedSerial)) return false;
+          if (!closing && s.casesGeneratedCount < (tr.minCaseIndex ?? tr.caseIndex ?? 0)) return false;
+          if (!closing && !enc.advanceClockToMins && s.clockMins < (tr.minClockMins || 0)) return false;
+          if (tr.requireOpenScreeningId && !this.screening(tr.requireOpenScreeningId)) return false;
+          if (tr.requireOpenRoom && !this.allScreenings().some(f => f.screen === tr.requireOpenRoom && f.status !== 'CANCELLED')) return false;
+          return true;
+        });
+      },
+      generateCustomerScenario(forcedType=null, person=null, arrivalTime=null) {
         const s=this.state, camp=this.campaign(), dayCfg=this.dayConfig(), pol=this.policies();
-        let now=s.clockMins;
+        let now=arrivalTime ?? s.clockMins;
         const adultDobs=['1984-03-15','1991-07-22','1979-11-04','1996-01-29','2001-08-12','1988-05-19'];
         const shellPerson=person||CHARACTERS.createRandomPerson(()=>this.rng());
         const defaultDob=pol.checkAgeRestrictions ? (this.pick(adultDobs)||'1988-05-19') : '1988-05-19';
@@ -673,7 +892,7 @@
           ...(pol.checkAgeRestrictions ? {
             claimedAge:defaultAge,
             trueAge:defaultAge,
-            idCard:{exists:true,presented:true,holderName:shellPerson.name,dob:defaultDob}
+            idCard:this.normalizeIdCard({exists:true,presented:true,holderName:shellPerson.name,dob:defaultDob}, shellPerson.name, s.day)
           } : {})
         };
         const lateTol = pol.lateToleranceMins ?? 10;
@@ -683,8 +902,14 @@
 
         const findScriptedEncounter = () => {
           for (const enc of (dayCfg.scriptedEncounters || [])) {
-            if (enc.oncePerShift !== false && s.scriptedDone[enc.id]) continue;
-            if (enc.encounterGroup && s.encounterGroupsDone?.[enc.encounterGroup]) continue;
+            const st = s.scriptedEncountersState?.[enc.id];
+            if (enc.guaranteed) continue; // Guaranteed encounters enter through the queue scheduler.
+            if (enc.oncePerShift !== false && (s.scriptedDone[enc.id] || st === 'resolved' || st === 'presented')) continue;
+            if (enc.encounterGroup) {
+              const groupBusy = s.encounterGroupsDone?.[enc.encounterGroup]
+                || (dayCfg.scriptedEncounters || []).some(other => other.encounterGroup === enc.encounterGroup && ['presented', 'resolved'].includes(s.scriptedEncountersState?.[other.id]));
+              if (groupBusy) continue;
+            }
             const tr = enc.trigger || {};
             const effNow = (enc.advanceClockToMins && now < enc.advanceClockToMins) ? enc.advanceClockToMins : now;
             if (tr.minClockMins !== undefined && effNow < tr.minClockMins) continue;
@@ -706,7 +931,7 @@
           'valid', 'subjective', 'wrong_film', 'screen', 'time', 'date', 'missing', 'hidden_ticket',
           'incomplete', 'cancelled', 'group', 'duplicate', 'promo', 'late', 'move', 'combined',
           'tv', 'tv_wrong', 'red', 'no_red',
-          'age_valid', 'underage', 'missing_id', 'fake_id', 'false_identity', 'disguise', 'staff_impostor'
+          'age_valid', 'underage', 'missing_id', 'refused_id', 'fake_id', 'false_identity', 'disguise', 'staff_impostor', 'expired_id'
         ]);
 
         let type = forcedType;
@@ -725,7 +950,7 @@
               if (candidate === 'tv_wrong' && !open.some(f => f.screen === 'TV Lounge')) continue;
               if (candidate === 'cancelled' && !this.state.schedule.some(f => f.status === 'CANCELLED')) continue;
               if ((candidate === 'red' || candidate === 'no_red') && !(pol.conditionalScreenRules || []).some(r => now > r.afterMins && now <= r.afterMins + 15)) continue;
-              if (['underage', 'missing_id', 'fake_id'].includes(candidate) && (!pol.checkAgeRestrictions || !open.some(f => (f.minAge || 0) >= 12))) continue;
+              if (['underage', 'missing_id', 'refused_id', 'fake_id', 'expired_id'].includes(candidate) && (!pol.checkAgeRestrictions || !open.some(f => (f.minAge || 0) >= 12))) continue;
               types.push(candidate);
             }
             type = this.pick(types) || 'screen';
@@ -750,7 +975,7 @@
         if (scripted?.advanceClockToMins && s.clockMins < scripted.advanceClockToMins) {
           s.clockMins = scripted.advanceClockToMins;
           s.clockFormatted = this.formatMins(s.clockMins);
-          now = s.clockMins;
+          now = arrivalTime ?? s.clockMins;
           shell.arrivalTime = now;
           UI.updateClockDisplay();
           open = this.allScreenings().filter(f => this.canEnter(f, shell) && this.freeSeats(f) >= 1);
@@ -813,7 +1038,7 @@
           if (!desired || !other) return this.generateCustomerScenario('screen', person);
           f = other;
         }
-        if (['age_valid', 'underage', 'missing_id', 'fake_id', 'false_identity', 'disguise'].includes(type) && !scripted) {
+        if (['age_valid', 'underage', 'missing_id', 'refused_id', 'fake_id', 'false_identity', 'disguise', 'expired_id'].includes(type) && !scripted) {
           const ageRestrictedOpen = open.filter(x => (x.minAge || 0) >= 12);
           if (!ageRestrictedOpen.length) return this.generateCustomerScenario('valid', person);
           f = desired = this.pick(ageRestrictedOpen);
@@ -822,17 +1047,16 @@
 
         const group = scripted?.groupSize ?? ((type === 'group' || type === 'overbooked_group') ? 3 : 1);
         const ticketSeats = scripted?.ticketSeats ?? (type === 'group' || type === 'overbooked_group' ? 1 : group);
-        const singleDescriptions = (f.descriptions || [f.statement]).filter(text => !/^We|^We're/.test(text) && !/\bfamily|partner\b/.test(text));
-        const purposeText = `I'm here ${f.purposePhrases?.[0] || 'to have fun'}.`;
         const statementChoices = [
+          { text: `One for ${f.title}, please.`, namesPlan: true },
           { text: `I'm going to see ${f.title}.`, namesPlan: true },
-          ...singleDescriptions.map(text => ({ text, namesPlan: true })),
-          { text: purposeText, namesPlan: false }
+          { text: `Evening. Here you go.`, namesPlan: false }
         ];
         const chosenStatement = this.pick(statementChoices);
 
         const c = {
           ...shell,
+          ...(shell.idCard ? { idCard: { ...shell.idCard, presented: false } } : {}),
           groupSize: group,
           caseType: type,
           patience: 100,
@@ -840,9 +1064,11 @@
           intent: { ids: [desired.id] },
           dialogue: [],
           asked: [],
+          discoveredEvidence: [],
+          unlockedQuestions: [],
           questionedYet: false,
           requiredQuestion: false,
-          statement: chosenStatement ? chosenStatement.text : `I'm going to see ${f.title}.`,
+          statement: chosenStatement ? chosenStatement.text : `One for ${f.title}, please.`,
           ticket: {
             exists: true,
             serial: this.makeUniqueSerial(),
@@ -862,7 +1088,7 @@
 
         if (['wrong_film', 'promo', 'change'].includes(type) || scripted?.wrongFilmTicket) {
           c.intent = c.known.preference = { genres: scripted?.intentGenres ? [...scripted.intentGenres] : [desired.genre] };
-          c.statement = `I'm not going to watch this film. I want ${desired.genre === 'comedy' ? 'something funny' : `a ${desired.genreLabel.toLowerCase()}`}.`;
+          c.statement = `Wait, that's the wrong film. I asked for ${desired.genre === 'comedy' ? 'something funny' : `a ${desired.genreLabel.toLowerCase()}`}.`;
           c.known.publicPlan = true;
         }
         if (type === 'screen' || type === 'combined' || type === 'tv_wrong') c.ticket.screen = f.screen === 1 ? 2 : 1;
@@ -873,9 +1099,9 @@
           if (type === 'hidden_ticket') {
             c.backupTicket = { ...c.ticket };
             c.requiredTicketQuestion = true;
-            c.statement = "My ticket? It isn't in my bag. One moment...";
+            c.statement = "My ticket? Hold on, let me check my bag...";
           } else {
-            c.statement = "I haven't got a ticket. I'm not going to buy one.";
+            c.statement = "I haven't got a ticket.";
           }
           c.ticket = { exists: false, reason: 'No ticket on the desk.' };
           c.known.publicPlan = false;
@@ -884,22 +1110,22 @@
           c.known.preference = null;
           c.known.publicPlan = false;
           c.requiredQuestion = true;
-          c.statement = "I'm going to meet my friends. Which film are we going to see? Let me check.";
+          c.statement = "I'm meeting friends here, let me check which film we're seeing.";
         }
         if (type === 'cancelled') {
           c.intent = { genres: [desired.genre] };
           c.known.preference = null;
           c.known.publicPlan = false;
           c.requiredQuestion = true;
-          c.statement = `I'm going to see ${f.title}. Can I watch another film?`;
+          c.statement = `Ticket for ${f.title}, please.`;
         }
-        if (type === 'group' || type === 'overbooked_group') { c.statement = `We're going to see ${f.title}. There are ${group === 3 ? 'three' : group} of us.`; c.known.publicPlan = true; }
+        if (type === 'group' || type === 'overbooked_group') { c.statement = `${group === 3 ? 'Three' : group} for ${f.title}, please.`; c.known.publicPlan = true; }
         if (type === 'duplicate') c.ticket.serial = this.pick(s.usedSerials);
         if (type === 'promo') c.ticket.ticketType = 'PROMO (NO CHANGE)';
-        if (type === 'late') { c.statement = `I'm late. I only want to see ${f.title}.`; c.known.publicPlan = true; }
-        if (type === 'subjective') { c.statement = `I'm going to watch ${f.title} to relax.`; c.known.publicPlan = true; }
+        if (type === 'late') { c.statement = `Sorry I'm late—one for ${f.title}, please.`; c.known.publicPlan = true; }
+        if (type === 'subjective') { c.statement = `One for ${f.title}, please.`; c.known.publicPlan = true; }
         if (type === 'red' || type === 'no_red') {
-          c.statement = `I'm going to see ${f.title} at ${f.time}.`;
+          c.statement = `One for ${f.title} at ${f.time}, please.`;
           c.intent = c.known.preference = { ids: [f.id] };
           c.known.publicPlan = true;
         }
@@ -910,81 +1136,132 @@
             const validAge = this.calculateAge(validDob, pol.currentDate);
             c.claimedAge = validAge;
             c.trueAge = validAge;
-            c.idCard = { exists: true, presented: true, holderName: c.person.name, dob: validDob };
-            c.statement = `I'm going to see ${f.title}. Here is my ticket and ID.`;
+            c.idCard = this.normalizeIdCard({ exists: true, presented: false, holderName: c.person.name, dob: validDob }, c.person.name, s.day);
+            c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'underage') {
             const underageDob = (f.minAge || 12) >= 16 ? '2012-06-15' : '2016-06-15';
             const uAge = this.calculateAge(underageDob, pol.currentDate);
-            c.claimedAge = uAge;
+            c.claimedAge = (f.minAge || 12) + 1;
             c.trueAge = uAge;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: true, presented: true, holderName: c.person.name, dob: underageDob };
-            c.statement = `I'm going to see ${f.title}. I really want to watch it!`;
+            c.idCard = this.normalizeIdCard({ exists: true, presented: false, holderName: c.person.name, dob: underageDob }, c.person.name, s.day);
+            c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'missing_id') {
             c.claimedAge = (f.minAge || 12) + 1;
             c.trueAge = (f.minAge || 12) - 2;
             c.allowAgeCorrection = false;
             c.idCard = { exists: false, presented: false, reason: 'No ID card presented.' };
-            c.statement = `I'm going to see ${f.title}. I'm ${c.claimedAge}, I promise, but I left my ID at home.`;
+            c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
+          } else if (type === 'refused_id') {
+            c.idCard.refusesToShow = true;
+            c.idCard.refusalText = "I'd rather not show my ID.";
+            c.allowAgeCorrection = false;
           } else if (type === 'fake_id') {
             const fakeDob = '2012-08-20';
             const realAge = this.calculateAge(fakeDob, pol.currentDate);
             c.claimedAge = (f.minAge || 16) + 1;
             c.trueAge = realAge;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: true, presented: true, holderName: c.person.name, dob: fakeDob, statedAge: c.claimedAge, photoAltered: true };
-            c.statement = `I'm going to see ${f.title}. Check my ID card—it says I'm ${c.claimedAge}!`;
+            c.idCard = this.normalizeIdCard({
+              exists: true,
+              presented: false,
+              holderName: c.person.name,
+              dob: fakeDob,
+              issueDate: '20/10/2026',
+              expiryDate: '10/10/2025'
+            }, c.person.name, s.day);
+            c.statement = `One for ${f.title}, please.`;
+            c.known.publicPlan = true;
+          } else if (type === 'expired_id') {
+            const validDob = '1998-04-12';
+            const validAge = this.calculateAge(validDob, pol.currentDate);
+            c.claimedAge = validAge;
+            c.trueAge = validAge;
+            c.allowAgeCorrection = false;
+            c.idCard = this.normalizeIdCard({
+              exists: true,
+              presented: false,
+              holderName: c.person.name,
+              dob: validDob,
+              issueDate: '01/05/2018',
+              expiryDate: '01/05/2023'
+            }, c.person.name, s.day);
+            c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'false_identity') {
             c.ticket.holderName = c.person.name;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: true, presented: true, holderName: 'Dr Alex Sterling', dob: '1982-11-03', photoMismatch: true };
-            c.statement = `I'm going to see ${f.title}. This is definitely my ID card.`;
+            c.idCard = this.normalizeIdCard({
+              exists: true,
+              presented: false,
+              holderName: 'Dr Alex Sterling',
+              dob: '1982-11-03',
+              photoMismatch: true,
+              portraitPerson: { ...c.person, isElderly: true, hairColor: '#cbd5e1', glasses: !c.person.glasses, hat: false },
+              photoMismatchText: 'The ID card photograph shows a much older person and the name does not match the ticket.'
+            }, 'Dr Alex Sterling', s.day);
+            c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'disguise') {
-            c.person = { ...c.person, fakeBeard: true, obviousDisguise: true, disguiseIssueText: 'Customer is wearing a glued-on fake beard.' };
+            c.person = { ...c.person, fakeBeard: true, obviousDisguise: true, disguiseIssueText: 'The beard is attached with visible glue.' };
             c.claimedAge = 24;
-            c.trueAge = 13;
+            c.trueAge = 14;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: false, presented: false, reason: 'No ID card.' };
-            c.statement = `Good evening! I am ${c.claimedAge} years old and I am going to see ${f.title}.`;
+            c.idCard = this.normalizeIdCard({
+              exists: true,
+              presented: false,
+              holderName: c.person.name,
+              dob: '2012-02-30'
+            }, c.person.name, s.day);
+            c.statement = `Good evening. One adult ticket for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'staff_impostor') {
-            c.person = { ...c.person, staffHat: true, staffBadge: true, obviousDisguise: true, disguiseIssueText: 'Customer is wearing a homemade staff badge.' };
+            c.person = { ...c.person, staffHat: true, staffBadge: true, obviousDisguise: true, disguiseIssueText: 'Customer is wearing a homemade staff badge with an unlisted pass.' };
             c.ticket.ticketType = 'STAFF PASS';
             c.ticket.serial = 'STAFF-00-FAKE';
             c.claimedAge = 19;
             c.trueAge = 14;
             c.allowAgeCorrection = false;
-            c.idCard = { exists: false, presented: false, reason: 'No staff ID.' };
-            c.statement = `I work here! I need to inspect ${f.title} right away.`;
+            c.idCard = { exists: false, presented: false, reason: 'No ID card presented.' };
+            c.statement = `Staff pass for ${f.title}.`;
             c.known.publicPlan = true;
           }
         }
 
         if (scripted) {
           c.scriptedId = scripted.id;
+          c.encounterGroup = scripted.encounterGroup || null;
+          c.characterId = scripted.characterId || null;
           if (scripted.characterId && camp.characters?.[scripted.characterId]) {
-            c.person = { ...camp.characters[scripted.characterId] };
+            c.person = { ...camp.characters[scripted.characterId], characterId: scripted.characterId };
             if (scripted.personTagOverride) c.person.tag = scripted.personTagOverride;
           }
           if (scripted.personOverrides) {
             c.person = { ...c.person, ...scripted.personOverrides };
           }
           if (c.idCard && !scripted.idCard) {
-            c.idCard.holderName = c.person.name;
+            c.idCard = this.normalizeIdCard({ ...c.idCard, holderName: c.person.name, presented: false }, c.person.name, s.day);
           }
           if (scripted.ticketOverrides) {
             Object.assign(c.ticket, scripted.ticketOverrides);
           }
           if (scripted.idCard) {
-            c.idCard = structuredClone(scripted.idCard);
+            c.idCard = this.normalizeIdCard({ ...structuredClone(scripted.idCard), presented: false }, c.person.name, s.day);
           }
           if (scripted.claimedAge !== undefined) c.claimedAge = scripted.claimedAge;
           if (scripted.trueAge !== undefined) c.trueAge = scripted.trueAge;
+          if (scripted.statedAgeInOpening !== undefined) c.statedAgeInOpening = Boolean(scripted.statedAgeInOpening);
+          if (scripted.requiresAgeCheck !== undefined) c.requiresAgeCheck = Boolean(scripted.requiresAgeCheck);
+          if (scripted.requiresIdentityCheck !== undefined) c.requiresIdentityCheck = Boolean(scripted.requiresIdentityCheck);
+          if (scripted.identityTitle) c.identityTitle = true;
+          c.preventQueueWalkout = scripted.preventQueueWalkout !== false;
+          c.guaranteedEncounter = Boolean(scripted.guaranteed);
+          if (scripted.revealsNameInOpening !== undefined) c.revealsNameInOpening = Boolean(scripted.revealsNameInOpening);
+          if (scripted.concealIdentity) c.concealIdentity = true;
+          if (scripted.introducedName !== undefined) c.introducedName = scripted.introducedName;
           if (scripted.allowAgeCorrection !== undefined) c.allowAgeCorrection = scripted.allowAgeCorrection;
           if (scripted.managerDirective) c.managerDirective = true;
           if (scripted.managerBonusCash !== undefined) c.managerBonusCash = scripted.managerBonusCash;
@@ -992,6 +1269,8 @@
           if (scripted.managerRefuseRepDelta !== undefined) c.managerRefuseRepDelta = scripted.managerRefuseRepDelta;
           if (scripted.expectedAction) c.expectedAction = scripted.expectedAction;
           if (scripted.storyEffects) c.storyEffects = structuredClone(scripted.storyEffects);
+          if (scripted.questionEffects) c.questionEffects = structuredClone(scripted.questionEffects);
+          if (scripted.extraQuestions) c.extraQuestions = structuredClone(scripted.extraQuestions);
           if (scripted.customFeedback) c.customFeedback = structuredClone(scripted.customFeedback);
           if (scripted.storyKey) c.storyKey = scripted.storyKey;
           if (scripted.dilemma) c.dilemma = true;
@@ -1021,18 +1300,20 @@
             const matchedBranch = scripted.statementByStory.find(b => !b.condition || this.matchesStoryCondition(b.condition));
             if (matchedBranch?.text) {
               c.statement = formatTpl(matchedBranch.text);
+              if (matchedBranch.revealsName !== undefined) c.revealsNameInOpening = Boolean(matchedBranch.revealsName);
+              if (matchedBranch.introducedName !== undefined) c.introducedName = matchedBranch.introducedName;
               if (!scripted.requiredQuestion) c.known.publicPlan = true;
             }
           } else if (scripted.statementByStory && typeof scripted.statementByStory === 'object') {
             const storyState = s.story[scripted.storyKey];
-            const tpl = scripted.statementByStory[storyState] || scripted.statementByStory.default || scripted.statementTemplate || `Today I'm going to see {title}.`;
+            const tpl = scripted.statementByStory[storyState] || scripted.statementByStory.default || scripted.statementTemplate || `One for {title}, please.`;
             c.statement = formatTpl(tpl);
             if (!scripted.requiredQuestion) c.known.publicPlan = true;
           } else if (scripted.statementTemplate) {
             c.statement = formatTpl(scripted.statementTemplate);
             if (!scripted.requiredQuestion) c.known.publicPlan = true;
           }
-          const nonAdmitCases = ['move', 'underage', 'missing_id', 'fake_id', 'false_identity', 'disguise', 'staff_impostor', 'manager_pressure', 'overbooked_group', 'screen', 'wrong_film', 'duplicate', 'promo', 'cancelled', 'late', 'dilemma_late'];
+          const nonAdmitCases = ['move', 'underage', 'missing_id', 'refused_id', 'fake_id', 'false_identity', 'disguise', 'staff_impostor', 'expired_id', 'manager_pressure', 'overbooked_group', 'screen', 'wrong_film', 'duplicate', 'promo', 'cancelled', 'late', 'dilemma_late'];
           c.isScriptedAdmit = scripted.expectedAction
             ? scripted.expectedAction === 'ADMIT'
             : Boolean(!scripted.dilemma && !scripted.wrongFilmTicket && !nonAdmitCases.includes(type));
@@ -1044,6 +1325,7 @@
           ? this.calculateAge(c.idCard.dob, pol.currentDate)
           : null;
         const spokenAge = c.claimedAge ?? calcIdAge ?? 25;
+        const formattedDob = c.idCard?.dob ? this.formatDateDMY(c.idCard.dob) : '';
         c.qaResponses = {
           which_film: c.intent.genres ? `I want a ${c.intent.genres.join(' or ')}. Any one is fine.` : `I'm going to see ${desired.title}.`,
           why_see: `I'm here ${desired.purposePhrases?.[0] || 'to have fun'}.`,
@@ -1052,10 +1334,11 @@
           friends_coming: group > 1 ? "Yes, they are. We're going to watch together." : "No. He isn't going to come today.",
           other_ticket: type === 'hidden_ticket' ? "Here it is! It was in my coat." : "No. I don't have another ticket.",
           alternative: c.intent.genres ? `A ${c.intent.genres.join(' or ')} is OK.` : `Only ${desired.title}, please.`,
-          ask_age: `I am ${spokenAge} years old.`,
+          ask_age: `I'm ${spokenAge}.`,
+          ask_name: `I'm ${c.introducedName || c.person.name}.`,
           ask_id: c.idCard?.exists
-            ? `Here is my ID card. My date of birth is ${c.idCard.dob}.`
-            : "I haven't got my ID card with me today."
+            ? `Here is my ID card. My date of birth is ${formattedDob}.`
+            : "I haven't got my ID card with me."
         };
         if (scripted?.qaOverrides) {
           Object.assign(c.qaResponses, scripted.qaOverrides);
@@ -1073,18 +1356,17 @@
           Object.assign(c.qaResponses, packQaOverride);
         }
         if (type === 'cancelled') c.qaResponses.are_you_sure = c.qaResponses.alternative;
+        if (c.idCard?.refusesToShow) c.qaResponses.ask_id = c.idCard.refusalText || "I'd rather not show my ID.";
 
         const ticket = c.backupTicket || c.ticket;
         c.proposedBooking = ticket.exists && !['date', 'duplicate', 'missing'].includes(type)
           ? { serial: ticket.serial, screeningId: f.id, seats: ticket.seats, status: 'reserved' }
           : null;
-        if (!this.validateGeneratedCase(c)) return this.generateCustomerScenario('missing', person);
-        s.casesGeneratedCount++;
-        if (scripted && scripted.oncePerShift !== false) s.scriptedDone[scripted.id] = true;
-        if (scripted?.encounterGroup) {
-          if (!s.encounterGroupsDone) s.encounterGroupsDone = {};
-          s.encounterGroupsDone[scripted.encounterGroup] = true;
+        if (!this.validateGeneratedCase(c)) {
+          if (scripted?.guaranteed) throw new Error(`Invalid guaranteed encounter configuration: ${scripted.id}`);
+          return this.generateCustomerScenario('missing', person);
         }
+        s.casesGeneratedCount++;
         return c;
       },
       validateGeneratedCase(c) {
@@ -1097,6 +1379,9 @@
         const draft=Object.create(this);draft.state={...this.state,bookings:{...this.state.bookings}};
         if(c.proposedBooking)draft.state.bookings[c.proposedBooking.serial]={...c.proposedBooking};
         const test=structuredClone(c);
+        test.idRequested = true;
+        test.idRefused = Boolean(test.idCard?.refusesToShow);
+        if (test.idCard?.exists && !test.idCard.refusesToShow) test.idCard.presented = true;
         if(test.backupTicket){test.ticket=test.backupTicket;test.requiredTicketQuestion=false;}
         if(test.requiredQuestion)test.known.preference=structuredClone(test.intent);
         const ev=draft.evaluateCustomerCase(test);
@@ -1110,7 +1395,7 @@
           screen:'screen',time:'time',date:'date',duplicate:'duplicate',late:'late',no_red:'red',
           group:'seats',overbooked_group:'seats',promo:'preference',wrong_film:'preference',
           incomplete:'preference',cancelled:'cancelled',combined:'screen',move:'screen',tv_wrong:'screen',
-          underage:'underage',missing_id:'missing_id',fake_id:'id_forged',false_identity:'id_name',
+          underage:'underage',missing_id:'missing_id',refused_id:'id_refused',fake_id:'id_forged',expired_id:'id_expired',false_identity:'id_name',
           disguise:'disguise',staff_impostor:'staff',manager_pressure:'vip'
         }[c.caseType];
         if(expected&&!ev.issues.some(i=>i.code===expected))return false;
@@ -1121,44 +1406,157 @@
           if(this.state.bookings[c.proposedBooking.serial]) throw new Error('Booking serial collision');
           this.state.bookings[c.proposedBooking.serial]={...c.proposedBooking};
         }
+        if (c.scriptedId) {
+          if (!this.state.scriptedEncountersState) this.state.scriptedEncountersState = {};
+          this.state.scriptedEncountersState[c.scriptedId] = 'presented';
+        }
         this.syncSeats();
+      },
+      resolveScriptedEncounter(c) {
+        if (!c?.scriptedId) return;
+        const s = this.state;
+        if (!s.scriptedEncountersState) s.scriptedEncountersState = {};
+        s.scriptedEncountersState[c.scriptedId] = 'resolved';
+        s.scriptedDone[c.scriptedId] = true;
+        s.story[`resolved_enc_${c.scriptedId}`] = 'yes';
+        if (!s.resolvedEncounters[s.day]) s.resolvedEncounters[s.day] = {};
+        s.resolvedEncounters[s.day][c.scriptedId] = true;
+        if (c.encounterGroup) {
+          if (!s.encounterGroupsDone) s.encounterGroupsDone = {};
+          s.encounterGroupsDone[c.encounterGroup] = true;
+        }
+        const charId = c.person?.characterId || c.characterId;
+        if (charId && !c.concealIdentity && (c.revealsNameInOpening || c.identityRevealed)) {
+          s.story[`known_char_${charId}`] = 'yes';
+        }
+        if (charId && !c.concealIdentity && c.idCard?.presented && c.idCard.holderName === c.person.name) {
+          s.story[`known_char_${charId}`] = 'yes';
+        }
       },
       nextCustomerFromQueue() {
         if(!this.state.shiftActive || this.state.paused || this.state.modalDepth) return;
         if(this.isShiftDismissed()) return this.endShift('SHIFT FAILED — MANAGEMENT DISMISSED YOU');
-        if(this.state.clockMins>=this.state.clockEndMins) return this.endShift('SHIFT COMPLETE — WELL DONE');
+        if (this.state.currentCustomer && !this.state.decisionLocked) return;
+        const closing = this.state.clockMins >= this.state.clockEndMins;
+        const guaranteed = this.nextGuaranteedEncounter(closing);
+        if(closing && !guaranteed) return this.endShift('SHIFT COMPLETE — WELL DONE');
         this.applyPendingLanguageMode();
         this.state.decisionLocked=false; this.closeCorrectionDrawer();this.clearInspectSelection();
+        if (typeof UI !== 'undefined' && UI.closeIdCardModal) UI.closeIdCardModal();
         document.getElementById('nextCustomerBtn').classList.add('hidden');
         document.getElementById('deskFeedbackBanner').classList.add('hidden');
         document.getElementById('stampAnimationOverlay').classList.add('hidden');
+        if (guaranteed) {
+          this.spawnCustomerToQueue(guaranteed.id);
+          const index = this.state.queue.findIndex(c => c.queuedEncounterId === guaranteed.id);
+          if (index > 0) this.state.queue.unshift(this.state.queue.splice(index, 1)[0]);
+        }
         if(!this.state.queue.length) this.spawnCustomerToQueue();
-        const visitor=this.state.queue.shift(), c=this.generateCustomerScenario(null,visitor.person);
+        const visitor=this.state.queue.shift();
+        const forcedEnc = visitor.queuedEncounterId || null;
+        const c=this.generateCustomerScenario(forcedEnc,visitor.person,forcedEnc ? visitor.arrivalTime : null);
         this.finalizeCustomerAtWindow(c);this.state.currentCustomer=c;
         UI.renderQueue();UI.renderCustomer(c);UI.renderTicketOnDesk(c);UI.renderScheduleBinder();UI.setDecisionButtons(false);
+        this.saveProgress();
       },
 
       askCustomerQuestion(key, label) {
         const c=this.state.currentCustomer;
         if(!c || this.state.decisionLocked || this.state.paused || this.state.modalDepth) return;
+        const question = this.getCustomerQuestions(c).find(q => q[0] === key);
+        if (!question) return;
+        label = question[1];
         SoundFX.click();c.questionedYet=true;
+        if (!Array.isArray(c.discoveredEvidence)) c.discoveredEvidence = [];
         if(['which_film','are_you_sure','alternative'].includes(key)) {c.known.preference=structuredClone(c.intent);c.known.publicPlan=true;}
         if(key==='other_ticket' && c.backupTicket) {c.ticket=c.backupTicket;delete c.backupTicket;c.requiredTicketQuestion=false;UI.renderTicketOnDesk(c);}
-        if(key==='ask_id') {
+        const effect = c.questionEffects?.[key];
+        const qEff = effect && (!effect.condition || this.matchesStoryCondition(effect.condition)) ? effect : null;
+        if(key==='ask_id' || qEff?.revealDocument === 'id') {
           c.idRequested=true;
-          if(c.idCard) c.idCard.presented=true;
+          c.idRefused = Boolean(c.idCard?.refusesToShow);
+          if(c.idCard?.exists && !c.idRefused) {
+            c.idCard.presented=true;
+            if (!c.discoveredEvidence.includes('id_presented')) c.discoveredEvidence.push('id_presented');
+          } else {
+            const evidence = c.idRefused ? 'id_refused' : 'id_missing';
+            if (!c.discoveredEvidence.includes(evidence)) c.discoveredEvidence.push(evidence);
+          }
           UI.renderTicketOnDesk(c);
+        }
+        if (key === 'ask_name') {
+          c.introducedName = c.introducedName || c.person.name;
+          c.identityRevealed = true;
         }
         if(key==='ask_age') {
           c.ageRequested=true;
+          const calcAge = (c.idCard?.exists && this.isValidCalendarDate(c.idCard.dob))
+            ? this.calculateAge(c.idCard.dob, this.currentDateISO())
+            : null;
+          c.revealedClaimedAge = c.claimedAge ?? calcAge ?? 25;
+          if (!c.discoveredEvidence.includes('age_claimed')) c.discoveredEvidence.push('age_claimed');
+        }
+        if ((c.ageRequested || c.statedAgeInOpening) && c.idCard?.presented && c.idCard?.exists) {
+          const actualAge = this.isValidCalendarDate(c.idCard.dob) ? this.calculateAge(c.idCard.dob, this.currentDateISO()) : null;
+          // An impossible birth date contradicts any stated age.
+          if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== actualAge) {
+            if (!c.discoveredEvidence.includes('age_id_contradiction')) {
+              c.discoveredEvidence.push('age_id_contradiction');
+            }
+          }
+        }
+        if (qEff && !c.asked.includes(key)) {
+          if (qEff.revealPreference) {
+            c.known.preference = structuredClone(c.intent);
+            c.known.publicPlan = true;
+          }
+          if (qEff.setStory) {
+            for (const [sk, sv] of Object.entries(qEff.setStory)) {
+              this.state.story[sk] = sv;
+            }
+          }
+          if (qEff.incrementStory) {
+            for (const [sk, delta] of Object.entries(qEff.incrementStory)) {
+              this.state.story[sk] = Number(this.state.story[sk] || 0) + Number(delta);
+            }
+          }
+          if (qEff.evidence) {
+            const evList = Array.isArray(qEff.evidence) ? qEff.evidence : [qEff.evidence];
+            for (const evItem of evList) {
+              if (!c.discoveredEvidence.includes(evItem)) c.discoveredEvidence.push(evItem);
+            }
+          }
+          if (qEff.revealIdentity) {
+            c.identityRevealed = true;
+            if (typeof qEff.revealIdentity === 'string') c.introducedName = qEff.revealIdentity;
+          }
+          if (Array.isArray(qEff.unlockQuestions)) {
+            if (!Array.isArray(c.unlockedQuestions)) c.unlockedQuestions = [];
+            for (const uq of qEff.unlockQuestions) {
+              const uKey = Array.isArray(uq) ? uq[0] : uq?.key;
+              if (uKey && !c.unlockedQuestions.some(existing => (Array.isArray(existing) ? existing[0] : existing?.key) === uKey)) {
+                c.unlockedQuestions.push(uq);
+              }
+            }
+          }
         }
         if(!c.asked.includes(key)) c.asked.push(key);
-        const reply=c.qaResponses[key]||"I'm here to watch a film.";
+        const reply=qEff?.revealStatement || c.qaResponses[key]||"I'm here to watch a film.";
         c.dialogue.push({question:label,reply});
+        this.applyEvidenceEffects(c);
         const box=document.getElementById('customerFollowUpBox');
         box.replaceChildren();
         c.dialogue.slice(-3).forEach(turn=>{const p=document.createElement('p');p.textContent=`${turn.question} — ${turn.reply}`;box.append(p);});
-        box.classList.remove('hidden'); UI.updateCustomerSummary();
+        box.classList.remove('hidden'); UI.renderCustomer(c); UI.updateCustomerSummary();
+        const questionButton = [...document.getElementById('questionButtonsGrid').children].find(button => button.getAttribute?.('data-question') === key);
+        questionButton?.focus?.();
+        this.saveProgress();
+      },
+
+      applyEvidenceEffects(c) {
+        for (const [evidence, effects] of Object.entries(c.storyEffects?.onEvidence || {})) {
+          if (c.discoveredEvidence?.includes(evidence)) Object.assign(this.state.story, effects);
+        }
       },
 
       openCorrectionDrawer() {
@@ -1204,9 +1602,13 @@
       makeDecision(action, target=null) {
         const s=this.state,c=s.currentCustomer,camp=this.campaign(),dm=camp.dilemmaMessage||{};
         if(!c || !s.shiftActive || s.paused || s.modalDepth || s.decisionLocked) return;
+        const notesStart = s.shiftStats.dilemmaNotes.length;
         const before=structuredClone(c.ticket),result=this.applyDecision(c,action,target?.id),ev=result.evaluation;
-        if(result.blocked) {UI.showDeskFeedback('warn',c.requiredTicketQuestion?'Ask if there is another ticket.':'Ask the customer about their plan first.');return;}
-        s.decisionLocked=true;this.closeCorrectionDrawer();s.shiftStats.served++;
+        if(result.blocked) {UI.showDeskFeedback('warn',c.requiredTicketQuestion?'Ask if there is another ticket.':ev.needsIdentification?'Request identification before checking this admission.':'Ask the customer about their plan first.');return;}
+        s.decisionLocked=true;this.closeCorrectionDrawer();
+        if (typeof UI !== 'undefined' && UI.closeIdCardModal) UI.closeIdCardModal();
+        s.shiftStats.served++;
+        this.resolveScriptedEncounter(c);
         let message;
         if(result.accepted && result.compliant) {
           s.shiftStats.correct++;
@@ -1223,9 +1625,6 @@
             s.money += earn; s.shiftStats.cashEarned += earn;
             this.adjustReputation(c.managerRefuseRepDelta ?? 3);
             s.story.manager_conflict = Number(s.story.manager_conflict || 0) + 1;
-            if (c.questionedYet || s.story.sofia_evidence === 'yes') {
-              s.story.whistleblower_identified = 'yes';
-            }
             message = c.customFeedback?.REFUSE || `✓ REFUSE. +€${earn}. ${ev.reason}`;
             SoundFX.cash();
           } else {
@@ -1249,7 +1648,7 @@
         } else {
           s.shiftStats.mistakes++;
           s.story.total_mistakes = Number(s.story.total_mistakes || 0) + 1;
-          if (action === 'ADMIT' && ev.issues.some(i => ['underage', 'missing_id', 'id_forged', 'age_mismatch', 'id_name', 'disguise', 'staff', 'vip', 'duplicate'].includes(i.code))) {
+          if (action === 'ADMIT' && ev.issues.some(i => ['underage', 'missing_id', 'id_refused', 'id_forged', 'id_expired', 'age_mismatch', 'id_name', 'disguise', 'staff', 'vip', 'duplicate'].includes(i.code))) {
             s.story.inspection_violations = Number(s.story.inspection_violations || 0) + 1;
           }
           const penalty=s.difficulty==='chaos'?8:5;s.money=Math.max(0,s.money-penalty);this.adjustReputation(-7);
@@ -1263,15 +1662,24 @@
           s.story[c.storyKey]=outcome;
         }
         if (c.storyEffects) {
-          const effMap = result.accepted ? (c.storyEffects.onAction?.[action] || {}) : (c.storyEffects.onMistake || {});
+          const effMap = result.accepted ? (c.storyEffects.onAction?.[action] || {}) : { ...c.storyEffects.onMistake, ...c.storyEffects.onMistakeByAction?.[action] };
           for (const [k, v] of Object.entries(effMap)) {
             s.story[k] = v;
           }
-          const incMap = result.accepted ? (c.storyEffects.incrementOnAction?.[action] || {}) : (c.storyEffects.incrementOnMistake || {});
+          const incMap = result.accepted ? (c.storyEffects.incrementOnAction?.[action] || {}) : { ...c.storyEffects.incrementOnMistake, ...c.storyEffects.incrementOnMistakeByAction?.[action] };
           for (const [k, delta] of Object.entries(incMap)) {
             s.story[k] = Number(s.story[k] || 0) + Number(delta);
           }
-          if (c.questionedYet && c.storyEffects.onQuestioned) {
+          if (c.storyEffects.onEvidence && Array.isArray(c.discoveredEvidence)) {
+            for (const [evKey, map] of Object.entries(c.storyEffects.onEvidence)) {
+              if (c.discoveredEvidence.includes(evKey) && map && typeof map === 'object') {
+                for (const [sk, sv] of Object.entries(map)) {
+                  s.story[sk] = sv;
+                }
+              }
+            }
+          }
+          if (c.questionedYet && c.storyEffects.onQuestioned && !c.questionEffects) {
             for (const [k, v] of Object.entries(c.storyEffects.onQuestioned)) {
               s.story[k] = v;
             }
@@ -1283,16 +1691,24 @@
           if (note && !result.exception) {
             s.shiftStats.dilemmaNotes.push(note);
           }
+          for (const [evidence, note] of Object.entries(c.storyEffects.noteByEvidence || {})) {
+            if (c.discoveredEvidence?.includes(evidence)) s.shiftStats.dilemmaNotes.push(note);
+          }
         }
         if(c.dilemma && !c.storyEffects?.dilemmaNoteByAction?.[action]) {
           if(action==='REFUSE'&&result.accepted) {this.adjustReputation(-2);s.shiftStats.dilemmaNotes.push(dm.refusedNote||`${c.person.name} could not enter. The manager accepted your decision.`);}
           if(action==='CORRECT'&&result.accepted) s.shiftStats.dilemmaNotes.push(dm.correctedNote||`${c.person.name} accepted another film.`);
         }
-        if(camp.inspectorCharacterId && c.person.id===camp.inspectorCharacterId) {
+        if(camp.inspectorCharacterId && c.person.id===camp.inspectorCharacterId && c.identityTitle) {
           const notes=camp.inspectorNotes||{};
           s.shiftStats.dilemmaNotes.push(s.reputation>=80?(notes.highRep||'The inspector liked the service.'):(notes.lowRep||'The inspector asked the manager to improve the service.'));
         }
-        s.outcomes.push({customer:c.person.name,caseType:c.caseType,action,accepted:result.accepted,compliant:!!result.compliant,exception:!!result.exception,ticketBefore:before,ticketAfter:structuredClone(c.ticket),time:s.clockMins});
+        const visibleName = this.getKnownCustomerName(c) || 'the customer';
+        if (c.person.name && visibleName !== c.person.name) {
+          message = message.split(c.person.name).join(visibleName);
+          s.shiftStats.dilemmaNotes = s.shiftStats.dilemmaNotes.map((note, index) => index < notesStart ? note : note.split(c.person.name).join(visibleName));
+        }
+        s.outcomes.push({customer:visibleName,caseType:c.caseType,action,accepted:result.accepted,compliant:!!result.compliant,exception:!!result.exception,evidence:[...(c.discoveredEvidence || [])],asked:[...c.asked],ticketBefore:before,ticketAfter:structuredClone(c.ticket),time:s.clockMins});
         UI.renderTicketOnDesk(c);UI.animateStamp(action,null,c);SoundFX.stamp();
         UI.showDeskFeedback(result.accepted?(result.exception?'warn':'ok'):'err',message);
         UI.renderScheduleBinder();UI.renderSerialsBinder();UI.renderHeader();UI.setDecisionButtons(true);
@@ -1328,6 +1744,7 @@
         } else if(action==='REFUSE' && b?.status==='reserved') b.status='cancelled';
         this.state.bookings=bookings;this.state.usedSerials=[...new Set(used)];
         if(replacement) c.ticket=replacement;
+        this.resolveScriptedEncounter(c);
         this.syncSeats();
         return {accepted:true,compliant:!exception,exception,managerComplied,managerChallenged,evaluation:ev};
       },
@@ -1350,6 +1767,7 @@
         }
         if(s.clockMins>=s.clockEndMins) {UI.showDeskFeedback('warn','Closing time. Finish this customer, then read your report.');s.closing=true;}
         if(s.closing) this.stopShiftLoop();
+        this.saveProgress();
       },
 
       validateLanguagePack(input) {
@@ -1427,11 +1845,17 @@
         if (status) {
           status.innerHTML = "🔍 Click any two fields (Ticket, ID Card, Statement, Schedule, Clock, Rules) to compare them!";
         }
+        const idModalStatus = document.getElementById('idModalInspectStatus');
+        if (idModalStatus) {
+          idModalStatus.textContent = "Click any field on the ID card and a reference item above to compare them.";
+        }
       },
 
       handleCustomerPortraitInspect(el) {
         if (!this.state.currentCustomer) return;
-        const p = this.state.currentCustomer.person;
+        const c = this.state.currentCustomer;
+        const p = c.person;
+        const displayName = this.getKnownCustomerName(c) || 'Customer';
         const condRule = (this.policies().conditionalScreenRules || [])[0];
         if (condRule) {
           const prop = condRule.requiredPersonProp;
@@ -1442,85 +1866,135 @@
           const desc = hasProp
             ? (condRule.portraitInspectMatchLabel || `${prop}: yes`)
             : (condRule.portraitInspectMismatchLabel || `${prop}: no`);
-          this.handleInspectClick('portrait', val, `${p.name} (${desc})`, el);
+          this.handleInspectClick('portrait', val, `${displayName} (${desc})`, el);
         } else {
-          this.handleInspectClick('portrait', p.id || p.name, `${p.name} (${p.tag || 'Customer'})`, el);
+          this.handleInspectClick('portrait', p.id || p.name, displayName, el);
         }
       },
 
       handleInspectClick(category,value,label,domEl) {
         if(!this.state.inspectMode || !this.state.currentCustomer)return;
         const first=this.state.inspectFirst,status=document.getElementById('inspectStatusText');
-        if(!first) {this.clearInspectSelection();this.state.inspectFirst={category,value,label,domEl};domEl?.classList.add('inspect-selected');status.textContent='Selected: '+label+'. Choose a second item.';}
-        else if(first.domEl===domEl)this.clearInspectSelection();
-        else {
+        const idModalStatus = document.getElementById('idModalInspectStatus');
+        if(!first) {
+          this.clearInspectSelection();
+          this.state.inspectFirst={category,value,label,domEl};
+          domEl?.classList.add('inspect-selected');
+          status.textContent='Selected: '+label+'. Choose a second item.';
+          if (idModalStatus) idModalStatus.textContent = status.textContent;
+        } else if(first.domEl===domEl) {
+          this.clearInspectSelection();
+        } else {
           const result=this.compareTwoInspectedItems(first,{category,value,label,domEl});
           [first.domEl,domEl].forEach(el=>{el?.classList.remove('inspect-selected');if(result.isMatch!==null)el?.classList.add(result.isMatch?'inspect-match':'inspect-mismatch');});
-          status.textContent=(result.isMatch===null?'ℹ ':result.isMatch?'✓ ':'✕ ')+result.message;this.state.inspectFirst=null;
+          status.textContent=(result.isMatch===null?'ℹ ':result.isMatch?'✓ ':'✕ ')+result.message;
+          if (idModalStatus) idModalStatus.textContent = status.textContent;
+          this.state.inspectFirst=null;
         }
         document.getElementById('compareStatus').textContent=status.textContent;
       },
 
       compareTwoInspectedItems(a,b) {
+        if ((a.category.startsWith('id_') || b.category.startsWith('id_')) && !this.state.currentCustomer?.idCard?.presented) {
+          return { isMatch: null, message: 'Request the document before inspecting it.' };
+        }
         const c=this.state.currentCustomer,neutral=message=>({isMatch:null,message}),match=(ok,message)=>({isMatch:ok,message});
         const pair=(x,y)=>a.category===x&&b.category===y||b.category===x&&a.category===y;
         const field=cat=>a.category===cat?a:b;
+        const todayDmy = this.formatDateDMY(this.policies().dateDisplay || this.currentDateISO());
         if(pair('serial','serial_log')) {const serial=field('serial').value;return match(!this.state.usedSerials.includes(serial),this.state.usedSerials.includes(serial)?`${serial} is in the used-ticket log.`:`${serial} is not in the used-ticket log.`);}
-        if(pair('serial','vip_log')) {const serial=field('serial').value;return match(this.state.authorizedVips.includes(serial),this.state.authorizedVips.includes(serial)?'This number is on the VIP list. Other rules still apply.':'This number is not on the VIP list.');}
+        if(pair('serial','vip_log')) {
+          const serial=field('serial').value;
+          const isStaff = c.ticket?.ticketType === 'STAFF PASS' || String(serial).startsWith('STAFF-');
+          if (isStaff) {
+            const authStaff = this.state.authorizedStaff || [];
+            return match(authStaff.includes(serial), authStaff.includes(serial) ? 'This number is on the authorised staff list. Other rules still apply.' : 'This number is not on the authorised staff list.');
+          }
+          return match(this.state.authorizedVips.includes(serial),this.state.authorizedVips.includes(serial)?'This number is on the VIP list. Other rules still apply.':'This number is not on the VIP list.');
+        }
         if(pair('ticket_date','today'))return match(a.value===b.value,`Ticket: ${c.ticket.date}. Today: ${this.today()}.`);
         if(pair('ticket_seats','booking_seats'))return match(Number(a.value)===Number(b.value),`Ticket: ${c.ticket.seats}. Booking record: ${this.booking(c)?.seats??0}.`);
         if(pair('ticket_time','clock')) {
           const time=this.parseTime(field('ticket_time').value),diff=this.arrival(c)-time,tol=this.policies().lateToleranceMins;
           return match(tol===null||tol===undefined||diff<=tol,`Arrival: ${this.formatMins(this.arrival(c))}. Printed start: ${field('ticket_time').value}. ${diff>0?diff+' minutes after start.':'Before the start.'}`);
         }
+        if(pair('id_dob','id_issue') || pair('id_issue','id_expiry') || pair('id_issue','today') || pair('id_expiry','today') || pair('id_expiry','rule') || pair('id_issue','rule')) {
+          const issueStr = c.idCard?.issueDate || field('id_issue')?.value || '';
+          const expStr = c.idCard?.expiryDate || field('id_expiry')?.value || '';
+          if (issueStr && !this.isValidCalendarDate(issueStr)) return match(false, `ID issue date (${this.formatDateDMY(issueStr)}) is not a valid calendar date.`);
+          if (expStr && !this.isValidCalendarDate(expStr)) return match(false, `ID expiry date (${this.formatDateDMY(expStr)}) is not a valid calendar date.`);
+          if (issueStr && expStr && this.compareDates(issueStr, expStr) > 0) {
+            return match(false, `ID issue date (${this.formatDateDMY(issueStr)}) is after expiry date (${this.formatDateDMY(expStr)}).`);
+          }
+          if (issueStr && this.compareDates(issueStr, this.currentDateISO()) > 0) {
+            return match(false, `ID issue date (${this.formatDateDMY(issueStr)}) is in the future (today is ${todayDmy}).`);
+          }
+          if (issueStr && this.compareDates(c.idCard?.dob, issueStr) > 0) return match(false, 'The ID was issued before the date of birth.');
+          if (expStr && this.compareDates(expStr, this.currentDateISO()) < 0) {
+            return match(false, `ID card expired on ${this.formatDateDMY(expStr)} (today is ${todayDmy}).`);
+          }
+          return match(true, `ID validity dates (${this.formatDateDMY(issueStr)} to ${this.formatDateDMY(expStr)}) are valid on ${todayDmy}.`);
+        }
         if(pair('id_dob','schedule_row') || pair('id_dob','ticket_film') || pair('id_dob','rule') || pair('id_dob','today')) {
           const dob = field('id_dob').value;
-          if (!this.isValidCalendarDate(dob)) return match(false, `ID birth date (${dob}) is not a valid calendar date.`);
+          const dobDmy = this.formatDateDMY(dob);
+          if (!this.isValidCalendarDate(dob)) return match(false, `ID birth date (${dobDmy}) is not a valid calendar date.`);
           const age = this.calculateAge(dob, this.currentDateISO());
           const f = pair('id_dob','schedule_row') ? this.screening(field('schedule_row').value) : this.screening(c.ticket?.filmId);
           const minAge = f?.minAge || 0;
           const rating = f?.ageRating || 'G';
-          return match(age >= minAge, `ID birth date: ${dob} (Age ${age} on ${this.policies().dateDisplay || this.currentDateISO()}). ${f ? `${f.title} is rated ${rating} (minimum age ${minAge}).` : ''}`);
+          return match(age >= minAge, `ID birth date: ${dobDmy} (Age ${age} on ${todayDmy}). ${f ? `${f.title} is rated ${rating} (minimum age ${minAge}).` : ''}`);
         }
-        if(pair('id_dob','statement') || pair('id_age','statement') || pair('id_dob','id_age')) {
+        if(pair('id_dob','statement')) {
           const dob = c.idCard?.dob || field('id_dob')?.value;
-          if (!this.isValidCalendarDate(dob)) return match(false, `ID birth date (${dob}) is not a valid calendar date.`);
+          const dobDmy = this.formatDateDMY(dob);
+          if (!this.isValidCalendarDate(dob)) return match(false, `ID birth date (${dobDmy}) is not a valid calendar date.`);
           const age = this.calculateAge(dob, this.currentDateISO());
-          const claimed = pair('id_dob','id_age') ? (c.idCard?.statedAge ?? age) : (c.claimedAge ?? c.idCard?.statedAge ?? age);
-          return match(age === Number(claimed), `Claimed/stated age: ${claimed}. Birth date ${dob} calculates to age ${age}.`);
+          if (!(c.ageRequested || c.statedAgeInOpening)) {
+            return neutral(`Birth date ${dobDmy} calculates to age ${age}. The customer has not stated an age yet — ask "How old are you?" to compare.`);
+          }
+          const claimed = c.claimedAge;
+          return match(age === Number(claimed), `Claimed/stated age: ${claimed}. Birth date ${dobDmy} calculates to age ${age}.`);
         }
         if(pair('id_name','ticket_holder')) {
           const idName = field('id_name').value;
           const holder = field('ticket_holder').value;
           return match(idName === holder, `ID Card Name: ${idName}. Ticket Holder: ${holder}.`);
         }
-        if(pair('id_name','portrait')) {
-          const idName = field('id_name').value;
-          return match(idName === c.person.name, `ID Card Name: ${idName}. Customer: ${c.person.name}.`);
-        }
-        if(pair('ticket_holder','portrait')) {
-          const holder = field('ticket_holder').value;
-          return match(holder === c.person.name, `Ticket Holder: ${holder}. Customer: ${c.person.name}.`);
+        if(pair('id_name','portrait') || pair('ticket_holder','portrait')) {
+          const named = field(pair('id_name','portrait') ? 'id_name' : 'ticket_holder').value;
+          const spokenName = c.identityTitle ? null : (c.introducedName || ((c.revealsNameInOpening || c.identityRevealed) ? c.person.name : null));
+          if (!spokenName) return neutral(`Name: ${named}. The customer has not told you their name. Compare the ID photograph, ticket holder and ID name instead.`);
+          return match(named === spokenName, `Name: ${named}. The customer said their name is ${spokenName}.`);
         }
         if(pair('id_photo','portrait')) {
           const ok = !(c.idCard?.photoMismatch || c.idCard?.photoAltered);
-          return match(ok, ok ? 'ID card photograph matches the customer.' : (c.idCard?.photoMismatchText || 'ID card photograph does not match the customer or has been altered.'));
+          return match(ok, ok ? 'ID card photograph matches the customer.' : (c.idCard?.photoMismatchText || 'ID card photograph does not match the customer.'));
         }
         if(pair('portrait','rule')) {
           const ruleField = field('rule');
           const condRules = this.policies().conditionalScreenRules || [];
           const condRule = condRules.find(r => r.id === ruleField.value) || condRules[0];
+          const custName = this.getKnownCustomerName(c) || 'Customer';
           if (!condRule) {
             if (c.person?.obviousDisguise) {
-              return match(false, c.person.disguiseIssueText || `${c.person.name} is wearing an obvious disguise.`);
+              return match(false, c.person.disguiseIssueText || `${custName} is wearing an obvious disguise.`);
             }
-            return neutral(`Customer: ${c.person.name}. Active rule: ${ruleField.label}. No conditional appearance rule is active for this shift.`);
+            return neutral(`Customer: ${custName}. Active rule: ${ruleField.label}. No conditional appearance rule is active for this shift.`);
           }
           const prop = condRule.requiredPersonProp;
           const hasProp = Boolean(c.person?.[prop]);
           const prefix = hasProp
-            ? (condRule.inspectMatchPrefix || `${condRule.portraitInspectMatchLabel || prop}.`)
-            : (condRule.inspectMismatchPrefix || `${condRule.portraitInspectMismatchLabel || 'No ' + prop}.`);
+            ? (condRule.portraitInspectMatchLabel ? `${condRule.portraitInspectMatchLabel}.` : (condRule.inspectMatchPrefix || `${prop}.`))
+            : (condRule.portraitInspectMismatchLabel ? `${condRule.portraitInspectMismatchLabel}.` : (condRule.inspectMismatchPrefix || `No ${prop}.`));
+          if (condRule.inspectMatchPrefix || condRule.inspectMismatchPrefix) {
+            const pfx = hasProp ? condRule.inspectMatchPrefix : condRule.inspectMismatchPrefix;
+            const summary = condRule.inspectSummary
+              || condRule.ruleText
+              || condRule.issueText
+              || `Screen ${condRule.screen} requires ${prop} after ${this.formatMins(condRule.afterMins)}. All other rules apply.`;
+            return neutral(`${pfx} ${summary}`);
+          }
           const summary = condRule.inspectSummary
             || condRule.ruleText
             || condRule.issueText
@@ -1590,6 +2064,7 @@
 
       endShift(customHeadline = null) {
         this.state.shiftActive = false;
+        this.pendingShift = null;
         UI.setDecisionButtons(true);
         this.stopShiftLoop();
         UI.clearDepartureBanner();
@@ -1648,6 +2123,19 @@
         this.state.lastShiftDismissed = false;
         this.state.forgivenWarningUsed = false;
         this.state.shiftStats = { served: 0, correct: 0, mistakes: 0, warnings: 0, exceptions: 0, customersLost: 0, cashEarned: 0, dilemmaNotes: [] };
+        this.pendingShift = null;
+        if (this.dayStartSnapshot?.day === this.state.day) {
+          const highScore = this.state.highScore;
+          for (const key of this.dayStartKeys) this.state[key] = structuredClone(this.dayStartSnapshot[key]);
+          this.state.highScore = Math.max(highScore, this.state.highScore);
+          this.rngSeed = this.dayStartSnapshot.rngSeed;
+        } else {
+          // Old saves have no rollback checkpoint; preserve resolved story events.
+          this.startupMessage = 'This older save has no day-start checkpoint. Resolved encounters remain completed.';
+        }
+        this.state.shiftActive = false;
+        this.state.currentCustomer = null;
+        this.state.lastCampaignEnding = null;
         this.prepareDaySchedule(this.state.day);
         UI.renderHeader();
         UI.renderScheduleBinder();
@@ -1667,6 +2155,8 @@
         if (this.state.day <= playableMax) {
           this.state.day += 1;
         }
+        this.pendingShift = null;
+        this.dayStartSnapshot = null;
         this.state.warnings = 0;
         this.state.lastShiftDismissed = false;
         this.state.forgivenWarningUsed = false;
@@ -1725,7 +2215,10 @@
           completedDays: [...s.completedDays],
           highScore: s.highScore,
           totalCustomersLost: s.totalCustomersLost || 0,
-          story: { ...s.story }
+          story: { ...s.story },
+          resolvedEncounters: structuredClone(s.resolvedEncounters),
+          activeShift: this.captureShift(),
+          dayStartSnapshot: this.dayStartSnapshot || null
         };
         try {
           let v3 = { version: 3, campaigns: {} };
@@ -1752,6 +2245,9 @@
             ['day','difficulty','money','reputation','ownedUpgrades','completedDays','highScore','totalCustomersLost','showLanguageHints','enableTVContent','disableQueueWalkouts','story'].forEach(k => payload[k] = s[k]);
             payload.languageMode = v3.languageMode;
             payload.muted = SoundFX.muted;
+            payload.activeShift = campData.activeShift;
+            payload.dayStartSnapshot = campData.dayStartSnapshot;
+            payload.resolvedEncounters = campData.resolvedEncounters;
             localStorage.setItem('cinema_chaos_save_v2', JSON.stringify(payload));
           }
         } catch(e) {
@@ -1760,6 +2256,8 @@
       },
 
       loadProgress(requestedCampaignId = null) {
+        this.pendingShift = null;
+        this.dayStartSnapshot = null;
         try {
           const pack=localStorage.getItem('cinema_chaos_pack_v2');
           if(pack) this.state.customLanguagePack=this.validateLanguagePack(JSON.parse(pack));
@@ -1808,7 +2306,8 @@
             completedDays: [],
             highScore: 0,
             totalCustomersLost: 0,
-            story: {}
+            story: {},
+            resolvedEncounters: {}
           });
 
           const globalSource = d || v3;
@@ -1851,6 +2350,28 @@
                 else if (typeof v === 'boolean') s.story[k] = v;
               }
             }
+            if (d.resolvedEncounters && typeof d.resolvedEncounters === 'object' && !Array.isArray(d.resolvedEncounters)) {
+              for (const [day, encounters] of Object.entries(d.resolvedEncounters)) {
+                if (!Number.isInteger(Number(day)) || !encounters || typeof encounters !== 'object') continue;
+                s.resolvedEncounters[day] = {};
+                for (const [id, resolved] of Object.entries(encounters)) if (resolved === true) s.resolvedEncounters[day][id] = true;
+              }
+            } else {
+              // Migrate the interrupted implementation's global flags to the saved day.
+              s.resolvedEncounters[s.day] = {};
+              for (const enc of this.dayConfig(s.day).scriptedEncounters || []) {
+                if (s.story[`resolved_enc_${enc.id}`] === 'yes') s.resolvedEncounters[s.day][enc.id] = true;
+              }
+            }
+            const live = d.activeShift;
+            if (live && live.campaignId === targetId && live.day === s.day &&
+                Number.isFinite(live.clockMins) && Number.isInteger(live.rngSeed) &&
+                Array.isArray(live.schedule) && Array.isArray(live.queue) && live.bookings && live.shiftStats) {
+              this.pendingShift = structuredClone(live);
+            }
+            if (d.dayStartSnapshot?.day === s.day && this.dayStartKeys.every(k => d.dayStartSnapshot[k] !== undefined)) {
+              this.dayStartSnapshot = structuredClone(d.dayStartSnapshot);
+            }
           }
         } catch(e) {
           this.startupMessage = 'Saved progress could not be loaded. A new campaign is ready.';
@@ -1859,6 +2380,8 @@
       },
 
       resetCampaignConfirm() {
+        this.pendingShift = null; this.dayStartSnapshot = null;
+        this.state.resolvedEncounters = {};
         this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;UI.clearDepartureBanner();
         Object.assign(this.state,{day:1,money:0,reputation:80,warnings:0,lastShiftDismissed:false,forgivenWarningUsed:false,ownedUpgrades:[],completedDays:[],totalCustomersLost:0,story:{},outcomes:[],lastCampaignEnding:null});
         this.prepareDaySchedule(1);this.saveProgress();UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.openBriefingModal(1);

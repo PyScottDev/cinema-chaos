@@ -45,14 +45,14 @@ function makeEl() {
   };
 }
 
-function createHarness(seed = 12345, customScripts = null) {
+function createHarness(seed = 12345, customScripts = null, savedStorage = null) {
   const elements = new Map();
   const sandbox = {
     window: {},
     location: { search: `?seed=${seed}` },
     innerWidth: 1280,
     localStorage: {
-      _s: {},
+      _s: savedStorage ? structuredClone(savedStorage) : {},
       getItem(k) { return this._s[k] ?? null; },
       setItem(k, v) { this._s[k] = String(v); },
       removeItem(k) { delete this._s[k]; },
@@ -98,6 +98,35 @@ function createHarness(seed = 12345, customScripts = null) {
     Game: sandbox.CinemaDebug.game,
     UI: sandbox.CinemaDebug.ui
   };
+}
+
+// Player interactions used by the pre-existing rule/scoring tests after IDs became request-only.
+function requestId(Game, customer = Game.state.currentCustomer) {
+  Game.state.currentCustomer = customer;
+  Game.askCustomerQuestion("ask_id", "Can I see your ID?");
+}
+function answerRequiredQuestions(Game, customer = Game.state.currentCustomer) {
+  Game.state.currentCustomer = customer;
+  for (let i = 0; i < 4; i++) {
+    const ev = Game.evaluateCustomerCase(customer);
+    if (!ev.needsQuestion) return ev;
+    const key = customer.requiredTicketQuestion && !customer.ticket.exists ? "other_ticket"
+      : ev.needsIdentification ? "ask_id" : "which_film";
+    Game.askCustomerQuestion(key, key);
+  }
+  assert.fail("Required information must be obtainable through the question buttons");
+}
+
+function finishShift(Game) {
+  Game.state.clockMins = Game.state.clockEndMins;
+  for (let step = 0; Game.state.shiftActive && step < 30; step++) {
+    if (!Game.state.decisionLocked && Game.state.currentCustomer) {
+      const ev = answerRequiredQuestions(Game);
+      Game.makeDecision(ev.validActions[0], ev.options[0]);
+    }
+    Game.nextCustomerFromQueue();
+  }
+  assert.strictEqual(Game.state.shiftActive, false, "Closing must serve remaining narrative customers and finish");
 }
 
 let passed = 0;
@@ -147,7 +176,7 @@ test("1. Deterministic simulation trace across Days 1-7 and Endless Mode Day 8 (
           if (c.requiredTicketQuestion) Game.askCustomerQuestion("other_ticket", "Do you have another ticket?");
           else Game.askCustomerQuestion("which_film", "Which film are you going to see?");
         }
-        const ev2 = Game.evaluateCustomerCase(c);
+        const ev2 = answerRequiredQuestions(Game, c);
         const action = ev2.validActions[0];
         const target = action === "CORRECT" ? ev2.options[0] : null;
         Game.makeDecision(action, target);
@@ -194,6 +223,7 @@ test("3. Day 2 rules: film age classifications (G, 12, 16) enforced, Leo underag
   const leo = Game.state.currentCustomer;
   assert.strictEqual(leo.person.id, "leo");
   assert.strictEqual(leo.ticket.filmId, "the_dark_house");
+  requestId(Game, leo);
   const evLeo = Game.evaluateCustomerCase(leo);
   assert.deepEqual(evLeo.validActions, ["REFUSE"]);
   assert.ok(evLeo.issues.some(i => i.code === "missing_id"));
@@ -202,12 +232,14 @@ test("3. Day 2 rules: film age classifications (G, 12, 16) enforced, Leo underag
   const adultHorror = Game.generateCustomerScenario("adult_horror_day2");
   Game.finalizeCustomerAtWindow(adultHorror);
   assert.strictEqual(adultHorror.ticket.filmId, "the_dark_house");
+  requestId(Game, adultHorror);
   const evAdult = Game.evaluateCustomerCase(adultHorror);
   assert.deepEqual(evAdult.validActions, ["ADMIT"]);
 
   // Procedural underage customer for a [12] or [16] film must be refused
   const underageCust = Game.generateCustomerScenario("underage");
   Game.finalizeCustomerAtWindow(underageCust);
+  requestId(Game, underageCust);
   const evUnderage = Game.evaluateCustomerCase(underageCust);
   assert.deepEqual(evUnderage.validActions, ["REFUSE"]);
   assert.ok(evUnderage.issues.some(i => i.code === "underage"));
@@ -226,6 +258,7 @@ test("4. Day 3 & Day 4 rules: Day 3 unlocks printer and relocates Planet X to Sc
   const morrisDay3 = Game.state.currentCustomer;
   assert.strictEqual(morrisDay3.person.id, "mr_morris");
   assert.strictEqual(morrisDay3.ticket.filmId, "planet_x");
+  requestId(Game, morrisDay3);
   const evMorris3 = Game.evaluateCustomerCase(morrisDay3);
   assert.deepEqual(evMorris3.validActions, ["CORRECT"]);
   assert.ok(evMorris3.issues.some(i => i.code === "screen"));
@@ -242,6 +275,7 @@ test("4. Day 3 & Day 4 rules: Day 3 unlocks printer and relocates Planet X to Sc
 
   const promoCust = Game.generateCustomerScenario("promo");
   Game.finalizeCustomerAtWindow(promoCust);
+  requestId(Game, promoCust);
   const evPromo = Game.evaluateCustomerCase(promoCust);
   assert.deepEqual(evPromo.validActions, ["REFUSE"], "Promo tickets with wrong film cannot be corrected");
 
@@ -300,12 +334,14 @@ test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, VIP pa
   assert.deepEqual(Game.evaluateCustomerCase(cancCust).validActions, ["QUESTION"]);
   Game.state.currentCustomer = cancCust;
   Game.askCustomerQuestion("which_film", "Which film are you going to see?");
+  answerRequiredQuestions(Game, cancCust);
   assert.deepEqual(Game.evaluateCustomerCase(cancCust).validActions, ["CORRECT"]);
 
   // Authorized VIP pass (Mystery Customer VIP-900-INSPECTOR) is valid
   const vipCust = Game.generateCustomerScenario("mystery_day5");
   Game.finalizeCustomerAtWindow(vipCust);
   assert.strictEqual(vipCust.ticket.serial, "VIP-900-INSPECTOR");
+  requestId(Game, vipCust);
   assert.deepEqual(Game.evaluateCustomerCase(vipCust).validActions, ["ADMIT"]);
 });
 
@@ -982,7 +1018,7 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
 
   // 2 & 8. Passing a shift below the warning threshold unlocks the next day and updates Staff Report
   Game.state.clockMins = Game.state.clockEndMins;
-  Game.nextCustomerFromQueue(); // Ends shift at closing time with 1 / 3 warnings
+  finishShift(Game); // Serve the guaranteed visitors before completing the shift.
   assert.strictEqual(Game.state.shiftActive, false);
   assert.strictEqual(Game.state.lastShiftDismissed, false);
   assert.strictEqual(doc.getElementById("reportModalTitle").textContent, "SHIFT COMPLETE — WELL DONE");
@@ -1011,6 +1047,7 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
     Game.finalizeCustomerAtWindow(cust);
     Game.state.currentCustomer = cust;
     Game.state.decisionLocked = false;
+    answerRequiredQuestions(Game, cust);
     Game.makeDecision("REFUSE"); // Wrong decision -> issues warning i
     if (i < limit) {
       assert.strictEqual(Game.state.shiftActive, true, `Shift should remain active at ${i} / ${limit} warnings`);
@@ -1094,9 +1131,8 @@ test("17. Seven-day campaign progression (Monday Day 1 through Sunday Day 7) and
     assert.strictEqual(cfg.title, title);
 
     Game.startShift();
-    // Complete shift cleanly at closing time
-    Game.state.clockMins = Game.state.clockEndMins;
-    Game.nextCustomerFromQueue();
+    // Complete the current and guaranteed encounters at closing time.
+    finishShift(Game);
     assert.strictEqual(Game.state.shiftActive, false);
     assert.strictEqual(Game.state.lastShiftDismissed, false);
     assert.ok(Game.state.completedDays.includes(dayNum));
@@ -1175,6 +1211,7 @@ test("19. Leo's six-day narrative arc (Days 2-6 disguises/forgeries refused, Day
   const leo2 = Game.state.currentCustomer;
   assert.strictEqual(leo2.person.id, "leo");
   assert.strictEqual(leo2.ticket.filmId, "the_dark_house");
+  requestId(Game, leo2);
   assert.deepEqual(Game.evaluateCustomerCase(leo2).validActions, ["REFUSE"]);
   Game.makeDecision("REFUSE");
   assert.strictEqual(Game.state.story.leo_day2_outcome, "refused");
@@ -1189,7 +1226,7 @@ test("19. Leo's six-day narrative arc (Days 2-6 disguises/forgeries refused, Day
   assert.strictEqual(leo3.person.id, "leo");
   assert.strictEqual(leo3.person.fakeBeard, true);
   assert.strictEqual(leo3.person.obviousDisguise, true);
-  assert.ok(leo3.statement.includes("not Leo from yesterday"), "Day 3 dialogue reflects Day 2 refusal");
+  assert.ok(leo3.statement.includes("Me again?"), "Day 3 dialogue reflects Day 2 refusal");
   assert.deepEqual(Game.evaluateCustomerCase(leo3).validActions, ["REFUSE"]);
   Game.makeDecision("REFUSE");
   assert.strictEqual(Game.state.story.leo_beard_detected, "yes");
@@ -1205,22 +1242,25 @@ test("19. Leo's six-day narrative arc (Days 2-6 disguises/forgeries refused, Day
   assert.strictEqual(leo4.person.sunglasses, true);
   assert.strictEqual(leo4.ticket.holderName, "Leo");
   assert.strictEqual(leo4.idCard.holderName, "Leonardo Senior");
-  assert.ok(leo4.statement.includes("bearded imposter"), "Day 4 dialogue references Day 3 beard detection");
+  assert.ok(leo4.statement.includes("Forget that beard"), "Day 4 dialogue references Day 3 beard detection");
+  requestId(Game, leo4);
   const evLeo4 = Game.evaluateCustomerCase(leo4);
   assert.deepEqual(evLeo4.validActions, ["REFUSE"]);
   assert.ok(evLeo4.issues.some(i => i.code === "id_name"));
   Game.makeDecision("REFUSE");
   assert.strictEqual(Game.state.story.leo_caught_count, 3);
 
-  // Day 5: The Fake ID (marker moustache, statedAge 17 vs DOB 2012-09-10 = age 14) -> REFUSE
+  // Day 5: The Fake ID (marker moustache, spoken claim of 17 vs DOB 2012-09-10 = age 14) -> REFUSE
   Game.state.day = 5;
   Game.startShift();
   const leo5 = Game.generateCustomerScenario("leo_day5");
   Game.finalizeCustomerAtWindow(leo5);
   Game.state.currentCustomer = leo5;
   assert.strictEqual(leo5.person.editedMoustache, true);
-  assert.strictEqual(leo5.idCard.statedAge, 17);
-  assert.strictEqual(leo5.idCard.dob, "2012-09-10");
+  assert.strictEqual(leo5.claimedAge, 17);
+  assert.strictEqual(leo5.idCard.statedAge, undefined, "Age belongs in dialogue, not on the document");
+  assert.strictEqual(leo5.idCard.dob, "10/09/2012");
+  requestId(Game, leo5);
   const evLeo5 = Game.evaluateCustomerCase(leo5);
   assert.deepEqual(evLeo5.validActions, ["REFUSE"]);
   assert.ok(evLeo5.issues.some(i => i.code === "id_forged"));
@@ -1271,6 +1311,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
   // Help Mr Morris on Day 3 (relocated Planet X -> Screen 1)
   const morris3 = GameHelped.state.currentCustomer;
   assert.strictEqual(morris3.person.id, "mr_morris");
+  requestId(GameHelped, morris3);
   GameHelped.makeDecision("CORRECT", GameHelped.screening("planet_x"));
   assert.strictEqual(GameHelped.state.story.morris_relationship, "loyal");
 
@@ -1286,6 +1327,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
   GameHelped.startShift();
   const sofia4 = GameHelped.state.currentCustomer;
   assert.strictEqual(sofia4.person.id, "sofia");
+  requestId(GameHelped, sofia4);
   GameHelped.makeDecision("CORRECT", GameHelped.screening("love_in_paris"));
   assert.strictEqual(GameHelped.state.story.sofia_trust, "ally");
 
@@ -1308,6 +1350,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
   const maya6 = GameHelped.state.currentCustomer;
   assert.strictEqual(maya6.person.id, "maya");
   assert.strictEqual(maya6.groupSize, 3);
+  requestId(GameHelped, maya6);
   assert.deepEqual(GameHelped.evaluateCustomerCase(maya6).validActions, ["CORRECT"]);
 
   // Branch B: Do NOT help Mr Morris or Maya -> on Day 6, Planet X has only 2 seats so the 3-person group must be REFUSEd
@@ -1329,6 +1372,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
   GameBlamed.nextCustomerFromQueue();
   const maya6Blamed = GameBlamed.state.currentCustomer;
   assert.strictEqual(maya6Blamed.person.id, "maya");
+  requestId(GameBlamed, maya6Blamed);
   assert.deepEqual(GameBlamed.evaluateCustomerCase(maya6Blamed).validActions, ["REFUSE"]);
 });
 
@@ -1358,7 +1402,7 @@ test("21. Guaranteed recurring character encounters appear reliably across multi
           if (c.requiredTicketQuestion) Game.askCustomerQuestion("other_ticket", "Do you have another ticket?");
           else Game.askCustomerQuestion("which_film", "Which film are you going to see?");
         }
-        const ev2 = Game.evaluateCustomerCase(c);
+        const ev2 = answerRequiredQuestions(Game, c);
         const action = ev2.validActions[0];
         const target = action === "CORRECT" ? ev2.options[0] : null;
         Game.makeDecision(action, target);
@@ -1383,6 +1427,8 @@ test("22. All five campaign endings are deterministically achievable and rendere
   Game.state.reputation = 92;
   Game.state.story = {
     morris_relationship: "loyal",
+    morris_day3_outcome: "helped",
+    morris_day6_outcome: "helped",
     leo_day7_outcome: "helped",
     maya_relationship: "helped",
     manager_compliance: 0,
@@ -1402,6 +1448,9 @@ test("22. All five campaign endings are deterministically achievable and rendere
     morris_relationship: "loyal",
     maya_relationship: "helped",
     leo_day7_outcome: "helped",
+    maya_day3_outcome: "helped",
+    maya_day6_outcome: "helped",
+    morris_day6_outcome: "helped",
     total_exceptions: 1,
     people_champion_path: "yes",
     manager_compliance: 0,
@@ -1428,7 +1477,8 @@ test("22. All five campaign endings are deterministically achievable and rendere
     manager_compliance: 0,
     sofia_evidence: "yes",
     whistleblower_identified: "yes",
-    inspector_day7_outcome: "helped"
+    inspector_day7_outcome: "helped",
+    vip_reported: "yes"
   };
   Game.endShift();
   assert.strictEqual(Game.state.lastCampaignEnding.id, "the_whistleblower");
@@ -1473,6 +1523,422 @@ test("23. Extended multi-day story state and numeric counters persist across sav
   assert.strictEqual(Game.state.story.leo_caught_count, 4);
   assert.strictEqual(Game.state.story.manager_conflict, 2);
   assert.strictEqual(Game.state.story.whistleblower_identified, "yes");
+});
+
+
+function elementText(el) {
+  return [el?.textContent || '', el?.innerHTML || '', ...(el?.children || []).map(elementText)].join(' ');
+}
+function findElement(el, predicate) {
+  if (predicate(el)) return el;
+  for (const child of el?.children || []) { const found = findElement(child, predicate); if (found) return found; }
+}
+function stageCase(h, type, day = 2, story = {}) {
+  const G = h.Game;
+  G.state.day = day; G.state.story = structuredClone(story);
+  G.startShift();
+  const c = G.generateCustomerScenario(type);
+  // Standalone fixture: keep one booking for explicitly reused scripted pass numbers.
+  delete G.state.bookings[c.proposedBooking?.serial];
+  G.finalizeCustomerAtWindow(c); G.state.currentCustomer = c; G.state.decisionLocked = false;
+  h.UI.renderCustomer(c); h.UI.renderTicketOnDesk(c);
+  return c;
+}
+
+test("24. Request-only identification, refusal/missing distinction, contextual questions and independent ticket rendering", () => {
+  const h = createHarness(2400), G = h.Game;
+  let c = stageCase(h, 'adult_horror_day2');
+  assert.strictEqual(c.idCard.presented, false);
+  assert.ok(!elementText(h.elements.get('deskDocumentArea')).includes(c.idCard.docNumber));
+  assert.strictEqual(G.evaluateCustomerCase(c).needsIdentification, true);
+  const cash = G.state.money;
+  G.makeDecision('ADMIT');
+  assert.strictEqual(G.state.decisionLocked, false);
+  assert.strictEqual(G.state.money, cash);
+  G.askCustomerQuestion('which_film', 'film');
+  assert.strictEqual(c.idCard.presented, false);
+  assert.strictEqual(G.getKnownCustomerName(c), null);
+  requestId(G);
+  assert.strictEqual(c.ageRequested, undefined, 'ID must not depend on asking age');
+  assert.strictEqual(c.idCard.presented, true);
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT']);
+  assert.ok(elementText(h.elements.get('deskDocumentArea')).includes('Inspect ID'));
+  for (const [type, evidence, issue] of [['missing_id','id_missing','missing_id'], ['refused_id','id_refused','id_refused']]) {
+    c = stageCase(h, type);
+    requestId(G);
+    assert.ok(c.discoveredEvidence.includes(evidence));
+    assert.ok(!c.idCard.presented);
+    assert.ok(G.evaluateCustomerCase(c).issues.some(i => i.code === issue));
+    assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['REFUSE']);
+  }
+  c = stageCase(h, 'hidden_ticket');
+  c.requiresIdentityCheck = true;
+  requestId(G);
+  assert.strictEqual(c.ticket.exists, false);
+  assert.ok(elementText(h.elements.get('deskDocumentArea')).includes('Inspect ID'), 'ID is independent of ticket existence');
+  c = stageCase(h, 'leo_day7', 7);
+  assert.ok(!G.getCustomerQuestions(c).some(([key]) => key === 'ask_id' || key === 'ask_age'));
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT'], 'Unrestricted honest visit needs no ID');
+});
+
+test("25. ID modal fields, distinct SVG photographs, alteration detail and paused clock/queue", () => {
+  const h = createHarness(2500), G = h.Game, U = h.UI;
+  for (const [type, day] of [['adult_horror_day2',2],['leo_day4',4],['leo_day5',5]]) {
+    const c = stageCase(h, type, day);
+    U.openIdCardModal(); assert.ok(!U.modalStack.has('idCardModal'));
+    requestId(G); U.openIdCardModal();
+    assert.ok(U.modalStack.has('idCardModal'));
+    const doc = h.elements.get('idCardModalDocument'), text = elementText(doc);
+    for (const label of ['Photograph','Full Name','Date of Birth','Issue Date','Expiry Date','Document Number','Issuing Authority']) assert.ok(text.includes(label), label);
+    assert.ok(!text.includes('Stated Age'));
+    assert.ok(!/FAKE ID|INVALID|UNDERAGE|Schedule Date/.test(text));
+    const clock = G.state.clockMins, patience = G.state.queue.map(c => c.patience);
+    G.tick(); G.updateQueuePatience();
+    assert.strictEqual(G.state.clockMins, clock);
+    assert.deepEqual(G.state.queue.map(c => c.patience), patience);
+    const photo = findElement(doc, e => e.id === 'idModalPhotoBtn');
+    const actual = vm.runInContext("CHARACTERS.renderPortraitSVG(Game.state.currentCustomer.person, 'neutral')", h.sandbox);
+    if (c.idCard.photoMismatch || c.idCard.photoAltered) assert.ok(!photo.innerHTML.includes(actual));
+    else assert.ok(photo.innerHTML.includes(actual));
+    if (c.idCard.photoAltered) assert.ok(elementText(photo).includes('Tape'));
+    U.closeIdCardModal(); assert.strictEqual(G.state.modalDepth, 0);
+    G.tick(); assert.strictEqual(G.state.clockMins, clock + 1);
+  }
+});
+
+test("26. DMY dates, exact birthdays, leap years, document chronology and expired ID inspection", () => {
+  const h = createHarness(2600), G = h.Game;
+  assert.strictEqual(G.formatDateDMY('2010-10-13'), '13/10/2010');
+  assert.strictEqual(G.calculateAge('13/10/2010','13/10/2026'), 16);
+  assert.strictEqual(G.calculateAge('14/10/2010','13/10/2026'), 15);
+  assert.strictEqual(G.calculateAge('29/02/2008','28/02/2024'), 15);
+  assert.strictEqual(G.calculateAge('29/02/2008','29/02/2024'), 16);
+  assert.strictEqual(G.calculateAge('29/02/2008','01/03/2023'), 15);
+  for (const date of ['29/02/1900','31/04/2026','00/12/2000','not a date']) assert.strictEqual(G.isValidCalendarDate(date), false);
+  assert.strictEqual(G.isValidCalendarDate('29/02/2000'), true);
+  let c = stageCase(h, 'adult_horror_day2'); requestId(G);
+  c.idCard.issueDate = '13/10/2026'; c.idCard.expiryDate = '13/10/2026';
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT'], 'Expiry includes the printed final day');
+  c.idCard.issueDate = '14/10/2026';
+  assert.ok(G.evaluateCustomerCase(c).issues.some(i => i.code === 'id_forged'));
+  c.idCard.issueDate = '01/01/1990';
+  assert.ok(G.evaluateCustomerCase(c).issues.some(i => i.code === 'id_forged'), 'Issue cannot predate birth');
+  c = stageCase(h, 'expired_id'); requestId(G); h.UI.openIdCardModal();
+  assert.ok(G.evaluateCustomerCase(c).issues.some(i => i.code === 'id_expired'));
+  const compare = G.compareTwoInspectedItems({category:'id_expiry',value:c.idCard.expiryDate}, {category:'today',value:G.today()});
+  assert.strictEqual(compare.isMatch, false);
+  const text = elementText(h.elements.get('idCardModalDocument'));
+  assert.ok(text.includes(G.formatDateDMY(c.idCard.dob)));
+  assert.ok(!/\b\d{4}-\d{2}-\d{2}\b/.test(text));
+  assert.ok(!text.includes(G.formatDateDMY(G.currentDateISO())), 'Today is an operational reference, not a document field');
+  h.UI.closeIdCardModal();
+  c.idCard.dob = '30/02/2012';
+  assert.doesNotThrow(() => G.evaluateCustomerCase(c));
+});
+
+test("27. Specific evidence, contextual follow-ups, declarative effects and truthful story reactions", () => {
+  const h = createHarness(2700), G = h.Game;
+  let c = stageCase(h, 'leo_day5', 5);
+  G.askCustomerQuestion('which_film', 'film');
+  assert.ok(!c.discoveredEvidence.includes('age_id_contradiction'));
+  G.askCustomerQuestion('ask_age', 'age'); assert.strictEqual(c.revealedClaimedAge, 17);
+  assert.strictEqual(c.idCard.presented, false);
+  requestId(G); assert.ok(c.discoveredEvidence.includes('age_id_contradiction'));
+  assert.strictEqual(G.state.story.leo_contradiction_spotted, 'yes');
+  c = stageCase(h, 'sofia_day4', 4);
+  G.askCustomerQuestion('which_film', 'film');
+  assert.strictEqual(G.state.story.sofia_whistleblower_clue, undefined);
+  assert.ok(!G.getCustomerQuestions(c).some(q => q[0] === 'ask_receipts'));
+  G.askCustomerQuestion('what_did_you_see', 'what');
+  assert.strictEqual(G.state.story.sofia_whistleblower_clue, 'yes');
+  assert.ok(G.getCustomerQuestions(c).some(q => q[0] === 'ask_receipts'));
+  G.askCustomerQuestion('ask_receipts', 'receipts');
+  assert.strictEqual(G.state.story.sofia_receipts_requested, 'yes');
+  c = stageCase(h, 'blackwood_day5', 5);
+  G.askCustomerQuestion('which_film', 'film'); G.makeDecision('REFUSE');
+  assert.strictEqual(G.state.story.blackwood_questioned, undefined);
+  assert.strictEqual(G.state.story.whistleblower_identified, undefined);
+  c = stageCase(h, 'blackwood_day6', 6);
+  G.askCustomerQuestion('challenge_vip', 'pass');
+  assert.ok(c.discoveredEvidence.includes('vip_challenged'));
+  assert.strictEqual(G.state.story.blackwood_questioned, 'yes');
+  c = stageCase(h, 'adult_horror_day2');
+  c.extraQuestions = [['show_document','May I check your document?']];
+  c.questionEffects = {show_document:{revealDocument:'id', revealStatement:'Here you go.', revealPreference:true, incrementStory:{document_requests:1}, unlockQuestions:[['follow','Anything else?']]}};
+  G.askCustomerQuestion('show_document','document'); G.askCustomerQuestion('show_document','document');
+  assert.strictEqual(c.idCard.presented, true);
+  assert.strictEqual(G.state.story.document_requests, 1, 'Repeated questions must not farm consequences');
+  assert.strictEqual(c.dialogue.at(-1).reply, 'Here you go.');
+  assert.ok(G.getCustomerQuestions(c).some(q => q[0] === 'follow'));
+  c = stageCase(h, 'sofia_day6_ally', 6, {sofia_trust:'ally'});
+  answerRequiredQuestions(G); G.makeDecision('ADMIT');
+  assert.ok(!G.state.shiftStats.dilemmaNotes.join(' ').includes('shared her receipt evidence'));
+  assert.strictEqual(G.state.story.sofia_evidence, undefined);
+});
+
+test("28. Every Campaign 1 scripted branch and procedural case has an accessible evidence route", () => {
+  const catalog = createHarness(2800).Game.campaign();
+  let checked = 0;
+  for (const [day, cfg] of Object.entries(catalog.days)) {
+    for (const enc of cfg.scriptedEncounters || []) {
+      const h = createHarness(2800 + checked), G = h.Game;
+      G.state.day = Number(day); G.state.story = {};
+      const requirements = enc.trigger?.requireStoryValue;
+      for (const r of requirements ? (Array.isArray(requirements) ? requirements : [requirements]) : []) G.state.story[r.key] = r.value ?? r.in?.[0] ?? r.min;
+      G.prepareDaySchedule(Number(day)); G.state.shiftActive = true;
+      const c = G.generateCustomerScenario(enc.id);
+      assert.strictEqual(c.scriptedId, enc.id, 'Never silently replace a scripted encounter');
+      G.finalizeCustomerAtWindow(c); G.state.currentCustomer = c;
+      assert.ok(!c.idCard?.presented);
+      const before = G.evaluateCustomerCase(c);
+      assert.ok(!before.issues.some(i => ['id_name','id_forged','id_expired','underage'].includes(i.code)), 'Hidden documents cannot determine scoring');
+      const ev = answerRequiredQuestions(G);
+      assert.ok(ev.validActions.includes(enc.expectedAction || (enc.dilemma ? 'REFUSE' : ev.validActions[0])), `${enc.id}: ${JSON.stringify(ev)}`);
+      assert.ok(c.statement.split(/\s+/).length <= 22, `${enc.id}: opening should be brief`);
+      checked++;
+    }
+    for (const type of cfg.casePool || []) {
+      const h = createHarness(2800 + checked), G = h.Game;
+      G.state.day = Number(day); G.prepareDaySchedule(Number(day)); G.state.shiftActive = true;
+      const c = G.generateCustomerScenario(type);
+      G.finalizeCustomerAtWindow(c); G.state.currentCustomer = c;
+      const ev = answerRequiredQuestions(G);
+      assert.ok(ev.validActions.some(a => ['ADMIT','CORRECT','REFUSE'].includes(a)), type);
+      checked++;
+    }
+  }
+  assert.ok(checked > 90);
+  const h = createHarness(2899), G = h.Game;
+  const c = stageCase(h, 'adult_horror_day2'); requestId(G);
+  c.person.name = 'An internal identity never spoken aloud'; c.trueAge = 8;
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT'], 'Hidden name/trueAge cannot override valid public evidence');
+  assert.strictEqual(G.compareTwoInspectedItems({category:'id_name',value:c.idCard.holderName}, {category:'portrait',value:c.person.id}).isMatch, null);
+});
+
+test("29. Guaranteed arrivals survive walkouts and closing, respect branches, and never duplicate", () => {
+  const h = createHarness(2900), G = h.Game;
+  G.state.day = 4; G.startShift();
+  const current = G.state.currentCustomer;
+  G.nextCustomerFromQueue(); assert.strictEqual(G.state.currentCustomer, current, 'An undecided customer cannot be skipped');
+  G.spawnCustomerToQueue('leo_day4'); G.spawnCustomerToQueue('leo_day4');
+  assert.strictEqual(G.state.queue.filter(c => c.queuedEncounterId === 'leo_day4').length, 1);
+  const queued = G.state.queue.find(c => c.queuedEncounterId === 'leo_day4'); queued.patience = 0.1;
+  G.state.queue.push({person:{name:'Routine visitor'},patience:0.1});
+  G.updateQueuePatience();
+  assert.ok(G.state.queue.includes(queued));
+  assert.ok(!G.state.queue.some(c => c.person.name === 'Routine visitor'));
+  queued.preventQueueWalkout = false; queued.patience = 0.1;
+  G.updateQueuePatience();
+  assert.strictEqual(G.state.scriptedEncountersState.leo_day4, 'scheduled', 'An optional walkout requeues the unresolved story');
+  const seen = [];
+  G.state.clockMins = G.state.clockEndMins;
+  while (G.state.shiftActive && seen.length < 20) {
+    const c = G.state.currentCustomer; seen.push(c.scriptedId);
+    const ev = answerRequiredQuestions(G);
+    G.makeDecision(ev.validActions[0], ev.options[0]); G.nextCustomerFromQueue();
+  }
+  assert.strictEqual(G.state.shiftActive, false);
+  assert.strictEqual(new Set(seen).size, seen.length);
+  for (const id of ['sofia_day4','leo_day4','mystery_day4','maya_day4_blamed','dilemma_late_day4']) assert.ok(seen.includes(id), id);
+  assert.ok(!seen.includes('maya_day4_helped'));
+  for (const id of seen) assert.strictEqual(G.state.scriptedEncountersState[id], 'resolved');
+});
+
+test("30. Active saves restore evidence, documents, bookings, RNG and encounter state; replay rolls back the day", () => {
+  const h = createHarness(3000), G = h.Game;
+  G.state.day = 2; G.startShift();
+  const initialMoney = G.state.money, initialStory = structuredClone(G.state.story);
+  requestId(G); G.makeDecision('REFUSE');
+  assert.strictEqual(G.state.story.leo_caught_count, 1);
+  let resumed = createHarness(9999, null, h.storage._s);
+  resumed.Game.startShift();
+  assert.strictEqual(resumed.Game.state.decisionLocked, true);
+  assert.strictEqual(resumed.Game.state.scriptedEncountersState.leo_day2, 'resolved');
+  assert.strictEqual(resumed.Game.state.story.leo_caught_count, 1);
+  G.nextCustomerFromQueue(); resumed.Game.nextCustomerFromQueue();
+  assert.strictEqual(JSON.stringify(resumed.Game.state.currentCustomer), JSON.stringify(G.state.currentCustomer));
+  G.askCustomerQuestion('ask_age','age'); requestId(G); G.tick();
+  h.UI.openIdCardModal(); G.saveProgress();
+  resumed = createHarness(123, null, h.storage._s); resumed.Game.startShift();
+  assert.strictEqual(resumed.Game.state.modalDepth, 0);
+  assert.strictEqual(resumed.Game.state.currentCustomer.idCard.presented, true);
+  assert.ok(resumed.Game.state.currentCustomer.discoveredEvidence.includes('age_claimed'));
+  assert.strictEqual(resumed.Game.state.clockMins, G.state.clockMins);
+  assert.strictEqual(JSON.stringify(resumed.Game.state.bookings), JSON.stringify(G.state.bookings));
+  assert.strictEqual(JSON.stringify(resumed.Game.state.queue), JSON.stringify(G.state.queue));
+  assert.strictEqual(resumed.Game.rngSeed, G.rngSeed);
+  resumed.Game.replayCurrentDay();
+  assert.strictEqual(resumed.Game.state.money, initialMoney);
+  assert.strictEqual(JSON.stringify(resumed.Game.state.story), JSON.stringify(initialStory));
+  resumed.Game.startShift();
+  assert.strictEqual(resumed.Game.state.currentCustomer.scriptedId, 'leo_day2');
+  requestId(resumed.Game); resumed.Game.makeDecision('REFUSE');
+  assert.strictEqual(resumed.Game.state.story.leo_caught_count, 1, 'Replay does not farm catches');
+  // Legacy saves keep resolved events even without a live snapshot.
+  const saved = JSON.parse(h.storage._s.cinema_chaos_save_v2); delete saved.activeShift; delete saved.dayStartSnapshot;
+  const legacy = createHarness(3001, null, {cinema_chaos_save_v2:JSON.stringify(saved)});
+  legacy.Game.startShift();
+  assert.notStrictEqual(legacy.Game.state.currentCustomer.scriptedId, 'leo_day2');
+});
+
+function playEndingRoute(route) {
+  const h = createHarness(3100), G = h.Game;
+  for (let day = 1; day <= 7; day++) {
+    assert.strictEqual(G.state.day, day); G.startShift();
+    let count = 0;
+    while (G.state.shiftActive && count < 20) {
+      const c = G.state.currentCustomer;
+      if (route === 'whistleblower' && c.characterId === 'sofia' && day === 6) G.askCustomerQuestion('what_did_you_see','receipts');
+      if (route === 'whistleblower' && c.scriptedId === 'mystery_day7') G.askCustomerQuestion('report_vip','report');
+      const ev = answerRequiredQuestions(G);
+      let action = ev.validActions[0];
+      if (route === 'management' && c.managerDirective) action = 'ADMIT';
+      if (route === 'people' && c.dilemma) action = 'ADMIT';
+      if (route === 'neutral' && c.scriptedId === 'sofia_day1') action = 'REFUSE';
+      if (route === 'fired' && day <= 3 && count < 2) action = action === 'REFUSE' ? 'ADMIT' : 'REFUSE';
+      G.makeDecision(action, ev.options[0]); count++;
+      G.state.clockMins = G.state.clockEndMins;
+      G.nextCustomerFromQueue();
+    }
+    assert.ok(count < 20);
+    if (day < 7) assert.strictEqual(G.advanceToNextDay(), true);
+  }
+  return h;
+}
+
+test("31. All five special endings and neutral completion are reachable through actual seven-day decisions", () => {
+  for (const [route, ending] of [['employee','employee_of_the_week'],['people','peoples_champion'],['management','management_material'],['whistleblower','the_whistleblower'],['neutral','probation_passed'],['fired','youre_fired']]) {
+    const h = playEndingRoute(route), G = h.Game;
+    assert.strictEqual(G.state.lastCampaignEnding.id, ending, route);
+    assert.deepEqual(G.state.completedDays, [1,2,3,4,5,6,7]);
+    assert.strictEqual(G.state.story.leo_day7_outcome, 'helped');
+    if (route === 'whistleblower') {
+      assert.strictEqual(G.state.story.vip_reported, 'yes');
+      assert.strictEqual(G.state.story.sofia_evidence, 'yes');
+    } else assert.ok(!G.state.lastCampaignEnding.callbacks.some(c => c.characterName === 'Sofia'));
+  }
+});
+
+test("32. Ending precedence, unearned rewards, identity disclosure and legacy pack question compatibility", () => {
+  const h = createHarness(3200), G = h.Game;
+  G.state.reputation = 90; G.state.story = {manager_conflict:3,manager_compliance:0};
+  assert.notStrictEqual(G.evaluateCampaignEnding(false).id, 'the_whistleblower');
+  G.state.story = {total_mistakes:1};
+  assert.strictEqual(G.evaluateCampaignEnding(false).id, 'probation_passed');
+  G.state.story = {sofia_evidence:'yes',vip_reported:'yes',inspector_day7_outcome:'helped',manager_conflict:3};
+  assert.strictEqual(G.evaluateCampaignEnding(false).id, 'the_whistleblower');
+  assert.strictEqual(G.evaluateCampaignEnding(true).id, 'youre_fired');
+  let c = stageCase(h, 'morris_day1', 1);
+  h.UI.renderCustomer(c);
+  assert.strictEqual(h.elements.get('customerIdentityBar').textContent, '1 person');
+  assert.strictEqual(h.elements.get('customerTraitRow').children.length, 0);
+  G.askCustomerQuestion('ask_name','name');
+  assert.strictEqual(G.getKnownCustomerName(c), 'Mr Morris');
+  G.makeDecision('ADMIT');
+  assert.strictEqual(G.state.story.known_char_mr_morris, 'yes');
+  c = stageCase(h, 'mystery_day7', 7); requestId(G);
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT']);
+  assert.strictEqual(G.compareTwoInspectedItems({category:'id_name',value:c.idCard.holderName}, {category:'portrait',value:c.person.id}).isMatch, null, 'A job title is not a conflicting personal name');
+  c = stageCase(h, 'valid', 1);
+  c.storyEffects = {onQuestioned:{legacy_question:'yes'}};
+  G.askCustomerQuestion('which_film','film'); G.makeDecision('ADMIT');
+  assert.strictEqual(G.state.story.legacy_question, 'yes', 'Existing packs without specific effects retain legacy semantics');
+});
+
+
+test("33. Other packs can reuse encounter IDs on different days and opt into identity without an age policy", () => {
+  const h = createHarness(3300), G = h.Game;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'tests/minimal-test-campaign.js'),'utf8'), h.sandbox);
+  const reg = h.sandbox.CinemaChaos.CampaignRegistry;
+  const pack = structuredClone(reg.get('festival-showcase'));
+  pack.id = 'identity-fixture'; pack.playableDaysCount = 2;
+  const enc = {id:'shared-id', caseType:'valid', targetScreeningId:'cosmic_voyage', expectedAction:'ADMIT', guaranteed:true, oncePerShift:true, requiresIdentityCheck:true,
+    personOverrides:{name:'Private internal name'}, idCard:{exists:true,holderName:'Festival Guest',dob:'01/01/1980',issueDate:'01/01/2020',expiryDate:'01/01/2030'}, statementTemplate:'One ticket, please.'};
+  pack.days[1].scriptedEncounters = [enc];
+  pack.days[2] = {...structuredClone(pack.days[1]),dayNum:2,dayName:'TUESDAY',playable:true};
+  reg.register(pack);
+  G.selectCampaign(pack.id); G.startShift();
+  assert.strictEqual(G.state.currentCustomer.scriptedId, 'shared-id');
+  assert.ok(G.getCustomerQuestions(G.state.currentCustomer).some(q => q[0] === 'ask_id'));
+  assert.ok(!G.getCustomerQuestions(G.state.currentCustomer).some(q => q[0] === 'ask_age'));
+  requestId(G); G.makeDecision('ADMIT'); finishShift(G);
+  assert.strictEqual(G.advanceToNextDay(), true); G.startShift();
+  assert.strictEqual(G.state.currentCustomer.scriptedId, 'shared-id', 'A resolved ID from Monday must not suppress Tuesday');
+  const current = JSON.stringify(G.state.currentCustomer);
+  G.selectCampaign('the-first-week');
+  G.startOrContinueCampaign(pack.id); G.startShift();
+  assert.strictEqual(JSON.stringify(G.state.currentCustomer), current, 'Switching campaigns preserves the suspended shift');
+  assert.strictEqual(G.state.resolvedEncounters[1]['shared-id'], true);
+  assert.ok(!G.state.resolvedEncounters[2]?.['shared-id']);
+  requestId(G); G.makeDecision('ADMIT');
+  assert.strictEqual(G.state.resolvedEncounters[2]['shared-id'], true);
+  const forged = structuredClone(pack); forged.days[1].scriptedEncounters[0].idCard.dob = '30/02/2012';
+  assert.doesNotThrow(() => reg.validate(forged), 'Impossible printed dates are intentional forgery content');
+  forged.days[1].scriptedEncounters[0].idCard.dob = 123;
+  assert.throws(() => reg.validate(forged), /printed text/);
+  const invalid = structuredClone(pack); invalid.days[1].scriptedEncounters[0].guaranteed = 'yes';
+  assert.throws(() => reg.validate(invalid), /must be boolean/);
+});
+
+test("34. Contradictions work in either question order, identity stays concealed, and ordinary queues remain active", () => {
+  const h = createHarness(3400), G = h.Game;
+  const c = stageCase(h, 'leo_day5', 5);
+  assert.strictEqual(G.getKnownCustomerName(c), null);
+  requestId(G);
+  assert.ok(!c.discoveredEvidence.includes('age_id_contradiction'));
+  G.askCustomerQuestion('ask_age','age');
+  assert.ok(c.discoveredEvidence.includes('age_id_contradiction'));
+  G.makeDecision('REFUSE');
+  assert.ok(G.state.outcomes.at(-1).evidence.includes('age_id_contradiction'));
+  // Serve the remaining script, then ordinary random customers still enter normally.
+  G.state.clockMins = 1065; G.state.closing = false;
+  for (let n = 0; n < 8; n++) {
+    G.nextCustomerFromQueue();
+    const ev = answerRequiredQuestions(G);
+    G.makeDecision(ev.validActions[0], ev.options[0]);
+  }
+  assert.strictEqual(G.state.currentCustomer.scriptedId, undefined);
+  G.state.decisionLocked = false;
+  G.state.queue = [{person:{name:'Waiting visitor'},patience:10}];
+  const time = G.state.clockMins; G.tick();
+  assert.strictEqual(G.state.clockMins, time + 1);
+  assert.ok(G.state.queue[0].patience < 10);
+});
+
+
+test("35. Sufficient ticket evidence permits refusal or an unrestricted correction without unnecessary ID", () => {
+  const h = createHarness(3500), G = h.Game;
+  let c = stageCase(h, 'adult_horror_day2');
+  c.ticket.screen = 2;
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['REFUSE'], 'Closed printer plus wrong screen already justifies refusal');
+  assert.strictEqual(c.idCard.presented, false);
+  c = stageCase(h, 'age_valid', 3);
+  c.intent = c.known.preference = {ids:['laughing_bananas']};
+  c.known.publicPlan = true;
+  c.statement = 'I wanted Laughing Bananas.';
+  const ev = G.evaluateCustomerCase(c);
+  assert.deepEqual(ev.validActions, ['CORRECT']);
+  assert.ok(ev.options.some(f => f.id === 'laughing_bananas'));
+  G.makeDecision('CORRECT', G.screening('laughing_bananas'));
+  assert.strictEqual(G.state.shiftStats.correct, 1);
+  assert.strictEqual(c.idCard.presented, false, 'An unrestricted replacement does not require identification');
+});
+
+
+test("36. Legacy stated-age metadata never appears on an ID or affects decisions", () => {
+  const h = createHarness(3600), G = h.Game;
+  let c = stageCase(h, 'adult_horror_day2');
+  requestId(G, c);
+  const expected = G.evaluateCustomerCase(c).validActions;
+  c.idCard.statedAge = 5; // Emulate an older saved/custom campaign document.
+  h.UI.openIdCardModal();
+  const text = elementText(h.elements.get('idCardModalDocument'));
+  assert.ok(!text.includes('Stated Age'), 'Cards display DOB, not a fabricated age field');
+  assert.ok(!text.includes('id_age'), 'Cards cannot expose a stale age inspection target');
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, expected, 'Legacy metadata must not cause a refusal');
+  assert.strictEqual(G.normalizeIdCard(c.idCard, c.person.name).statedAge, undefined,
+    'Normalising a legacy document discards obsolete metadata');
+  h.UI.closeIdCardModal();
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

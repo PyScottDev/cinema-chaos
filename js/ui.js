@@ -5,29 +5,29 @@
       setDecisionButtons(disabled) { ['btnAdmit','btnCorrect','btnRefuse'].forEach(id=>document.getElementById(id).disabled=disabled); },
       updateCustomerSummary() {
         const c=Game.state.currentCustomer;
-        document.getElementById('mobileCustomerSummary').textContent=c?`${c.person.name}: ${c.dialogue.at(-1)?.reply||c.statement}`:'';
+        const knownName = c && Game.getKnownCustomerName ? Game.getKnownCustomerName(c) : null;
+        document.getElementById('mobileCustomerSummary').textContent=c?`${knownName||'Customer'}: ${c.dialogue.at(-1)?.reply||c.statement}`:'';
       },
       renderCustomer(c) {
         document.getElementById('customerPortraitBox').innerHTML=CHARACTERS.renderPortraitSVG(c.person,'neutral');
-        document.getElementById('customerIdentityBar').textContent=`${c.person.name} · ${c.groupSize} ${c.groupSize===1?'person':'people'}`;
+        const knownName = Game.getKnownCustomerName ? Game.getKnownCustomerName(c) : null;
+        const groupLabel = `${c.groupSize} ${c.groupSize===1?'person':'people'}`;
+        document.getElementById('customerIdentityBar').textContent = knownName ? `${knownName} · ${groupLabel}` : groupLabel;
         const traits=document.getElementById('customerTraitRow');traits.replaceChildren();
-        [c.person.wearingRed?'🧥 Red clothes':'',c.person.tag==='Cinema Visitor'?'':c.person.tag,c.dilemma?'⚖️ Dilemma':''].filter(Boolean).forEach(text=>{
-          const badge=document.createElement('span');badge.className='bg-amber-900 text-amber-100 text-xs px-2 py-1 rounded-full';badge.textContent=text;traits.append(badge);
-        });
         document.getElementById('customerStatementBox').textContent=c.statement;
         const follow=document.getElementById('customerFollowUpBox');follow.replaceChildren();
         c.dialogue.slice(-3).forEach(t=>{const p=document.createElement('p');p.textContent=`${t.question} — ${t.reply}`;follow.append(p);});
         follow.classList.toggle('hidden',!c.dialogue.length);
         const hint=document.getElementById('languageHintBar');hint.textContent=c.languageHint;hint.classList.toggle('hidden',!Game.state.showLanguageHints);
-        const defaultQuestions=[['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?'],['ask_age','How old are you?'],['ask_id','Can I see your ID, please?']];
-        const questions=Game.campaign()?.playerQuestions||defaultQuestions;
+        const defaultQuestions=[['film','Which film are you going to see?'],['ticket','Where is your ticket?'],['change','Would another time or film be okay?']];
+        const questions=Game.getCustomerQuestions ? Game.getCustomerQuestions(c) : (Game.campaign()?.playerQuestions||defaultQuestions);
         const grid=document.getElementById('questionButtonsGrid');grid.replaceChildren();
-        questions.forEach(([key,label])=>{const button=document.createElement('button');button.className='bg-[#3d0d13] hover:bg-[#5c1620] text-amber-100 border border-amber-600/60 rounded-lg px-2.5 py-2 text-left text-xs font-medium';button.textContent=(c.asked.includes(key)?'✓ ':'▸ ')+label;button.onclick=()=>{Game.askCustomerQuestion(key,label);button.textContent='✓ '+label;};grid.append(button);});
+        questions.forEach(([key,label])=>{const button=document.createElement('button');button.className='bg-[#3d0d13] hover:bg-[#5c1620] text-amber-100 border border-amber-600/60 rounded-lg px-2.5 py-2 text-left text-xs font-medium';button.setAttribute('data-question',key);button.textContent=(c.asked.includes(key)?'✓ ':'▸ ')+label;button.onclick=()=>{Game.askCustomerQuestion(key,label);};grid.append(button);});
         this.updateCustomerSummary();
       },
       renderTicketOnDesk(c) {
         const area=document.getElementById('deskDocumentArea'),t=c.ticket;area.replaceChildren();
-        if(!t.exists) {const card=document.createElement('div');card.className='ticket-slide bg-rose-950 border-2 border-dashed border-rose-400 rounded-xl p-5 text-center';card.textContent='🎟 No ticket on the desk.';area.append(card);return;}
+        if(!t.exists) {const card=document.createElement('div');card.className='ticket-slide bg-rose-950 border-2 border-dashed border-rose-400 rounded-xl p-5 text-center';card.textContent='🎟 No ticket on the desk.';area.append(card);} else {
         const fProg=Game.screening(t.filmId);
         const ratingSuffix=fProg?.ageRating?` · Rated ${fProg.ageRating}`:'';
         const card=document.createElement('div');
@@ -65,74 +65,185 @@
           document.getElementById('inspectStatusText').textContent=!f?'No programme entry.':fields.length?'Printed fields differ: '+fields.join(', '):'Printed film, room and time match the programme.';
         };card.append(scan);}
         area.append(card);
+        }
 
         if (Game.policies().checkAgeRestrictions || c.idCard) {
-          if (c.idCard?.exists && c.idCard.presented !== false) {
-            const idBox = document.createElement('div');
-            idBox.className = 'mt-2.5 bg-slate-100 border-2 border-slate-500 rounded-xl p-3 text-slate-900 font-ticket shadow-md';
-            const header = document.createElement('div');
-            header.className = 'flex items-center justify-between border-b border-slate-400 pb-1 mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-700';
-            header.textContent = `🪪 Identity Card · Today: ${Game.policies().dateDisplay || Game.currentDateISO()}`;
-            idBox.append(header);
-
-            const body = document.createElement('div');
-            body.className = 'grid grid-cols-3 gap-2 items-center';
-
-            const photoBtn = document.createElement('button');
-            photoBtn.type = 'button';
-            photoBtn.className = 'inspectable bg-slate-800 border border-slate-500 rounded p-1 flex flex-col items-center justify-center';
-            const portraitTarget = c.idCard.portraitPerson || (c.idCard.photoAltered ? { ...c.person, editedMoustache: true } : c.person);
-            photoBtn.innerHTML = `<div class="w-10 h-12 overflow-hidden">${CHARACTERS.renderPortraitSVG(portraitTarget, 'neutral')}</div><span class="text-[9px] text-amber-200 mt-0.5">${c.idCard.photoAltered || c.idCard.photoMismatch ? 'Photo (Edited?)' : 'ID Photo'}</span>`;
-            photoBtn.onclick = () => Game.handleInspectClick('id_photo', (c.idCard.photoMismatch || c.idCard.photoAltered) ? 'ALTERED' : (c.person.id || c.person.name), 'ID Card Photo', photoBtn);
-            body.append(photoBtn);
-
-            const infoCol = document.createElement('div');
-            infoCol.className = 'col-span-2 space-y-1.5';
-
-            const nameBtn = document.createElement('button');
-            nameBtn.type = 'button';
-            nameBtn.className = 'inspectable w-full text-left bg-white border border-slate-400 px-2 py-1 rounded text-xs';
-            nameBtn.textContent = `Name: ${c.idCard.holderName || c.person.name}`;
-            nameBtn.onclick = () => Game.handleInspectClick('id_name', c.idCard.holderName || c.person.name, `ID Name: ${c.idCard.holderName || c.person.name}`, nameBtn);
-            infoCol.append(nameBtn);
-
-            const dobBtn = document.createElement('button');
-            dobBtn.type = 'button';
-            dobBtn.className = 'inspectable w-full text-left bg-white border border-slate-400 px-2 py-1 rounded text-xs font-bold';
-            dobBtn.textContent = `DOB: ${c.idCard.dob}`;
-            dobBtn.onclick = () => Game.handleInspectClick('id_dob', c.idCard.dob, `ID Date of Birth: ${c.idCard.dob}`, dobBtn);
-            infoCol.append(dobBtn);
-
-            if (c.idCard.statedAge !== undefined) {
-              const ageBtn = document.createElement('button');
-              ageBtn.type = 'button';
-              ageBtn.className = 'inspectable w-full text-left bg-amber-50 border border-amber-500 px-2 py-1 rounded text-xs font-bold text-amber-950';
-              ageBtn.textContent = `Printed Age: ${c.idCard.statedAge}`;
-              ageBtn.onclick = () => Game.handleInspectClick('id_age', c.idCard.statedAge, `ID Printed Age: ${c.idCard.statedAge}`, ageBtn);
-              infoCol.append(ageBtn);
+          if (c.idCard?.exists && c.idCard.presented === true) {
+            const inspectIdBtn = document.createElement('button');
+            inspectIdBtn.type = 'button';
+            inspectIdBtn.id = 'openIdCardModalBtn';
+            inspectIdBtn.className = 'mt-2.5 w-full bg-amber-900 hover:bg-amber-800 text-amber-100 border-2 border-[#e2b857] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-extrabold shadow-lg flex items-center justify-between transition cursor-pointer';
+            inspectIdBtn.innerHTML = '<span>🪪 ID Card Provided — Inspect ID</span><span class="bg-[#e2b857] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded">Open Pop-up</span>';
+            inspectIdBtn.onclick = () => this.openIdCardModal();
+            area.append(inspectIdBtn);
+            if (this.modalStack.has('idCardModal')) {
+              this.renderIdCardModal(c);
             }
-
-            body.append(infoCol);
-            idBox.append(body);
-            area.append(idBox);
-          } else if (c.idCard?.exists && c.idCard.presented === false) {
-            const reqBtn = document.createElement('button');
-            reqBtn.type = 'button';
-            reqBtn.className = 'mt-2 w-full bg-amber-800 hover:bg-amber-700 text-amber-100 border border-amber-400 rounded-lg px-3 py-2 text-xs font-bold shadow';
-            reqBtn.textContent = '🪪 Ask Customer for ID Card';
-            reqBtn.onclick = () => Game.askCustomerQuestion('ask_id', 'Can I see your ID, please?');
-            area.append(reqBtn);
-          } else if (!c.idCard?.exists && (c.idRequested || c.asked?.includes('ask_id'))) {
+          } else if ((!c.idCard?.exists || c.idRefused) && (c.idRequested || c.asked?.includes('ask_id'))) {
             const noId = document.createElement('div');
             noId.className = 'mt-2 bg-rose-950/90 border border-rose-400 rounded-lg px-3 py-2 text-xs text-rose-100 font-ticket';
-            noId.textContent = `🪪 No ID Card: ${c.idCard?.reason || 'Customer cannot present valid identification.'}`;
+            noId.textContent = c.idRefused ? '🪪 The customer declined to show identification.' : `🪪 No ID Card: ${c.idCard?.reason || 'Customer has no identification with them.'}`;
             area.append(noId);
           }
         }
       },
+      openIdCardModal() {
+        const c = Game.state.currentCustomer;
+        if (!c || !c.idCard?.exists || !c.idCard?.presented) return;
+        if (this.modalStack.has('compareModal')) this.closeCompare();
+        if (this.modalStack.size) return;
+        this.idReturnFocus = document.activeElement;
+        Game.clearInspectSelection();
+        this.renderIdCardModal(c);
+        this.showModal('idCardModal');
+        document.getElementById('closeIdCardModalBtn')?.focus?.();
+      },
+      closeIdCardModal() {
+        const modal = document.getElementById('idCardModal');
+        if (modal) modal.classList.add('hidden');
+        if (this.modalStack.has('idCardModal')) {
+          this.hideModal('idCardModal');
+          Game.clearInspectSelection();
+          this.idReturnFocus?.focus?.();
+        }
+      },
+      renderIdCardModal(c) {
+        const docContainer = document.getElementById('idCardModalDocument');
+        const refContainer = document.getElementById('idCardModalCompareRefs');
+        if (!docContainer || !c || !c.idCard?.exists) return;
+        docContainer.replaceChildren();
+        if (refContainer) refContainer.replaceChildren();
+
+        const idCard = Game.normalizeIdCard ? Game.normalizeIdCard(c.idCard, c.person?.name, Game.state.day) : c.idCard;
+        const holderName = idCard.holderName || c.person?.name || 'Visitor';
+        const dobDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.dob) : idCard.dob;
+        const issueDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.issueDate || '15/06/2024') : (idCard.issueDate || '15/06/2024');
+        const expiryDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.expiryDate || '15/06/2029') : (idCard.expiryDate || '15/06/2029');
+        const docNum = idCard.docNumber || 'CID-402918';
+        const authority = idCard.issuingAuthority || 'City Civil Registry';
+
+        const cardWrap = document.createElement('div');
+        cardWrap.className = 'space-y-3';
+
+        const banner = document.createElement('div');
+        banner.className = 'flex items-center justify-between border-b-2 border-slate-700 pb-2';
+        banner.innerHTML = `
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-widest text-slate-600">${this.escapeHTML(authority)}</div>
+            <div class="font-marquee text-base sm:text-lg text-slate-900 tracking-wide">IDENTITY CARD</div>
+          </div>
+          <div class="text-right font-ticket text-xs font-bold text-slate-700">DOC NO. ${this.escapeHTML(docNum)}</div>
+        `;
+        cardWrap.append(banner);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-1 sm:grid-cols-3 gap-3 items-stretch';
+
+        const photoBtn = document.createElement('button');
+        photoBtn.type = 'button';
+        photoBtn.id = 'idModalPhotoBtn';
+        photoBtn.className = 'inspectable bg-slate-800 border-2 border-slate-600 rounded-xl p-2.5 flex flex-col items-center justify-center shadow-inner cursor-pointer';
+        const portraitTarget = idCard.portraitPerson || (idCard.photoMismatch
+          ? { ...c.person, isElderly: !c.person.isElderly, hairColor: '#cbd5e1', glasses: !c.person.glasses, hat: false, oversizedSuit: false, sunglasses: false }
+          : idCard.photoAltered ? { ...c.person, editedMoustache: !c.person.editedMoustache } : c.person);
+        photoBtn.innerHTML = `<div class="w-24 h-28 overflow-hidden rounded bg-slate-900 border border-slate-700 flex items-center justify-center">${CHARACTERS.renderPortraitSVG(portraitTarget, 'neutral')}</div><span class="text-[10px] font-bold uppercase tracking-wider text-amber-200 mt-1.5">Photograph</span>`;
+        if (idCard.photoAltered) {
+          const detail = document.createElement('span');
+          detail.className = 'text-[10px] text-amber-100 mt-1';
+          detail.textContent = idCard.alterationDescription || 'Tape crosses the photograph border; the stamp stops at its edge.';
+          photoBtn.append(detail);
+        }
+        photoBtn.onclick = () => {
+          if (!Game.state.inspectMode) Game.toggleInspectMode();
+          Game.handleInspectClick('id_photo', (idCard.photoMismatch || idCard.photoAltered) ? 'ALTERED' : (c.person.id || c.person.name), 'ID Card Photograph', photoBtn);
+        };
+        grid.append(photoBtn);
+
+        const fieldsGrid = document.createElement('div');
+        fieldsGrid.className = 'sm:col-span-2 grid grid-cols-2 gap-2';
+
+        const addFieldBtn = (kind, val, label, display, span2 = false) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'inspectable text-left bg-white border border-slate-400 p-2 rounded-lg shadow-sm cursor-pointer ' + (span2 ? 'col-span-2' : '');
+          const lbl = document.createElement('span');
+          lbl.className = 'text-[10px] uppercase text-slate-500 block font-sans font-bold';
+          lbl.textContent = label;
+          const txt = document.createElement('span');
+          txt.className = 'font-ticket font-bold text-xs sm:text-sm text-slate-950';
+          txt.textContent = display;
+          btn.append(lbl, txt);
+          btn.onclick = () => {
+            if (!Game.state.inspectMode) Game.toggleInspectMode();
+            Game.handleInspectClick(kind, val, `${label}: ${display}`, btn);
+          };
+          fieldsGrid.append(btn);
+        };
+
+        addFieldBtn('id_name', holderName, 'Full Name', holderName, true);
+        addFieldBtn('id_dob', dobDmy, 'Date of Birth', dobDmy, true);
+        addFieldBtn('id_issue', issueDmy, 'Issue Date', issueDmy, false);
+        addFieldBtn('id_expiry', expiryDmy, 'Expiry Date', expiryDmy, false);
+        addFieldBtn('id_number', docNum, 'Document Number', docNum, false);
+        addFieldBtn('id_authority', authority, 'Issuing Authority', authority, false);
+
+        grid.append(fieldsGrid);
+        cardWrap.append(grid);
+        docContainer.append(cardWrap);
+
+        if (refContainer) {
+          const addRefBtn = (cat, val, label, text, onClickCustom = null) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'inspectable text-left bg-slate-900 hover:bg-slate-800 border border-amber-700/70 rounded-lg px-2.5 py-1.5 text-xs text-amber-100 cursor-pointer';
+            btn.textContent = text;
+            btn.onclick = onClickCustom || (() => Game.handleInspectClick(cat, val, label, btn));
+            refContainer.append(btn);
+          };
+
+          addRefBtn('portrait', c.person.id || c.person.name, 'Customer Appearance', '👤 Compare with Customer Appearance', (e) => {
+            if (!Game.state.inspectMode) Game.toggleInspectMode();
+            Game.handleCustomerPortraitInspect(e.currentTarget);
+          });
+
+          const lastSpeech = c.dialogue.at(-1)?.reply || c.statement;
+          addRefBtn('statement', c.statement, 'Customer Statement', `💬 Statement: "${lastSpeech.slice(0, 42)}${lastSpeech.length > 42 ? '…' : ''}"`, (e) => {
+            if (!Game.state.inspectMode) Game.toggleInspectMode();
+            Game.handleInspectClick('statement', c.statement, 'Customer Statement', e.currentTarget);
+          });
+
+          if (c.ticket?.exists) {
+            const f = Game.screening(c.ticket.filmId);
+            const ratingLabel = f?.ageRating ? ` [${f.ageRating}]` : '';
+            addRefBtn('ticket_film', c.ticket.filmId, `Ticket Film: ${c.ticket.filmTitle}`, `🎟️ Ticket Film: ${c.ticket.filmTitle}${ratingLabel}`, (e) => {
+              if (!Game.state.inspectMode) Game.toggleInspectMode();
+              Game.handleInspectClick('ticket_film', c.ticket.filmId, `Ticket Film: ${c.ticket.filmTitle}`, e.currentTarget);
+            });
+            if (c.ticket.holderName) {
+              addRefBtn('ticket_holder', c.ticket.holderName, `Ticket Holder: ${c.ticket.holderName}`, `🏷️ Ticket Holder: ${c.ticket.holderName}`, (e) => {
+                if (!Game.state.inspectMode) Game.toggleInspectMode();
+                Game.handleInspectClick('ticket_holder', c.ticket.holderName, `Ticket Holder: ${c.ticket.holderName}`, e.currentTarget);
+              });
+            }
+          }
+          for (const film of Game.allScreenings().filter(f => c.known.publicPlan && c.known.preference && f.id !== c.ticket?.filmId && Game.accepts(c, f, c.known.preference))) {
+            addRefBtn('schedule_row', film.id, film.title, `🎬 Alternative: ${film.title}${film.ageRating ? ' [' + film.ageRating + ']' : ''}`, e => {
+              if (!Game.state.inspectMode) Game.toggleInspectMode();
+              Game.handleInspectClick('schedule_row', film.id, film.title, e.currentTarget);
+            });
+          }
+
+          const todayRef = Game.formatDateDMY ? Game.formatDateDMY(Game.policies().dateDisplay || Game.currentDateISO()) : Game.today();
+          addRefBtn('today', Game.today(), `Schedule Date (${todayRef})`, `📅 Schedule Date: ${todayRef}`, (e) => {
+            if (!Game.state.inspectMode) Game.toggleInspectMode();
+            Game.handleInspectClick('today', Game.today(), `Schedule Date (${todayRef})`, e.currentTarget);
+          });
+        }
+      },
       renderScheduleBinder() {
         const s=Game.state, pol=Game.policies();
-        document.getElementById('scheduleDayTag').textContent=pol.dateDisplay?`${Game.today()} · ${pol.dateDisplay}`:Game.today();
+        const displayDate = pol.dateDisplay || pol.currentDate;
+        document.getElementById('scheduleDayTag').textContent=displayDate?`${Game.today()} · ${Game.formatDateDMY(displayDate)}`:Game.today();
         const render=(id,items)=>{const list=document.getElementById(id);list.replaceChildren();items.forEach(f=>{
           const node=document.createElement('button');node.type='button';node.className='inspectable w-full text-left p-2 rounded-lg border '+(f.status==='CANCELLED'?'bg-red-100 border-red-400':'bg-amber-50 border-amber-300');
           node.innerHTML='<div class="flex justify-between gap-2"><strong class="text-xs text-slate-900"></strong><span class="room text-[10px] bg-red-900 text-amber-100 rounded px-1"></span></div><div class="details font-ticket text-[11px] text-slate-700"></div>';
@@ -622,7 +733,7 @@
         const container = document.getElementById('queueVisualContainer');
         if (!container) return;
 
-        const activeItemsHtml = q.map(c => {
+        const activeItemsHtml = q.map((c, idx) => {
           const state = Game.getPatienceState ? Game.getPatienceState(c.patience) : (c.patience <= 20 ? 'critical' : c.patience <= 40 ? 'impatient' : 'normal');
           const pct = Math.max(0, Math.min(100, Math.round(c.patience)));
           const cardClass = state === 'critical'
@@ -640,15 +751,16 @@
             : state === 'impatient'
             ? `<span class="queue-patience-cue text-[9px] font-bold uppercase tracking-tight text-amber-200 bg-amber-900/90 border border-amber-400/70 px-1 rounded leading-tight">⏳ Impatient</span>`
             : '';
+          const queueLabel = `Waiting #${idx + 1}`;
           return `
             <div data-patience-state="${state}" class="${cardClass} rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0 transition-colors">
               <span class="w-3 h-3 rounded-full inline-block border border-white/50 shrink-0" style="background:${c.person.coatColor}"></span>
               <div>
                 <div class="flex items-center gap-1">
-                  <span class="text-[10px] font-bold text-amber-100 leading-none">${this.escapeHTML(c.person.name)}</span>
+                  <span class="text-[10px] font-bold text-amber-100 leading-none">${queueLabel}</span>
                   ${cueHtml}
                 </div>
-                <div class="w-14 h-1.5 bg-black rounded-full overflow-hidden mt-1" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${this.escapeHTML(c.person.name)} patience ${pct}% (${state})">
+                <div class="w-14 h-1.5 bg-black rounded-full overflow-hidden mt-1" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${queueLabel} patience ${pct}% (${state})">
                   <div class="h-full ${barColor}" style="width:${pct}%"></div>
                 </div>
               </div>
@@ -661,7 +773,7 @@
             <div data-patience-state="departed" class="bg-rose-950/90 border-2 border-rose-400 rounded-lg px-2 py-1 flex items-center gap-1.5 shrink-0 queue-item-departing">
               <span class="w-3 h-3 rounded-full inline-block border border-white/50 shrink-0" style="background:${c.person?.coatColor || '#ef4444'}"></span>
               <div>
-                <div class="text-[10px] font-bold text-rose-200 leading-none">${this.escapeHTML(c.person?.name || 'Customer')}</div>
+                <div class="text-[10px] font-bold text-rose-200 leading-none">Waiting customer</div>
                 <div class="text-[9px] font-extrabold uppercase text-amber-300 mt-0.5">🚪 Left queue</div>
               </div>
             </div>
@@ -700,10 +812,11 @@
           ? {id:'printer',title:'Printer closed',text:'Today: admit correct tickets. Refuse tickets with errors.'}
           : {id:'printer',title:'Changes',text:'Standard tickets for today can be changed to a film the customer accepts. It must have enough seats. A changed ticket lets them enter.'});
         if (pol.checkAgeRestrictions) {
+          const todayDmy = Game.formatDateDMY ? Game.formatDateDMY(pol.dateDisplay || pol.currentDate || '') : (pol.dateDisplay || '');
           rules.push({
             id:'age',
             title: pol.ageRuleTitle || 'Age classifications & ID',
-            text: pol.ageRuleText || camp.ageRuleText || `Check film age ratings (G: all ages, 12: min age 12, 16: min age 16). Customers for 12 or 16 films must present a valid ID card matching their name, photo and date of birth${pol.dateDisplay ? ' (Today: ' + pol.dateDisplay + ')' : ''}.`
+            text: pol.ageRuleText || camp.ageRuleText || `Check film age ratings (G: all ages, 12: min age 12, 16: min age 16). Customers for 12 or 16 films must present a valid ID card matching their name, photo and date of birth${todayDmy ? ' (Today: ' + todayDmy + ')' : ''}.`
           });
         }
         if (pol.lateToleranceMins !== null && pol.lateToleranceMins !== undefined) {
@@ -902,6 +1015,8 @@
 
         document.getElementById('briefingDaySubtitle').textContent = `THE GRAND CINEMA — ${cfg.dayName} SHIFT`;
         document.getElementById('briefingDayTitle').textContent = cfg.title;
+        const startButton = document.getElementById('startShiftBtn');
+        if (startButton) startButton.textContent = Game.pendingShift ? 'Resume saved shift →' : 'Start shift →';
         document.getElementById('briefingMemoText').textContent = memo;
         document.getElementById('briefingLanguageFocus').textContent = cfg.languageFocus;
         this.renderBriefingObjective();
@@ -1094,8 +1209,20 @@
     };
 
     document.addEventListener('keydown',e=>{
+      if (e.key === 'Tab' && UI.modalStack.has('idCardModal')) {
+        const modal = document.getElementById('idCardModal');
+        const controls = [...modal.querySelectorAll('button:not([disabled]), [tabindex="0"]')];
+        const first = controls[0], last = controls.at(-1);
+        if (e.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+          e.preventDefault(); last?.focus();
+        } else if (!e.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+          e.preventDefault(); first?.focus();
+        }
+        return;
+      }
       if(e.key==='Escape') {
-        if(UI.modalStack.has('compareModal'))UI.closeCompare();
+        if(UI.modalStack.has('idCardModal'))UI.closeIdCardModal();
+        else if(UI.modalStack.has('compareModal'))UI.closeCompare();
         else if(UI.modalStack.has('guideModal'))UI.closeGuideModal();
         else if(UI.modalStack.has('teacherModal'))UI.closeTeacherModal();
         else if(UI.modalStack.has('campaignSelectModal') && Game.state.shiftActive)UI.closeCampaignSelectModal();
