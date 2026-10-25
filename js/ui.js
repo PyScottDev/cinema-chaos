@@ -47,8 +47,15 @@
           card.querySelector('.ticket-fields').append(node);
         });
         const b=Game.booking(c), booking=document.createElement('button');booking.className='inspectable w-full mt-3 text-xs text-left border-t border-dashed border-slate-500 pt-2';
-        booking.textContent=`Booking record: ${b?b.seats+' seat(s) · '+b.status:'not found'} · Arrival ${Game.formatMins(c.arrivalTime)}`;
+        booking.textContent=`Booking record: ${b?b.seats+' seat(s) · '+b.status:'not found'}`;
         booking.onclick=()=>Game.handleInspectClick('booking_seats',b?.seats??0,'Booking record: '+(b?.seats??0)+' seats',booking);card.append(booking);
+        if (Game.policies().lateToleranceMins !== null && Game.policies().lateToleranceMins !== undefined) {
+          const arrival=document.createElement('button');
+          arrival.className='inspectable mt-1 text-xs font-ticket text-left border border-amber-900/40 rounded p-2 w-full';
+          arrival.textContent=`Arrival recorded: ${Game.formatMins(c.arrivalTime)}`;
+          arrival.onclick=()=>Game.handleInspectClick('arrival_time',c.arrivalTime,arrival.textContent,arrival);
+          card.append(arrival);
+        }
         if(c.dilemma) {
           const dilemmaNote=document.createElement('div');
           dilemmaNote.className='text-xs mt-2 p-2 rounded bg-amber-100/90 border border-amber-700 text-amber-950 font-sans font-semibold';
@@ -567,7 +574,18 @@
       },
 
       updateClockDisplay() {
-        document.getElementById('clockDisplay').textContent = Game.state.clockFormatted;
+        const s=Game.state;
+        const left=Math.max(0,Math.ceil(s.shiftRemainingSeconds || 0));
+        const minutes=Math.floor(left/60),seconds=left%60;
+        document.getElementById('clockDisplay').textContent=`${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        const progress=document.getElementById('shiftProgress');
+        const total=s.shiftTargetCustomers || Game.getShiftTarget();
+        const handled=s.shiftStats.served + s.shiftStats.customersLost;
+        if(progress) progress.textContent=`${handled} / ${total}`;
+        const bar=document.getElementById('shiftProgressBar');
+        if(bar) bar.style.width=`${Math.min(100,100*handled/total)}%`;
+        const box=document.getElementById('clockInspectBox');
+        if(box) box.classList.toggle('shift-time-warning',left>0 && left<=60);
       },
 
       updateDifficultyButtons() {
@@ -956,11 +974,13 @@
         }
         const leadEl = document.getElementById('briefingObjectiveLead');
         if (leadEl) {
-          leadEl.textContent = 'Serve customers correctly and finish your shift without receiving too many management warnings.';
+          const target = Game.getShiftTarget();
+          const duration = Game.pendingShift?.shiftRemainingSeconds ?? Game.getShiftDurationSeconds();
+          leadEl.textContent = `Serve ${target} customers before the ${Math.floor(duration/60)}:${String(duration%60).padStart(2,'0')} countdown ends. Finish early for a €5 bonus. The shift also ends when everyone has been served.`;
         }
         const noteEl = document.getElementById('briefingObjectiveRuleNote');
         if (noteEl) {
-          noteEl.textContent = `Incorrect ticket decisions can lead to warnings. Receiving your ${ordinal} warning (${maxWarnings} / ${maxWarnings}) will end the shift.`;
+          noteEl.textContent = `Wrong decisions can cause warnings (${maxWarnings} maximum). The countdown pauses for help, documents and feedback. Unserved ordinary customers leave when time expires; story visitors still get their turn.`;
         }
       },
 
@@ -1013,7 +1033,7 @@
 
         const resolvedHeadline = dismissed
           ? 'SHIFT FAILED — MANAGEMENT DISMISSED YOU'
-          : 'SHIFT COMPLETE — WELL DONE';
+          : (headline || 'SHIFT COMPLETE — CINEMA CLOSED');
         document.getElementById('reportModalTitle').textContent = resolvedHeadline;
         document.getElementById('reportServed').textContent = st.served;
         document.getElementById('reportCorrect').textContent = st.correct;
@@ -1057,7 +1077,8 @@
             : 'Ready for another Endless shift!';
           if (outcomeDetail) {
             outcomeDetail.className = 'font-ticket text-xs text-emerald-200/95';
-            outcomeDetail.textContent = `Closing time reached with ${warningsCount} of ${maxWarnings} permitted warnings. ${unlockMsg}`;
+            const remaining = Math.max(0,s.shiftRemainingSeconds);
+            outcomeDetail.textContent = `${s.shiftExpired ? 'Countdown expired' : 'Customers processed'}: ${s.shiftStats.served} served, ${s.shiftStats.customersLost} unserved. ${remaining > 0 ? 'Early finish bonus: €5. ' : ''}${unlockMsg}`;
           }
         }
 

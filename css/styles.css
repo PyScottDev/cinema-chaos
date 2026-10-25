@@ -324,3 +324,7 @@
   .id-field-value { font-size:10px; }
   .id-card-fields { gap:2px; }
 }
+
+/* Shift countdown: urgency without a flashing or misleading cinema clock. */
+.shift-time-warning { border-color: #fb7185 !important; }
+.shift-time-warning #clockDisplay { color: #fda4af !important; }

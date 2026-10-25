@@ -47,7 +47,7 @@
       },
 
       // Assign once to the finished customer. Do not infer legal age from artwork.
-      assignPortrait(person, ageHint = null) {
+      assignPortrait(person, ageHint = null, recentlyUsed = []) {
         if (!person || person.characterId || Object.prototype.hasOwnProperty.call(PORTRAIT_REGISTRY.recurring, person.id)) return person;
         if (person.portraitId && PORTRAIT_REGISTRY.visitors.some(p => p.id === person.portraitId)) return person;
         const group = typeof ageHint !== 'number' || !Number.isFinite(ageHint) ? null
@@ -63,12 +63,16 @@
         const available = PORTRAIT_REGISTRY.visitors.filter(p => !PORTRAIT_REGISTRY.reservedVisitorIds.includes(p.id));
         let candidates = available.filter(p => p.wearingRed === red && (!group || p.ageGroup === group) && (!gender || p.genderPresentation === gender));
         if (!candidates.length) candidates = available.filter(p => p.wearingRed === red && (!gender || p.genderPresentation === gender));
-        // Prefer consistent accessories if possible without compromising red clothing or casting age.
+        // Reuse is a last resort. Age and red-clothing match take priority over
+        // accessories; a teenager must still look like a teenager for ID gameplay.
+        const unused = candidates.filter(p => !recentlyUsed.includes(p.id));
+        if (unused.length) candidates = unused;
         const withGlasses = candidates.filter(p => p.glasses === Boolean(person.glasses));
         if (withGlasses.length) candidates = withGlasses;
         const hasHat = Boolean(person.hat) && person.hat !== 'none';
         const withHat = candidates.filter(p => p.hat === hasHat);
         if (withHat.length) candidates = withHat;
+        // Stable for saved visitors; the used roster changes who is eligible.
         const chosen = candidates[this.stablePortraitHash(`${person.id}|${person.name}`) % candidates.length];
         if (chosen) person.portraitId = chosen.id;
         return person;

@@ -35,15 +35,18 @@
         </div>
       </div>
 
-      <!-- Central Live Metrics (Clock, Money, Reputation, Warnings) -->
+      <!-- Central Live Metrics (Countdown, progress, cash, reputation, warnings) -->
       <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
-        <!-- Inspectable Clock -->
-        <div id="clockInspectBox"
-             onclick="Game.handleInspectClick('clock', Game.state.clockFormatted, 'Current Time: ' + Game.state.clockFormatted, this)"
-             title="Click in Inspect Mode to compare current time against ticket time or rules"
-             class="inspectable bg-black/70 border-2 border-[#e2b857] px-3 py-1 rounded-lg flex items-center gap-2">
-          <span class="text-amber-400 text-xs uppercase font-bold tracking-wider">Clock</span>
-          <span id="clockDisplay" class="font-ticket text-lg sm:text-xl font-bold text-emerald-400">17:45</span>
+        <!-- The only visible game clock is a real countdown. Screening arrival times
+             are fixed case evidence printed on the ticket, not this timer. -->
+        <div id="clockInspectBox" class="bg-black/70 border-2 border-[#e2b857] px-3 py-1 rounded-lg flex items-center gap-2" title="Shift time remaining (minutes:seconds)">
+          <span class="text-amber-400 text-xs uppercase font-bold tracking-wider">Time left</span>
+          <span id="clockDisplay" class="font-ticket text-lg sm:text-xl font-bold text-emerald-400" role="timer">08:00</span>
+        </div>
+        <div class="bg-[#2c090d] border border-amber-700/60 px-3 py-1 rounded-lg flex items-center gap-2" title="Customers processed out of this shift's total">
+          <span class="text-xs text-amber-300/80 uppercase font-semibold">Cases</span>
+          <span id="shiftProgress" class="font-ticket text-sm font-bold text-amber-200">0 / 6</span>
+          <span class="hidden sm:block w-14 h-2 rounded-full bg-black/60 overflow-hidden"><span id="shiftProgressBar" class="block h-full bg-amber-400 transition-all" style="width:0%"></span></span>
         </div>
 
         <!-- Earnings -->
@@ -229,7 +232,7 @@
 
         <!-- Live Comparison Status Display -->
         <div id="inspectComparisonBanner" class="bg-slate-900/90 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-amber-100 flex items-center justify-between min-h-[36px]">
-          <span id="inspectStatusText" role="status" aria-live="polite">🔍 Click any two fields (Ticket, Statement, Schedule, Clock, Rules) to compare them!</span>
+          <span id="inspectStatusText" role="status" aria-live="polite">🔍 Click any two fields (Ticket, Statement, Schedule, Booking Arrival, Rules) to compare them!</span>
         </div>
       </div>
 
@@ -551,7 +554,7 @@
           <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 pt-2">
             <div>
               <span class="text-xs font-bold text-slate-800 block">Gameplay Difficulty:</span>
-              <span class="text-[11px] text-slate-600">Adjusts queue patience, shift speed &amp; warning limit.</span>
+              <span class="text-[11px] text-slate-600">Adjusts countdown length, queue patience &amp; warning limit.</span>
             </div>
             <div class="flex gap-1.5">
               <button onclick="Game.setDifficulty('relaxed')" id="diffBtnRelaxed" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition">
@@ -783,12 +786,12 @@
 
         <div class="bg-white border border-slate-300 p-3.5 rounded-xl">
           <h3 class="font-bold text-indigo-950 uppercase mb-1">2. Using the 🔍 Inspect Tool</h3>
-          <p>When <strong>INSPECT MODE</strong> is ON, click any two items — such as the customer's speech bubble, a field on the ticket, a row in the Cinema Schedule, the Booth Clock, or a Manager Rule — to visually compare them and spot discrepancies.</p>
+          <p>When <strong>INSPECT MODE</strong> is ON, click any two items — such as the customer's speech bubble, a field on the ticket, a row in the Cinema Schedule, the booking arrival time, or a Manager Rule — to visually compare them and spot discrepancies.</p>
         </div>
 
         <div class="bg-white border border-slate-300 p-3.5 rounded-xl">
           <h3 class="font-bold text-slate-900 mb-1">3. Take your time</h3>
-          <p>Arrival time is saved when the customer reaches your desk. Reading does not make them late. Help and document view pause the clock. After a decision, read the message and press Next customer.</p>
+          <p>You have a countdown to process the shift’s customers. Reading the Help or ID card and reading the decision feedback pause the timer. Late-arrival cases use the fixed arrival time printed on the booking record, not the countdown. After deciding, press Next customer.</p>
           <p class="mt-2">Keyboard: A = admit · C = correct · R = refuse · Q = ask which film · I = inspect · P = pause · N = next.</p>
           <p class="mt-2">Free seats do not include bookings. A customer with a booking can enter a full screening. A replacement moves their booking; it does not charge for seats twice.</p>
         </div>
@@ -852,11 +855,11 @@
         </div>
         <div>
           <label class="text-xs font-extrabold uppercase tracking-wider text-[#f7d983] block mb-1.5">
-            ⚡ Gameplay Difficulty (Queue &amp; Clock Pacing)
+            ⚡ Gameplay Difficulty (Countdown &amp; Queue)
           </label>
           <div id="campaignMenuDifficultyButtons" class="flex flex-wrap gap-1.5"></div>
           <p class="text-[11px] text-amber-200/80 mt-1.5 font-ticket">
-            Controls customer queue patience, clock speed, and maximum management warnings.
+            Controls countdown length, queue patience, and maximum management warnings.
           </p>
         </div>
       </div>

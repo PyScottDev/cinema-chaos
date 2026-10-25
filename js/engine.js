@@ -33,7 +33,16 @@
         paused: false,
         clockMins: 17 * 60 + 45, // 17:45
         clockEndMins: 21 * 60 + 15, // 21:15
-        clockFormatted: "17:45",
+        clockFormatted: "17:45", // Internal, fixed arrival-time chronology, not the HUD timer
+        shiftDurationSeconds: 0,
+        shiftRemainingSeconds: 0,
+        shiftTargetCustomers: 0,
+        shiftPlan: [],
+        shiftQueuedCount: 0,
+        shiftExpired: false,
+        replayNonce: 0,
+        recentPortraits: [],
+        recentCustomerNames: [],
 
         schedule: [],
         tvSchedule: [],
@@ -117,7 +126,7 @@
         document.getElementById('languagePackJsonArea').value = JSON.stringify(this.languagePack(), null, 2);
         document.getElementById('saveNotice').textContent=this.startupMessage||'Progress saves automatically. Continue resumes your saved shift.';
         const day=document.getElementById('scheduleDayTag');day.tabIndex=0;day.setAttribute('role','button');day.classList.add('inspectable');day.onclick=()=>Game.handleInspectClick('today',Game.today(),'Today: '+Game.today(),day);
-        document.getElementById('customerStatementBox').tabIndex=0;document.getElementById('clockInspectBox').tabIndex=0;
+        document.getElementById('customerStatementBox').tabIndex=0;
         UI.setDecisionButtons(true);
         if(innerWidth<1024)UI.switchMobileTab('window');
       },
@@ -188,6 +197,14 @@
         if (!["relaxed","normal","chaos"].includes(diff)) return;
         this.state.difficulty = diff;
         this.state.maxWarnings = this.getMaxWarnings(diff);
+        if (this.state.shiftActive && this.state.shiftDurationSeconds) {
+          const elapsed = this.state.shiftDurationSeconds - this.state.shiftRemainingSeconds;
+          const nextDuration = this.getShiftDurationSeconds(diff);
+          this.state.shiftDurationSeconds = nextDuration;
+          this.state.shiftRemainingSeconds = Math.max(0, nextDuration - elapsed);
+          this.state.shiftExpired = this.state.shiftRemainingSeconds === 0;
+          UI.updateClockDisplay();
+        }
         if(this.state.shiftActive) this.startShiftLoop();
         UI.updateDifficultyButtons();
         UI.renderHeader();
@@ -365,7 +382,7 @@
         } catch(e){msg.textContent='Pack not changed: '+e.message;msg.className='text-xs text-rose-400';}
       },
 
-      shiftSaveKeys: ['clockMins','clockEndMins','clockFormatted','warnings','forgivenWarningUsed',
+      shiftSaveKeys: ['clockMins','clockEndMins','clockFormatted','shiftDurationSeconds','shiftRemainingSeconds','shiftTargetCustomers','shiftPlan','shiftQueuedCount','shiftExpired','recentPortraits','recentCustomerNames','warnings','forgivenWarningUsed',
         'schedule','tvSchedule','scheduleSnapshot','bookings','usedSerials','authorizedVips','authorizedStaff',
         'queue','currentCustomer','casesGeneratedCount','serialCounter','scriptedDone','encounterGroupsDone',
         'scriptedEncountersState','encounterArrivalTimes','noticesSeen','decisionLocked','closing','outcomes','shiftStats',
@@ -382,6 +399,15 @@
         this.rngSeed = saved.rngSeed;
         Object.assign(this.state, { shiftActive: true, paused: false, modalDepth: 0, inspectFirst: null });
         this.pendingShift = null;
+        if (!Number.isInteger(saved.shiftDurationSeconds) || !Array.isArray(saved.shiftPlan)) {
+          // Legacy clock-based saves cannot safely resume a different shift model.
+          this.state.shiftPlan = this.buildShiftPlan();
+          this.state.shiftTargetCustomers = this.state.shiftPlan.length;
+          this.state.shiftQueuedCount = Math.min(this.state.shiftPlan.length, this.state.casesGeneratedCount + this.state.queue.length);
+          this.state.shiftDurationSeconds = this.getShiftDurationSeconds();
+          this.state.shiftRemainingSeconds = this.state.shiftDurationSeconds;
+          this.state.shiftExpired = false;
+        }
         const c = this.state.currentCustomer;
         if (c) { UI.renderCustomer(c); UI.renderTicketOnDesk(c); }
         UI.renderQueue(); UI.renderHeader(); UI.renderScheduleBinder(); UI.renderRulesBinder(); UI.renderSerialsBinder(); UI.renderUpgradesStrip();
@@ -408,8 +434,16 @@
         }
         this.prepareDaySchedule(this.state.day);
         Object.assign(this.state,{shiftActive:true,paused:false,clockMins:1065,clockFormatted:'17:45',warnings:0,lastShiftDismissed:false,queue:[],casesGeneratedCount:0,
+          shiftExpired:false,shiftQueuedCount:0,shiftRemainingSeconds:0,shiftDurationSeconds:0,shiftTargetCustomers:0,shiftPlan:[],recentCustomerNames:[],
           forgivenWarningUsed:false,currentCustomer:null,decisionLocked:false,closing:false,outcomes:[],
           shiftStats:{served:0,correct:0,mistakes:0,warnings:0,exceptions:0,customersLost:0,cashEarned:0,dilemmaNotes:[]}});
+        this.state.shiftPlan = this.buildShiftPlan();
+        this.state.shiftTargetCustomers = this.state.shiftPlan.length;
+        this.state.shiftDurationSeconds = this.getShiftDurationSeconds();
+        this.state.shiftRemainingSeconds = this.state.shiftDurationSeconds;
+        const noticeBox=document.getElementById('midShiftNoticeBox');
+        noticeBox.classList.add('hidden');
+        document.getElementById('rulesAlertDot').classList.add('hidden');
         this.setDifficulty(this.state.difficulty);SoundFX.bell();
         UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.renderUpgradesStrip();UI.renderPause();
         this.spawnCustomerToQueue();this.spawnCustomerToQueue();this.nextCustomerFromQueue();this.startShiftLoop();
@@ -417,7 +451,7 @@
 
       startShiftLoop() {
         this.stopShiftLoop();
-        this.timerInterval=setInterval(()=>this.tick(),this.state.difficulty==='relaxed'?2400:this.state.difficulty==='chaos'?1150:1600);
+        this.timerInterval=setInterval(()=>this.tick(),1000);
       },
 
       stopShiftLoop() {
@@ -428,6 +462,79 @@
       },
 
       togglePause() { if(this.state.shiftActive&&!this.state.modalDepth){this.state.paused=!this.state.paused;UI.renderPause();} },
+
+      // A short, finite shift. Campaigns may override these defaults per day.
+      getShiftTarget() {
+        const cfg = this.dayConfig();
+        return cfg.shift?.targetCustomers || ([6,8,9,10,10,12,11,12][Math.min(this.state.day, 8) - 1] || 10);
+      },
+      getShiftDurationSeconds(diff = this.state.difficulty) {
+        const base = this.dayConfig().shift?.durationSeconds || ([480,540,540,540,480,480,450,480][Math.min(this.state.day, 8) - 1] || 480);
+        return Math.round(base * (diff === 'relaxed' ? 1.5 : diff === 'chaos' ? 0.75 : 1));
+      },
+      shiftProgress() {
+        const s = this.state;
+        return { completed: s.shiftStats.served + s.shiftStats.customersLost, target: s.shiftTargetCustomers };
+      },
+      // Story slots are created by encounter group, not by encounter ID. The
+      // correct branch is chosen at the WINDOW, after earlier story choices.
+      buildShiftPlan() {
+        const cfg = this.dayConfig();
+        const groups = new Map();
+        for (const enc of cfg.scriptedEncounters || []) {
+          if (!enc.guaranteed) continue;
+          const key = enc.encounterGroup || enc.id;
+          if (this.state.encounterGroupsDone?.[key] || this.state.scriptedDone?.[enc.id]) continue;
+          if (groups.has(key)) continue;
+          const variants = (cfg.scriptedEncounters || []).filter(e => (e.encounterGroup || e.id) === key);
+          groups.set(key, Math.min(...variants.map(e => e.trigger?.minCaseIndex ?? e.trigger?.caseIndex ?? 0)));
+        }
+        const story = [...groups].map(([key,minIndex]) => ({kind:'story',group:key,minIndex}));
+        const total = Math.max(this.getShiftTarget(),story.length);
+        const plan = [], pending = [...story];
+        const ordinary = this.makeOrdinaryCaseMix(total-story.length);
+        const optionalUsed = new Set();
+        const optional = (cfg.scriptedEncounters || []).filter(enc => !enc.guaranteed);
+        for (let i = 0; i < total; i++) {
+          const available = pending.filter(e => e.minIndex <= i);
+          const lastOpportunity = pending.length >= total-i;
+          if (available.length && (i === 0 || lastOpportunity || this.rng() < (i < total*.7 ? .65 : .85))) {
+            // Preserve the story's broad order while varying its exact position.
+            const chosen = available[Math.floor(this.rng()*Math.min(available.length,2))];
+            pending.splice(pending.indexOf(chosen),1);
+            plan.push({kind:'story',group:chosen.group});
+          } else {
+            const eligible = optional.filter(enc => !optionalUsed.has(enc.id) &&
+              i >= (enc.trigger?.minCaseIndex ?? enc.trigger?.caseIndex ?? 0) &&
+              (!enc.trigger?.requireStoryValue || this.matchesStoryCondition(enc.trigger.requireStoryValue)));
+            const candidate = eligible.length && this.rng() < .15 ? this.pick(eligible) : null;
+            if (candidate) optionalUsed.add(candidate.id);
+            plan.push({kind:'ordinary',caseType:candidate?.id || ordinary.shift() || 'valid'});
+          }
+        }
+        if (pending.length) throw new Error('Campaign shift is too short for its story encounters.');
+        return plan;
+      },
+      makeOrdinaryCaseMix(count) {
+        if (!count) return [];
+        const pool = [...new Set(this.dayConfig().casePool || ['valid','screen','wrong_film'])].filter(t =>
+          (t !== 'tv' && t !== 'tv_wrong' || this.policies().tvLoungeOpen) &&
+          (t !== 'red' && t !== 'no_red' || (this.policies().conditionalScreenRules || []).length > 0));
+        const validCount = Math.round(count * .45);
+        const mix = [];
+        for (let i=0;i<validCount;i++) mix.push(this.policies().checkAgeRestrictions && i%2 ? 'age_valid' : 'valid');
+        const challenges = pool.filter(t => !['valid','age_valid','subjective'].includes(t));
+        const shuffled = [...challenges];
+        for (let i=shuffled.length-1;i>0;i--){const j=Math.floor(this.rng()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+        for(let i=validCount;i<count;i++) mix.push(shuffled[(i-validCount)%shuffled.length] || 'screen');
+        for(let i=mix.length-1;i>0;i--){const j=Math.floor(this.rng()*(i+1));[mix[i],mix[j]]=[mix[j],mix[i]];}
+        return mix;
+      },
+      resolveStorySlot(group) {
+        const options = (this.dayConfig().scriptedEncounters || []).filter(e => e.guaranteed && (e.encounterGroup || e.id) === group);
+        return options.find(e => (!e.trigger?.requireStoryValue || this.matchesStoryCondition(e.trigger.requireStoryValue))
+          && (!e.trigger?.requireStoryFlag || this.state.story[e.trigger.requireStoryFlag])) || options[options.length-1];
+      },
 
       patienceConfig: {
         impatientThreshold: 40,
@@ -445,7 +552,7 @@
       },
 
       getPatienceDecayRate() {
-        if (this.state.disableQueueWalkouts || this.state.difficulty === 'relaxed') return 0;
+        if (this.state.disableQueueWalkouts || this.state.difficulty === 'relaxed' || this.state.day <= 2) return 0;
         const base = this.state.difficulty === 'chaos' ? this.patienceConfig.chaosDecay : this.patienceConfig.normalDecay;
         return this.state.ownedUpgrades.includes('seating') ? base / this.patienceConfig.seatingDivisor : base;
       },
@@ -456,7 +563,7 @@
         const departed = [];
         if (decay > 0) {
           this.state.queue = this.state.queue.filter(c => {
-            if (c.preventQueueWalkout !== false && (c.scriptedId || c.guaranteedEncounter)) {
+            if (c.plan?.kind === 'story' || (c.preventQueueWalkout !== false && (c.scriptedId || c.guaranteedEncounter))) {
               c.patience = Math.max(15, c.patience - decay);
               return true;
             }
@@ -855,43 +962,56 @@
         this.state.clockEndMins=Math.max(...this.allScreenings().map(f=>f.timeMins))+10;
         this.state.scheduleSnapshot=this.allScreenings().map(f=>[f.id,f.time,f.timeMins,f.screen,f.status]);
       },
-      // Queue visitors have no invented tickets yet: cases are constructed from the live state at the window.
-      spawnCustomerToQueue(forcedEncounterId = null) {
-        if (forcedEncounterId && (this.state.queue.some(c => c.queuedEncounterId === forcedEncounterId) ||
-            ['presented','resolved'].includes(this.state.scriptedEncountersState?.[forcedEncounterId]))) return;
+      // Queue is a preview of the finite shift plan, never an infinite spawner.
+      spawnCustomerToQueue() {
+        const s = this.state;
+        if (s.shiftQueuedCount >= s.shiftPlan.length) return false;
+        const slot = s.shiftPlan[s.shiftQueuedCount++];
+        let visitor = CHARACTERS.createRandomPerson(() => this.rng());
+        if (slot.kind === 'ordinary') {
+          const used = new Set(s.recentCustomerNames || []);
+          const alternatives = CHARACTERS.firstNames.filter(name => !used.has(name));
+          if (alternatives.length) visitor.name = this.pick(alternatives);
+          s.recentCustomerNames.push(visitor.name);
+        }
         const entry = {
-          person: CHARACTERS.createRandomPerson(() => this.rng()),
-          patience: 100
+          person: visitor,
+          patience: 100,
+          plan: {...slot},
+          guaranteedEncounter: slot.kind === 'story',
+          preventQueueWalkout: slot.kind === 'story'
         };
-        if (forcedEncounterId) {
-          const enc = (this.dayConfig().scriptedEncounters || []).find(e => e.id === forcedEncounterId);
-          entry.queuedEncounterId = forcedEncounterId;
-          entry.guaranteedEncounter = true;
-          entry.preventQueueWalkout = enc?.preventQueueWalkout !== false;
-          entry.arrivalTime = this.state.encounterArrivalTimes?.[forcedEncounterId] ?? this.state.clockMins;
-          if (!this.state.scriptedEncountersState) this.state.scriptedEncountersState = {};
-          if (this.state.scriptedEncountersState[forcedEncounterId] !== 'resolved') {
-            this.state.scriptedEncountersState[forcedEncounterId] = 'queued';
+        if (slot.kind === 'story') {
+          const encounter = this.resolveStorySlot(slot.group);
+          const named = this.campaign().characters?.[encounter?.characterId];
+          if (named) entry.person = {...named, characterId:encounter.characterId};
+        }
+        s.queue.push(entry);
+        UI.renderQueue();
+        return true;
+      },
+      nextGuaranteedEncounter() {
+        const next = this.state.queue.find(e => e.plan?.kind === 'story');
+        return next ? this.resolveStorySlot(next.plan.group) : null;
+      },
+      queueNextPlannedVisitors() {
+        // Only one waiting visitor early in the week; queue congestion is not
+        // a second timer competing with the countdown on the tutorial days.
+        const desired = this.state.day <= 2 ? 1 : Math.min(3, this.state.difficulty === 'chaos' ? 3 : 2);
+        while (this.state.queue.length < desired) if (!this.spawnCustomerToQueue()) break;
+      },
+      processNotices() {
+        const s = this.state;
+        for (const notice of this.dayConfig().midShiftNotices || []) {
+          if (s.clockMins >= notice.atMins && !s.noticesSeen[notice.id]) {
+            s.noticesSeen[notice.id] = true;
+            const noticeBox=document.getElementById('midShiftNoticeBox');
+            document.getElementById('midShiftNoticeText').textContent=notice.text;
+            noticeBox.classList.remove('hidden');
+            document.getElementById('rulesAlertDot').classList.remove('hidden');
+            break;
           }
         }
-        this.state.queue.push(entry);
-        UI.renderQueue();
-      },
-      nextGuaranteedEncounter(closing = false) {
-        const s = this.state;
-        return (this.dayConfig().scriptedEncounters || []).find(enc => {
-          if (!enc.guaranteed || s.scriptedDone[enc.id] || ['presented','resolved'].includes(s.scriptedEncountersState?.[enc.id])) return false;
-          if (enc.encounterGroup && s.encounterGroupsDone[enc.encounterGroup]) return false;
-          const tr = enc.trigger || {};
-          if (tr.requireStoryValue && !this.matchesStoryCondition(tr.requireStoryValue)) return false;
-          if (tr.requireStoryFlag && !s.story[tr.requireStoryFlag]) return false;
-          if (tr.requireUnusedSerial && s.usedSerials.includes(tr.requireUnusedSerial)) return false;
-          if (!closing && s.casesGeneratedCount < (tr.minCaseIndex ?? tr.caseIndex ?? 0)) return false;
-          if (!closing && !enc.advanceClockToMins && s.clockMins < (tr.minClockMins || 0)) return false;
-          if (tr.requireOpenScreeningId && !this.screening(tr.requireOpenScreeningId)) return false;
-          if (tr.requireOpenRoom && !this.allScreenings().some(f => f.screen === tr.requireOpenRoom && f.status !== 'CANCELLED')) return false;
-          return true;
-        });
       },
       generateCustomerScenario(forcedType=null, person=null, arrivalTime=null) {
         const s=this.state, camp=this.campaign(), dayCfg=this.dayConfig(), pol=this.policies();
@@ -951,7 +1071,7 @@
         let type = forcedType;
         let scripted = null;
         if (!type) {
-          scripted = findScriptedEncounter();
+          scripted = findScriptedEncounter(); // Optional scripted cases remain supported; guaranteed encounters use shift slots.
           if (scripted) {
             type = scripted.caseType;
           } else if (this.rng() < 0.40) {
@@ -1340,7 +1460,9 @@
 
         // Stage 2A: cast ordinary visitors only after case/age metadata is known.
         // No RNG is consumed; named campaign characters resolve by their stable IDs.
-        CHARACTERS.assignPortrait(c.person, c.trueAge ?? null);
+        CHARACTERS.assignPortrait(c.person, c.trueAge ?? null, s.recentPortraits);
+        const portraitId = c.person.portraitId;
+        if (portraitId) s.recentPortraits = [...s.recentPortraits.filter(id => id !== portraitId), portraitId].slice(-24);
         c.statementSummary = c.statement;
         const requiresPlanConfirmation = ['incomplete', 'wrong_film', 'promo', 'change'].includes(type) || Boolean(scripted?.wrongFilmTicket);
         const calcIdAge = (c.idCard?.exists && this.isValidCalendarDate(c.idCard.dob))
@@ -1456,29 +1578,50 @@
         }
       },
       nextCustomerFromQueue() {
-        if(!this.state.shiftActive || this.state.paused || this.state.modalDepth) return;
-        if(this.isShiftDismissed()) return this.endShift('SHIFT FAILED — MANAGEMENT DISMISSED YOU');
-        if (this.state.currentCustomer && !this.state.decisionLocked) return;
-        const closing = this.state.clockMins >= this.state.clockEndMins;
-        const guaranteed = this.nextGuaranteedEncounter(closing);
-        if(closing && !guaranteed) return this.endShift('SHIFT COMPLETE — WELL DONE');
+        const s=this.state;
+        if (!s.shiftActive || s.paused || s.modalDepth) return;
+        if (this.isShiftDismissed()) return this.endShift('SHIFT FAILED — MANAGEMENT DISMISSED YOU');
+        if (s.currentCustomer && !s.decisionLocked) return;
+        if (s.shiftExpired) {
+          // Unserved procedural visitors go home. Story customers still get
+          // their scene, but the countdown remains at zero.
+          const removed = s.queue.filter(e => e.plan?.kind !== 'story').length;
+          s.queue = s.queue.filter(e => e.plan?.kind === 'story');
+          const remaining = s.shiftPlan.slice(s.shiftQueuedCount).filter(e => e.kind !== 'story').length;
+          s.shiftStats.customersLost += removed + remaining;
+          s.totalCustomersLost += removed + remaining;
+          s.shiftQueuedCount = s.shiftPlan.length;
+          for (const slot of s.shiftPlan) {
+            if (slot.kind === 'story' && !s.queue.some(e => e.plan?.group === slot.group) &&
+                !s.encounterGroupsDone?.[slot.group] && !s.scriptedDone[this.resolveStorySlot(slot.group)?.id]) {
+              s.queue.push({person:{name:'Special visitor'},patience:100,plan:slot,guaranteedEncounter:true,preventQueueWalkout:true});
+            }
+          }
+        }
+        if (s.shiftStats.served + s.shiftStats.customersLost >= s.shiftTargetCustomers && !s.queue.length) {
+          return this.endShift(s.shiftExpired ? 'TIME UP — CINEMA CLOSED' : 'SHIFT COMPLETE — CINEMA CLOSED');
+        }
         this.applyPendingLanguageMode();
-        this.state.decisionLocked=false; this.closeCorrectionDrawer();this.clearInspectSelection();
-        if (typeof UI !== 'undefined' && UI.closeIdCardModal) UI.closeIdCardModal();
+        s.decisionLocked=false;this.closeCorrectionDrawer();this.clearInspectSelection();
+        if (UI.closeIdCardModal) UI.closeIdCardModal();
         document.getElementById('nextCustomerBtn').classList.add('hidden');
         document.getElementById('deskFeedbackBanner').classList.add('hidden');
         document.getElementById('stampAnimationOverlay').classList.add('hidden');
-        if (guaranteed) {
-          this.spawnCustomerToQueue(guaranteed.id);
-          const index = this.state.queue.findIndex(c => c.queuedEncounterId === guaranteed.id);
-          if (index > 0) this.state.queue.unshift(this.state.queue.splice(index, 1)[0]);
-        }
-        if(!this.state.queue.length) this.spawnCustomerToQueue();
-        const visitor=this.state.queue.shift();
-        const forcedEnc = visitor.queuedEncounterId || null;
-        const c=this.generateCustomerScenario(forcedEnc,visitor.person,forcedEnc ? visitor.arrivalTime : null);
-        this.finalizeCustomerAtWindow(c);this.state.currentCustomer=c;
-        UI.renderQueue();UI.renderCustomer(c);UI.renderTicketOnDesk(c);UI.renderScheduleBinder();UI.setDecisionButtons(false);
+        this.queueNextPlannedVisitors();
+        if (!s.queue.length) return this.endShift('SHIFT COMPLETE — CINEMA CLOSED');
+        const visitor=s.queue.shift();
+        const enc = visitor.plan?.kind === 'story' ? this.resolveStorySlot(visitor.plan.group) : null;
+        // Fictional arrival time advances at customer boundaries, never while
+        // reading the ticket. Late cases have their own fixed timestamps.
+        const index = s.casesGeneratedCount;
+        s.clockMins = Math.min(1270, Math.max(s.clockMins, 1065 + index * (s.shiftTargetCustomers > 9 ? 15 : 19)));
+        s.clockFormatted = this.formatMins(s.clockMins);
+        const forcedType = enc?.id || visitor.plan?.caseType || 'valid';
+        const c = this.generateCustomerScenario(forcedType, visitor.person, enc ? this.state.encounterArrivalTimes?.[enc.id] : null);
+        this.finalizeCustomerAtWindow(c);s.currentCustomer=c;
+        this.queueNextPlannedVisitors();
+        UI.renderQueue();UI.renderCustomer(c);UI.renderTicketOnDesk(c);UI.renderScheduleBinder();UI.renderHeader();UI.setDecisionButtons(false);
+        this.processNotices();
         this.saveProgress();
       },
 
@@ -1777,18 +1920,16 @@
       },
 
       tick() {
-        const s=this.state;if(!s.shiftActive||s.paused||s.modalDepth||s.decisionLocked) return;
-        s.clockMins++;s.clockFormatted=this.formatMins(s.clockMins);UI.updateClockDisplay();
+        const s=this.state;
+        if (!s.shiftActive || s.paused || s.modalDepth || s.decisionLocked || s.shiftExpired) return;
+        s.shiftRemainingSeconds = Math.max(0, s.shiftRemainingSeconds - 1);
+        UI.updateClockDisplay();
         this.updateQueuePatience();
-        if(s.queue.length<4&&this.rng()<(s.difficulty==='chaos'?0.15:0.08))this.spawnCustomerToQueue();
-        for (const notice of (this.dayConfig().midShiftNotices || [])) {
-          if (s.clockMins >= notice.atMins && !s.noticesSeen[notice.id]) {
-            s.noticesSeen[notice.id] = true;
-            UI.openNotice(notice.text);
-          }
+        if (!s.shiftRemainingSeconds) {
+          s.shiftExpired = true;
+          this.stopShiftLoop();
+          UI.showDeskFeedback('warn', 'Time is up. Finish this customer; remaining story visitors will still be seen.');
         }
-        if(s.clockMins>=s.clockEndMins) {UI.showDeskFeedback('warn','Closing time. Finish this customer, then read your report.');s.closing=true;}
-        if(s.closing) this.stopShiftLoop();
         this.saveProgress();
       },
 
@@ -1865,7 +2006,7 @@
         });
         const status = document.getElementById('inspectStatusText');
         if (status) {
-          status.innerHTML = "🔍 Click any two fields (Ticket, ID Card, Statement, Schedule, Clock, Rules) to compare them!";
+          status.innerHTML = "🔍 Click any two fields (Ticket, ID Card, Statement, Schedule, Arrival Time, Rules) to compare them!";
         }
         const idModalStatus = document.getElementById('idModalInspectStatus');
         if (idModalStatus) {
@@ -1936,7 +2077,7 @@
         }
         if(pair('ticket_date','today'))return match(a.value===b.value,`Ticket: ${c.ticket.date}. Today: ${this.today()}.`);
         if(pair('ticket_seats','booking_seats'))return match(Number(a.value)===Number(b.value),`Ticket: ${c.ticket.seats}. Booking record: ${this.booking(c)?.seats??0}.`);
-        if(pair('ticket_time','clock')) {
+        if(pair('ticket_time','arrival_time')) {
           const time=this.parseTime(field('ticket_time').value),diff=this.arrival(c)-time,tol=this.policies().lateToleranceMins;
           return match(tol===null||tol===undefined||diff<=tol,`Arrival: ${this.formatMins(this.arrival(c))}. Printed start: ${field('ticket_time').value}. ${diff>0?diff+' minutes after start.':'Before the start.'}`);
         }
@@ -2114,9 +2255,14 @@
         } else {
           this.state.lastCampaignEnding = null;
         }
+        if (!dismissed && this.state.shiftRemainingSeconds > 0) {
+          this.state.money += 5;
+          this.state.shiftStats.cashEarned += 5;
+        }
+        this.state.highScore = Math.max(this.state.highScore, this.state.money);
         const headline = dismissed
           ? 'SHIFT FAILED — MANAGEMENT DISMISSED YOU'
-          : 'SHIFT COMPLETE — WELL DONE';
+          : (customHeadline || 'SHIFT COMPLETE — CINEMA CLOSED');
         this.saveProgress();
         UI.renderHeader();
         UI.openShiftReportModal(headline, dismissed);
@@ -2150,7 +2296,8 @@
           const highScore = this.state.highScore;
           for (const key of this.dayStartKeys) this.state[key] = structuredClone(this.dayStartSnapshot[key]);
           this.state.highScore = Math.max(highScore, this.state.highScore);
-          this.rngSeed = this.dayStartSnapshot.rngSeed;
+          // Preserve rolled-back story and finances, but NEVER replay the RNG.
+          this.rngSeed = (this.rngSeed * 16807 + (++this.state.replayNonce) * 9973) % 2147483647 || 1;
         } else {
           // Old saves have no rollback checkpoint; preserve resolved story events.
           this.startupMessage = 'This older save has no day-start checkpoint. Resolved encounters remain completed.';
@@ -2389,7 +2536,11 @@
             if (live && live.campaignId === targetId && live.day === s.day &&
                 Number.isFinite(live.clockMins) && Number.isInteger(live.rngSeed) &&
                 Array.isArray(live.schedule) && Array.isArray(live.queue) && live.bookings && live.shiftStats) {
-              this.pendingShift = structuredClone(live);
+              if (Number.isInteger(live.shiftDurationSeconds) && Array.isArray(live.shiftPlan)) {
+                this.pendingShift = structuredClone(live);
+              } else {
+                this.startupMessage = 'The new shift countdown requires restarting the interrupted shift; your campaign progress is preserved.';
+              }
             }
             if (d.dayStartSnapshot?.day === s.day && this.dayStartKeys.every(k => d.dayStartSnapshot[k] !== undefined)) {
               this.dayStartSnapshot = structuredClone(d.dayStartSnapshot);

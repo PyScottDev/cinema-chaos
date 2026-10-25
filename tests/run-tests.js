@@ -118,9 +118,21 @@ function answerRequiredQuestions(Game, customer = Game.state.currentCustomer) {
   assert.fail("Required information must be obtainable through the question buttons");
 }
 
+function reachCustomer(Game, personId, limit = 20) {
+  for (let i = 0; Game.state.shiftActive && i < limit; i++) {
+    const c = Game.state.currentCustomer;
+    if (c.person.id === personId) return c;
+    const ev = answerRequiredQuestions(Game, c);
+    Game.makeDecision(ev.validActions[0], ev.options[0]);
+    Game.nextCustomerFromQueue();
+  }
+  assert.fail(`Expected recurring character ${personId} before end of shift`);
+}
+
 function finishShift(Game) {
-  Game.state.clockMins = Game.state.clockEndMins;
-  for (let step = 0; Game.state.shiftActive && step < 30; step++) {
+  Game.state.shiftRemainingSeconds = 0;
+  Game.state.shiftExpired = true;
+  for (let step = 0; Game.state.shiftActive && step < 40; step++) {
     if (!Game.state.decisionLocked && Game.state.currentCustomer) {
       const ev = answerRequiredQuestions(Game);
       Game.makeDecision(ev.validActions[0], ev.options[0]);
@@ -804,6 +816,10 @@ test("15. Customer patience, low-patience visual states, departures, statistics 
   assert.strictEqual(w0.patience, 5, "Relaxed mode must not reduce customer patience");
   assert.strictEqual(Game.state.queue.includes(w0), true, "Customers must not abandon the queue in Relaxed mode");
 
+  // Countdown is the only pressure on Days 1–2; queue walkouts start on Day 3.
+  Game.setDifficulty("normal");
+  assert.strictEqual(Game.getPatienceDecayRate(), 0);
+  Game.state.day = 4;
   // 4. Normal and Chaos modes apply their intended patience rates
   Game.setDifficulty("normal");
   w0.patience = 100;
@@ -855,6 +871,7 @@ test("15. Customer patience, low-patience visual states, departures, statistics 
   const lostBefore = Game.state.shiftStats.customersLost;
   const totalLostBefore = Game.state.totalCustomersLost;
 
+  w0.guaranteedEncounter = false; w0.preventQueueWalkout = false; w0.plan = {kind:'ordinary'}; // Test an ordinary queued visitor
   w0.patience = 0.5; // Will hit 0 on next Normal tick (0.75 decay)
   const departed = Game.updateQueuePatience();
   assert.strictEqual(departed.length, 1, "One customer should depart when patience reaches 0");
@@ -936,11 +953,11 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
     assert.strictEqual(doc.getElementById("warningsDisplay").textContent, `0 / ${expectedLimit}`);
     assert.strictEqual(doc.getElementById("briefingWarningThresholdBadge").textContent, `Management warnings: 0 / ${expectedLimit}`);
     assert.ok(
-      doc.getElementById("briefingObjectiveLead").textContent.includes("Serve customers correctly and finish your shift without receiving too many management warnings."),
+      doc.getElementById("briefingObjectiveLead").textContent.includes("countdown ends"),
       "Briefing must display clear shift objective"
     );
     assert.ok(
-      doc.getElementById("briefingObjectiveRuleNote").textContent.includes(`Receiving your ${expectedOrd} warning`),
+      doc.getElementById("briefingObjectiveRuleNote").textContent.includes(`Wrong decisions can cause warnings`),
       `Briefing must state the ${expectedOrd} warning dismissal rule for ${diff}`
     );
   }
@@ -1022,14 +1039,14 @@ test("16. Shift objectives, authoritative warning thresholds, mistakes vs warnin
   finishShift(Game); // Serve the guaranteed visitors before completing the shift.
   assert.strictEqual(Game.state.shiftActive, false);
   assert.strictEqual(Game.state.lastShiftDismissed, false);
-  assert.strictEqual(doc.getElementById("reportModalTitle").textContent, "SHIFT COMPLETE — WELL DONE");
+  assert.strictEqual(doc.getElementById("reportModalTitle").textContent, "TIME UP — CINEMA CLOSED");
   assert.strictEqual(
     doc.getElementById("reportOutcomeSummary").textContent,
     "You completed your shift without reaching the management warning limit."
   );
   assert.strictEqual(doc.getElementById("reportWarnings").textContent, `1 / ${Game.getMaxWarnings("normal")}`);
   assert.strictEqual(String(doc.getElementById("reportMistakes").textContent), "0");
-  assert.strictEqual(String(doc.getElementById("reportCustomersLost").textContent), "1");
+  assert.ok(Number(doc.getElementById("reportCustomersLost").textContent) >= 1, "Timed out ordinary visitors count as unserved");
   assert.ok(Game.state.completedDays.includes(4), "Passing Day 4 must record Day 4 in completedDays");
   assert.strictEqual(doc.getElementById("nextDayContinueBtn").classList.contains("hidden"), false);
 
@@ -1318,7 +1335,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
 
   // Help Maya on Day 3 (misprinted Wild World ticket -> Screen 2)
   GameHelped.nextCustomerFromQueue();
-  const maya3 = GameHelped.state.currentCustomer;
+  const maya3 = reachCustomer(GameHelped, 'maya');
   assert.strictEqual(maya3.person.id, "maya");
   GameHelped.makeDecision("CORRECT", GameHelped.screening("wild_world"));
   assert.strictEqual(GameHelped.state.story.maya_relationship, "helped");
@@ -1348,7 +1365,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
 
   // Maya's 3-person premiere group for Planet X on Day 6 can be CORRECTed because the extra balcony seats are open
   GameHelped.nextCustomerFromQueue();
-  const maya6 = GameHelped.state.currentCustomer;
+  const maya6 = reachCustomer(GameHelped, 'maya');
   assert.strictEqual(maya6.person.id, "maya");
   assert.strictEqual(maya6.groupSize, 3);
   requestId(GameHelped, maya6);
@@ -1371,7 +1388,7 @@ test("20. Story consequences affecting gameplay: Maya's balcony boost, Mr Morris
 
   // Maya's 3-person group for Planet X must be REFUSEd because only 2 seats exist in Screen 1
   GameBlamed.nextCustomerFromQueue();
-  const maya6Blamed = GameBlamed.state.currentCustomer;
+  const maya6Blamed = reachCustomer(GameBlamed, 'maya');
   assert.strictEqual(maya6Blamed.person.id, "maya");
   requestId(GameBlamed, maya6Blamed);
   assert.deepEqual(GameBlamed.evaluateCustomerCase(maya6Blamed).validActions, ["REFUSE"]);
@@ -1395,7 +1412,7 @@ test("21. Guaranteed recurring character encounters appear reliably across multi
       Game.state.day = day;
       Game.startShift();
       const seenCharacterIds = [];
-      for (let step = 0; step < 6; step++) {
+      for (let step = 0; Game.state.shiftActive && step < Game.state.shiftTargetCustomers; step++) {
         const c = Game.state.currentCustomer;
         if (c.person.id) seenCharacterIds.push(c.person.id);
         const ev = Game.evaluateCustomerCase(c);
@@ -1718,18 +1735,18 @@ test("29. Guaranteed arrivals survive walkouts and closing, respect branches, an
   G.state.day = 4; G.startShift();
   const current = G.state.currentCustomer;
   G.nextCustomerFromQueue(); assert.strictEqual(G.state.currentCustomer, current, 'An undecided customer cannot be skipped');
-  G.spawnCustomerToQueue('leo_day4'); G.spawnCustomerToQueue('leo_day4');
-  assert.strictEqual(G.state.queue.filter(c => c.queuedEncounterId === 'leo_day4').length, 1);
-  const queued = G.state.queue.find(c => c.queuedEncounterId === 'leo_day4'); queued.patience = 0.1;
+  while (!G.state.queue.some(e => e.plan?.group === 'leo_day4') && G.spawnCustomerToQueue()) {}
+  assert.strictEqual(G.state.queue.filter(e => e.plan?.group === 'leo_day4').length, 1);
+  const queued = G.state.queue.find(e => e.plan?.group === 'leo_day4'); queued.patience = 0.1;
   G.state.queue.push({person:{name:'Routine visitor'},patience:0.1});
   G.updateQueuePatience();
   assert.ok(G.state.queue.includes(queued));
   assert.ok(!G.state.queue.some(c => c.person.name === 'Routine visitor'));
   queued.preventQueueWalkout = false; queued.patience = 0.1;
   G.updateQueuePatience();
-  assert.strictEqual(G.state.scriptedEncountersState.leo_day4, 'scheduled', 'An optional walkout requeues the unresolved story');
+  assert.ok(G.state.queue.includes(queued), 'Guaranteed story encounters cannot walk out');
   const seen = [];
-  G.state.clockMins = G.state.clockEndMins;
+  G.state.shiftRemainingSeconds = 0; G.state.shiftExpired = true;
   while (G.state.shiftActive && seen.length < 20) {
     const c = G.state.currentCustomer; seen.push(c.scriptedId);
     const ev = answerRequiredQuestions(G);
@@ -1759,8 +1776,10 @@ test("30. Active saves restore evidence, documents, bookings, RNG and encounter 
   h.UI.openIdCardModal(); G.saveProgress();
   resumed = createHarness(123, null, h.storage._s); resumed.Game.startShift();
   assert.strictEqual(resumed.Game.state.modalDepth, 0);
-  assert.strictEqual(resumed.Game.state.currentCustomer.idCard.presented, true);
-  assert.ok(resumed.Game.state.currentCustomer.discoveredEvidence.includes('age_claimed'));
+  assert.strictEqual(resumed.Game.state.currentCustomer.idCard?.presented === true,
+    G.state.currentCustomer.idCard?.presented === true, 'Restored ID disclosure must match the original customer');
+  assert.strictEqual(JSON.stringify(resumed.Game.state.currentCustomer.discoveredEvidence),
+    JSON.stringify(G.state.currentCustomer.discoveredEvidence), 'Question evidence survives reload');
   assert.strictEqual(resumed.Game.state.clockMins, G.state.clockMins);
   assert.strictEqual(JSON.stringify(resumed.Game.state.bookings), JSON.stringify(G.state.bookings));
   assert.strictEqual(JSON.stringify(resumed.Game.state.queue), JSON.stringify(G.state.queue));
@@ -1898,8 +1917,9 @@ test("34. Contradictions work in either question order, identity stays concealed
   assert.strictEqual(G.state.currentCustomer.scriptedId, undefined);
   G.state.decisionLocked = false;
   G.state.queue = [{person:{name:'Waiting visitor'},patience:10}];
-  const time = G.state.clockMins; G.tick();
-  assert.strictEqual(G.state.clockMins, time + 1);
+  const time = G.state.shiftRemainingSeconds, fictionalTime = G.state.clockMins; G.tick();
+  assert.strictEqual(G.state.shiftRemainingSeconds, time - 1, 'Countdown loses one second per active tick');
+  assert.strictEqual(G.state.clockMins, fictionalTime, 'Fictional time does not tick while investigating');
   assert.ok(G.state.queue[0].patience < 10);
 });
 
@@ -2005,6 +2025,7 @@ test("45. Borrowed portraits respect explicit asset mappings and missing-image f
   assert.ok(fallback.includes('data-fallback-person'));
   assert.ok(decodeURIComponent(fallback).includes('isElderly'));
 });
+
 
 console.log(`\nAll ${passed} test suites passed!`);
 
@@ -2226,6 +2247,120 @@ test("52. Both eligible and underage young visitors appear, with no compulsory I
     const art=vm.runInContext('PORTRAIT_REGISTRY.visitors',h.sandbox).find(v=>v.id===c.person.portraitId);
     assert.ok(art && ['youngAdult','under18'].includes(art.ageGroup),'Young visitors have age-appropriate portraits');
   }
+});
+
+
+test("53. The countdown is an explicit minutes:seconds limit with day-by-day pacing and independent difficulty", () => {
+  const h=createHarness(5300),G=h.Game, d=h.sandbox.document;
+  const counts=[6,8,9,10,10,12,11];
+  const duration=[480,540,540,540,480,480,450];
+  for(let day=1;day<=7;day++){
+    G.state.day=day;
+    assert.strictEqual(G.getShiftTarget(),counts[day-1]);
+    assert.strictEqual(G.getShiftDurationSeconds('normal'),duration[day-1]);
+    assert.strictEqual(G.getShiftDurationSeconds('relaxed'),Math.round(duration[day-1]*1.5));
+    assert.strictEqual(G.getShiftDurationSeconds('chaos'),Math.round(duration[day-1]*.75));
+  }
+  G.state.day=1;G.setDifficulty('normal');G.startShift();
+  assert.strictEqual(G.state.shiftTargetCustomers,6);
+  assert.strictEqual(d.getElementById('clockDisplay').textContent,'08:00');
+  assert.strictEqual(d.getElementById('shiftProgress').textContent,'0 / 6');
+  const before=G.state.clockMins;
+  G.tick();
+  assert.strictEqual(G.state.shiftRemainingSeconds,479);
+  assert.strictEqual(d.getElementById('clockDisplay').textContent,'07:59');
+  assert.strictEqual(G.state.clockMins,before,'Scenario arrival time is not a second countdown');
+  G.stopShiftLoop();
+});
+
+test("54. Pause, help modal and feedback freeze the countdown; changing difficulty changes the available time", () => {
+  const h=createHarness(5400),G=h.Game,U=h.UI;
+  G.startShift();G.tick();const initial=G.state.shiftRemainingSeconds;
+  G.state.paused=true;G.tick();assert.strictEqual(G.state.shiftRemainingSeconds,initial);
+  G.state.paused=false;U.openGuideModal();G.tick();assert.strictEqual(G.state.shiftRemainingSeconds,initial);
+  U.closeGuideModal();
+  G.state.decisionLocked=true;G.tick();assert.strictEqual(G.state.shiftRemainingSeconds,initial);
+  G.state.decisionLocked=false;
+  G.setDifficulty('relaxed');assert.strictEqual(G.state.shiftDurationSeconds,720);
+  assert.strictEqual(G.state.shiftRemainingSeconds,719);
+  G.setDifficulty('chaos');assert.strictEqual(G.state.shiftDurationSeconds,360);
+  assert.strictEqual(G.state.shiftRemainingSeconds,359);
+  G.stopShiftLoop();
+});
+
+test("55. Replaying a day changes procedural sequence but preserves every guaranteed story slot", () => {
+  const h=createHarness(5500),G=h.Game;
+  G.startShift();
+  const first=JSON.stringify(G.state.shiftPlan),seed=G.rngSeed;
+  const initialStory=JSON.stringify(G.state.story);
+  G.endShift();G.replayCurrentDay();G.startShift();
+  const replay=JSON.stringify(G.state.shiftPlan);
+  assert.notStrictEqual(G.rngSeed,seed);
+  assert.notStrictEqual(first,replay,'Replaying must not use the same generated ordinary plan');
+  assert.strictEqual(JSON.stringify(G.state.story),initialStory,'Story progress rolls back');
+  const mandatory=G.state.shiftPlan.filter(x=>x.kind==='story').map(x=>x.group);
+  assert.deepEqual(mandatory.sort(),['blackwood_day1','morris_day1','sofia_day1'].sort());
+  assert.strictEqual(G.state.shiftPlan.length,6);
+  G.stopShiftLoop();
+});
+
+test("56. Countdown expiry removes unserved ordinary customers but plays all mandatory story scenes", () => {
+  const h=createHarness(5600),G=h.Game;
+  G.state.day=4;G.startShift();
+  const groups=G.state.shiftPlan.filter(x=>x.kind==='story').map(x=>x.group);
+  const ordinary=G.state.shiftPlan.filter(x=>x.kind==='ordinary').length;
+  G.state.shiftRemainingSeconds=1;G.tick();
+  assert.strictEqual(G.state.shiftExpired,true);
+  let served=[];
+  for(let i=0;G.state.shiftActive && i<20;i++){
+    const c=G.state.currentCustomer;served.push(c.scriptedId || c.caseType);
+    const ev=answerRequiredQuestions(G);
+    G.makeDecision(ev.validActions[0],ev.options[0]);
+    G.nextCustomerFromQueue();
+  }
+  assert.strictEqual(G.state.shiftActive,false);
+  assert.ok(G.state.shiftStats.customersLost>=ordinary,'Unserved ordinary slots are reported');
+  for(const group of groups){
+    assert.ok(G.state.encounterGroupsDone[group] || G.state.scriptedDone[group], `Story group ${group} must be resolved`);
+  }
+  assert.strictEqual(G.state.shiftStats.served+G.state.shiftStats.customersLost,G.state.shiftTargetCustomers);
+  assert.ok(h.sandbox.document.getElementById('reportModalTitle').textContent.includes('TIME UP'));
+});
+
+test("57. On-time completion awards €5; scenario plans are bounded and contain varied ordinary cases", () => {
+  const h=createHarness(5700),G=h.Game;
+  G.startShift();
+  assert.ok(G.state.shiftPlan.some(e=>e.kind==='ordinary' && ['valid','age_valid'].includes(e.caseType)));
+  assert.ok(G.state.shiftPlan.some(e=>e.kind==='ordinary' && !['valid','age_valid'].includes(e.caseType)));
+  let count=0;
+  while(G.state.shiftActive && count++<20){
+    const ev=answerRequiredQuestions(G);
+    G.makeDecision(ev.validActions[0],ev.options[0]);
+    G.nextCustomerFromQueue();
+  }
+  assert.ok(count<20,'Day 1 must finish promptly after its finite plan');
+  assert.strictEqual(G.state.shiftStats.served,6);
+  assert.strictEqual(G.state.shiftStats.customersLost,0);
+  assert.strictEqual(G.state.shiftStats.cashEarned,G.state.outcomes.reduce((sum,o)=>sum+({ADMIT:10,CORRECT:12,REFUSE:8}[o.action]||0),0)+5);
+  assert.ok(G.state.shiftRemainingSeconds>0,'Finishing all cases does not require clock expiry');
+});
+
+test("58. Portrait allocation favours unused compatible faces without changing a customer's saved portrait", () => {
+  const h=createHarness(5800),G=h.Game;
+  const portraits=vm.runInContext('PORTRAIT_REGISTRY.visitors',h.sandbox);
+  const pool=portraits.filter(p=>p.genderPresentation==='female' && p.ageGroup==='youngAdult' && !p.wearingRed);
+  assert.ok(pool.length>1);
+  const person={name:'Anna',id:'visitor-1',wearingRed:false,glasses:false,hat:false};
+  vm.runInContext('CHARACTERS.assignPortrait(__person,22,__recent)',Object.assign(h.sandbox,{__person:person,__recent:[]}));
+  const first=person.portraitId;
+  const second={name:'Anna',id:'visitor-2',wearingRed:false,glasses:false,hat:false};
+  h.sandbox.__person=second;h.sandbox.__recent=[first];
+  vm.runInContext('CHARACTERS.assignPortrait(__person,22,__recent)',h.sandbox);
+  assert.notStrictEqual(second.portraitId,first,'Another face should be selected when a matching one is available');
+  h.sandbox.__recent=[];
+  vm.runInContext('CHARACTERS.assignPortrait(__person,22,__recent)',h.sandbox);
+  assert.notStrictEqual(second.portraitId,first,'Once assigned, the portrait remains stable');
+  assert.strictEqual(G.policies().lateToleranceMins,null);
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

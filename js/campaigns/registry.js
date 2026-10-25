@@ -205,6 +205,13 @@
           }
           reqStr(dayCfg.dayName, `${label}.dayName`);
           reqStr(dayCfg.title, `${label}.title`);
+          if (dayCfg.shift !== undefined) {
+            const sh = dayCfg.shift;
+            if (!sh || !Number.isInteger(sh.targetCustomers) || sh.targetCustomers < 1 || sh.targetCustomers > 100 ||
+                !Number.isInteger(sh.durationSeconds) || sh.durationSeconds < 30 || sh.durationSeconds > 7200) {
+              throw new Error(`Invalid shift target or countdown duration at ${label}.shift.`);
+            }
+          }
           if (!dayCfg.policies || typeof dayCfg.policies !== "object" || Array.isArray(dayCfg.policies)) {
             throw new Error(`Missing 'policies' object at '${label}'.`);
           }

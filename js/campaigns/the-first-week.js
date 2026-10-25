@@ -182,6 +182,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
     days: {
       1: {
         dayNum: 1,
+        shift: { targetCustomers: 6, durationSeconds: 480 },
         dayName: 'MONDAY',
         title: 'Day 1 — The New Employee',
         briefingMemo: [
@@ -300,6 +301,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
       2: {
         dayNum: 2,
+        shift: { targetCustomers: 8, durationSeconds: 540 },
         dayName: 'TUESDAY',
         title: 'Day 2 — Not Old Enough',
         briefingMemo: [
@@ -450,6 +452,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
       3: {
         dayNum: 3,
+        shift: { targetCustomers: 9, durationSeconds: 540 },
         dayName: 'WEDNESDAY',
         title: 'Day 3 — The Broken Projector',
         briefingMemo: [
@@ -642,6 +645,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
       4: {
         dayNum: 4,
+        shift: { targetCustomers: 10, durationSeconds: 540 },
         dayName: 'THURSDAY',
         title: 'Day 4 — Someone Is Cheating',
         briefingMemo: [
@@ -944,6 +948,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
       5: {
         dayNum: 5,
+        shift: { targetCustomers: 10, durationSeconds: 480 },
         dayName: 'FRIDAY',
         title: 'Day 5 — Special Treatment',
         briefingMemo: [
@@ -1144,6 +1149,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
       6: {
         dayNum: 6,
+        shift: { targetCustomers: 12, durationSeconds: 480 },
         dayName: 'SATURDAY',
         title: 'Day 6 — The Big Premiere',
         briefingMemo: [
@@ -1511,6 +1517,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
       7: {
         dayNum: 7,
+        shift: { targetCustomers: 11, durationSeconds: 450 },
         dayName: 'SUNDAY',
         title: 'Day 7 — The Final Inspection',
         briefingMemo: [
@@ -1783,6 +1790,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
     endlessDay: {
       dayNum: 8,
+      shift: { targetCustomers: 12, durationSeconds: 480 },
       dayName: 'ENDLESS SHIFT',
       title: 'Endless Mode — Box Office Master',
       briefingMemo: [
