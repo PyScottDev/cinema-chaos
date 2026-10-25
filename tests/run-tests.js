@@ -312,7 +312,7 @@ test("5. TV Lounge completely removed from Campaign 1 while generic engine suppo
   }
 });
 
-test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, VIP pass, and Mr Blackwood's conflicting VIP pressure", () => {
+test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, VIP pass, and Mrs Blackwood's conflicting VIP pressure", () => {
   const { Game } = createHarness(505);
   Game.state.day = 5;
   Game.startShift();
@@ -320,7 +320,7 @@ test("6. Day 5 rules: Love in Paris cancelled, Happy Penguins extra show, VIP pa
   assert.strictEqual(Game.screening("love_in_paris").status, "CANCELLED");
   assert.ok(Game.screening("happy_penguins_late"), "Extra show happy_penguins_late should exist on Day 5");
 
-  // First scripted encounter on Day 5 is Mr Blackwood demanding you admit unlisted VIP-000-CASH
+  // First scripted encounter on Day 5 is Mrs Blackwood demanding you admit unlisted VIP-000-CASH
   const blackwood = Game.state.currentCustomer;
   assert.strictEqual(blackwood.person.id, "mr_blackwood");
   assert.strictEqual(blackwood.ticket.serial, "VIP-000-CASH");
@@ -1461,7 +1461,7 @@ test("22. All five campaign endings are deterministically achievable and rendere
   assert.strictEqual(Game.state.lastCampaignEnding.id, "peoples_champion");
   assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("The People&#39;s Champion"));
 
-  // 3. Management Material (obeyed Mr Blackwood's VIP-000 directives)
+  // 3. Management Material (obeyed Mrs Blackwood's VIP-000 directives)
   Game.state.reputation = 76;
   Game.state.story = {
     manager_compliance: 2,
@@ -1471,7 +1471,7 @@ test("22. All five campaign endings are deterministically achievable and rendere
   assert.strictEqual(Game.state.lastCampaignEnding.id, "management_material");
   assert.ok(doc.getElementById("reportStoryNotes").innerHTML.includes("Management Material"));
 
-  // 4. The Whistleblower (refused Mr Blackwood's unlisted passes and exposed fraud with Sofia's evidence)
+  // 4. The Whistleblower (refused Mrs Blackwood's unlisted passes and exposed fraud with Sofia's evidence)
   Game.state.reputation = 88;
   Game.state.story = {
     manager_conflict: 2,
@@ -2051,12 +2051,11 @@ test("38. All portrait assets exist; registry is campaign-independent and loaded
     assert.ok(fs.existsSync(path.join(ROOT, p.src)), `Visitor ${p.id} missing: ${p.src}`);
     assert.ok(['under18','youngAdult','adult','olderAdult'].includes(p.ageGroup));
   }
-  assert.ok(reg.recurring.mr_blackwood.endsWith('/men/man-08.webp'));
-  assert.ok(reg.recurring.maya.endsWith('/women/woman-08.webp'));
-  assert.notStrictEqual(reg.recurring.mr_blackwood, 'assets/characters/recurring/manager.webp', 'Unrelated manager artwork must not be mislabelled');
+  assert.ok(reg.recurring.maya.endsWith('/recurring/maya.webp'));
+  assert.ok(reg.recurring.mr_blackwood.endsWith('/recurring/manager.webp'));
   assert.strictEqual(Object.keys(reg.costumeProfiles.leo.variants).length, 9);
   for (const src of Object.values(reg.costumeProfiles.leo.variants)) assert.ok(fs.existsSync(path.join(ROOT, src)), `Missing Leo variant: ${src}`);
-  assert.ok(reg.reservedVisitorIds.includes('woman-08') && reg.reservedVisitorIds.includes('man-08'));
+  assert.deepEqual(reg.reservedVisitorIds, []);
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.ok(html.indexOf('js/portrait-registry.js') < html.indexOf('js/characters.js'));
 });
@@ -2065,12 +2064,10 @@ test("39. Recurring characters use stable artwork and Leo's costume cues are vis
   const h = createHarness(3900);
   const html = (person) => vm.runInContext('CHARACTERS.renderPortrait('+ JSON.stringify(person) +')', h.sandbox);
   const named = h.Game.campaign().characters;
-  for (const [id, basename] of [['mr_morris','mr_morris.webp'],['sofia','sofia.webp'],['leo','leo_neutral.webp'],['mystery','mystery_customer.webp'],['maya','woman-08.webp'],['mr_blackwood','man-08.webp']]) {
+  for (const [id, basename] of [['mr_morris','mr_morris.webp'],['sofia','sofia.webp'],['leo','leo_neutral.webp'],['mystery','mystery_customer.webp'],['maya','maya.webp'],['mr_blackwood','manager.webp']]) {
     const markup = html({...named[id], characterId:id});
     assert.ok(markup.includes(basename), id);
   }
-  assert.match(html({...named.maya, characterId:'maya'}), /data-costume="staffBadge"/);
-  assert.ok(!html({...named.mr_blackwood, characterId:'mr_blackwood'}).includes('/recurring/manager.webp'));
   const variants = [
     [{fakeBeard:true},'leo_neutral.webp','fakeBeard'],
     [{oversizedSuit:true,sunglasses:true},'leo_suit.webp','sunglasses'],
@@ -2152,13 +2149,13 @@ test("46. Every scripted Leo encounter receives its intended illustration", () =
   }
 });
 
-test("47. Named recasts stay distinct from visitors and preserve visible staff role", () => {
+test("47. Dedicated Maya and Mrs Blackwood portraits stay distinct from visitors", () => {
   const h=createHarness(4700),r=vm.runInContext('PORTRAIT_REGISTRY',h.sandbox);
   const named=h.Game.campaign().characters;
   const maya=vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify({...named.maya,characterId:'maya'})+')',h.sandbox);
   const manager=vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify({...named.mr_blackwood,characterId:'mr_blackwood'})+')',h.sandbox);
-  assert.ok(maya.includes('woman-08.webp') && maya.includes('data-costume="staffBadge"'));
-  assert.ok(manager.includes('man-08.webp') && !manager.includes('data-costume='));
+  assert.ok(maya.includes('maya.webp') && !maya.includes('data-costume='));
+  assert.ok(manager.includes('manager.webp') && !manager.includes('data-costume='));
   assert.notStrictEqual(r.recurring.maya,r.recurring.sofia);
   assert.notStrictEqual(r.recurring.mr_blackwood,r.recurring.mr_morris);
   for(let i=0;i<100;i++) {
@@ -2220,7 +2217,7 @@ test("51. Character renderer remains campaign-independent; profiles are data-dri
   const h=createHarness(5100);
   const prof=vm.runInContext('PORTRAIT_REGISTRY.costumeProfiles',h.sandbox);
   assert.ok(prof.leo.rules.some(r=>r.overlay==='fakeBeard'));
-  assert.strictEqual(prof.maya.overlayWhen,'staffBadge');
+  assert.deepEqual(prof.maya, {});
   const image=vm.runInContext(`CHARACTERS.renderPortrait({id:'leo',characterId:'leo',fakeBeard:true,skinColor:'#a86',hairColor:'#999',coatColor:'#222',shirtColor:'#fff'})`,h.sandbox);
   assert.ok(image.includes('leo_neutral.webp') && image.includes('fakeBeard'));
 });

@@ -150,20 +150,21 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         name: 'Maya',
         tag: 'Junior Staff',
         isElderly: false,
-        skin: '#f1c27d',
-        skinColor: '#f1c27d',
-        hairColor: '#d8c18b',
-        coatColor: '#233d60',
-        shirtColor: '#d1fae5',
-        glasses: true,
+        skin: '#b9724d',
+        skinColor: '#b9724d',
+        hairColor: '#2d1b12',
+        coatColor: '#556b2f',
+        shirtColor: '#f5efe1',
+        glasses: false,
         hat: false,
         moustache: false,
         wearingRed: false,
-        staffBadge: true
+        staffBadge: false,
+        shoulderBag: true
       },
       mr_blackwood: {
         id: 'mr_blackwood',
-        name: 'Mr Blackwood',
+        name: 'Mrs Blackwood',
         tag: 'Cinema Manager',
         isElderly: false,
         skin: '#f1c27d',
@@ -184,7 +185,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: 'MONDAY',
         title: 'Day 1 — The New Employee',
         briefingMemo: [
-          'Welcome to The Grand Cinema. I am Mr Blackwood, your manager.',
+          'Welcome to The Grand Cinema. I am Mrs Blackwood, your manager.',
           'Your job is simple: read the programme, check every ticket field (film, screen, time, day and seats), and listen to the customer’s plan.',
           'The correction printer is closed until Wednesday. Today, ADMIT valid tickets and REFUSE any ticket with an error.'
         ].join('\n'),
@@ -208,7 +209,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
           {
             id: 'day1_blackwood_memo',
             atMins: 1090,
-            text: 'Manager’s Memo (Mr Blackwood): Keep the queue moving! Tomorrow we introduce official Film Age Classifications ([G], [12], [16]). Do not embarrass my cinema.'
+            text: 'Manager’s Memo (Mrs Blackwood): Keep the queue moving! Tomorrow we introduce official Film Age Classifications ([G], [12], [16]). Do not embarrass my cinema.'
           }
         ],
         scriptedEncounters: [
@@ -273,13 +274,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             targetScreeningId: 'laughing_bananas',
             expectedAction: 'REFUSE',
             revealsNameInOpening: true,
-            introducedName: 'Mr Blackwood',
+            introducedName: 'Mrs Blackwood',
             storyKey: 'blackwood_day1_outcome',
             oncePerShift: true,
             guaranteed: true,
             preventQueueWalkout: true,
             trigger: { minCaseIndex: 2 },
-            statementTemplate: "Mr Blackwood, your manager. Check this ticket for me.",
+            statementTemplate: "Mrs Blackwood, your manager. Check this ticket for me.",
             qaOverrides: {
               which_film: "This test ticket is for Laughing Bananas in Screen 1.",
               are_you_sure: "I am testing whether you check the Screen field when the printer is closed."
@@ -290,7 +291,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               },
               onMistake: { blackwood_day1_outcome: 'failed_test' },
               dilemmaNoteByAction: {
-                REFUSE: 'You passed Mr Blackwood’s surprise Monday spot-check.'
+                REFUSE: 'You passed Mrs Blackwood’s surprise Monday spot-check.'
               }
             }
           }
@@ -562,7 +563,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               dilemmaNoteByAction: {
                 CORRECT: 'You fixed Maya’s misprinted Screen 2 ticket. She promised to return the favour on Saturday.'
               },
-              dilemmaNoteOnMistake: 'Maya was reprimanded by Mr Blackwood after the misprinted ticket was not corrected.'
+              dilemmaNoteOnMistake: 'Maya was reprimanded by Mrs Blackwood after the misprinted ticket was not corrected.'
             },
             customFeedback: {
               CORRECT: 'You corrected Maya’s misprinted ticket to Screen 2. Maya breathed a huge sigh of relief!'
@@ -713,7 +714,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             qaOverrides: {
               which_film: "I'm going to see Love in Paris at 20:00 in Screen 2.",
               why_see: "I'm here to see a romantic film.",
-              what_did_you_see: "Scalpers are reselling serial GC-4-109, and I saw Mr Blackwood taking cash for unlisted VIP passes!"
+              what_did_you_see: "Scalpers are reselling serial GC-4-109, and I saw Mrs Blackwood taking cash for unlisted VIP passes!"
             },
             storyEffects: {
               onAction: {
@@ -946,7 +947,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: 'FRIDAY',
         title: 'Day 5 — Special Treatment',
         briefingMemo: [
-          'Friday night brings VIP guests and schedule changes—and pressure from Mr Blackwood.',
+          'Friday night brings VIP guests and schedule changes—and pressure from Mrs Blackwood.',
           'Love in Paris (20:00) is CANCELLED; ask affected customers about another film and use CORRECT. An extra show of Happy Penguins runs at 19:15 in Screen 2.',
           'Official VIP passes must appear on the Authorised VIP List in the binder. Check ID dates and compare them with what the customer tells you.'
         ].join('\n'),
@@ -1004,7 +1005,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             managerRefuseRepDelta: 4,
             expectedAction: 'REFUSE',
             revealsNameInOpening: true,
-            introducedName: 'Mr Blackwood',
+            introducedName: 'Mrs Blackwood',
             extraQuestions: [
               ['challenge_vip', "Why isn't this VIP pass on the authorised list?"]
             ],
@@ -1031,13 +1032,13 @@ const THE_FIRST_WEEK_CAMPAIGN = {
                 REFUSE: { blackwood_day5_outcome: 'refused' }
               },
               dilemmaNoteByAction: {
-                ADMIT: 'You obeyed Mr Blackwood and admitted unlisted pass VIP-000-CASH.',
-                REFUSE: 'You refused Mr Blackwood’s unlisted VIP-000-CASH pass and upheld the official VIP list.'
+                ADMIT: 'You obeyed Mrs Blackwood and admitted unlisted pass VIP-000-CASH.',
+                REFUSE: 'You refused Mrs Blackwood’s unlisted VIP-000-CASH pass and upheld the official VIP list.'
               }
             },
             customFeedback: {
-              ADMIT: 'You obeyed Mr Blackwood and waved through unlisted pass VIP-000-CASH (+€15). The Corporate Inspector will not like this.',
-              REFUSE: 'You stood up to Mr Blackwood and refused unlisted pass VIP-000-CASH in accordance with Head Office rules!'
+              ADMIT: 'You obeyed Mrs Blackwood and waved through unlisted pass VIP-000-CASH (+€15). The Corporate Inspector will not like this.',
+              REFUSE: 'You stood up to Mrs Blackwood and refused unlisted pass VIP-000-CASH in accordance with Head Office rules!'
             }
           },
           {
@@ -1405,7 +1406,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             qaOverrides: {
               which_film: "I'm going to see The Last Train at 20:30.",
               why_see: "I'm here to watch the thriller.",
-              what_did_you_see: "Mr Blackwood has been pocketing cash for unlisted 'VIP-000' passes! Refuse them and tell the Inspector tomorrow."
+              what_did_you_see: "Mrs Blackwood has been pocketing cash for unlisted 'VIP-000' passes! Refuse them and tell the Inspector tomorrow."
             },
             storyEffects: {
               onAction: {
@@ -1450,7 +1451,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             qaOverrides: {
               which_film: "I want a thriller—The Last Train at 20:30.",
               alternative: "The Last Train in Screen 3, please.",
-              what_did_you_see: "Mr Blackwood has been selling unlisted 'VIP-000' passes for cash!"
+              what_did_you_see: "Mrs Blackwood has been selling unlisted 'VIP-000' passes for cash!"
             },
             storyEffects: {
               onAction: {
@@ -1473,7 +1474,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             managerRefuseRepDelta: 4,
             expectedAction: 'REFUSE',
             revealsNameInOpening: true,
-            introducedName: 'Mr Blackwood',
+            introducedName: 'Mrs Blackwood',
             extraQuestions: [
               ['challenge_vip', "Why isn't this VIP pass on the authorised list?"]
             ],
@@ -1500,8 +1501,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
                 REFUSE: { blackwood_day6_outcome: 'refused' }
               },
               dilemmaNoteByAction: {
-                ADMIT: 'You obeyed Mr Blackwood and admitted unlisted premiere pass VIP-000-PREMIERE.',
-                REFUSE: 'You refused Mr Blackwood’s unlisted VIP-000-PREMIERE pass.'
+                ADMIT: 'You obeyed Mrs Blackwood and admitted unlisted premiere pass VIP-000-PREMIERE.',
+                REFUSE: 'You refused Mrs Blackwood’s unlisted VIP-000-PREMIERE pass.'
               }
             }
           }
@@ -1515,7 +1516,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         briefingMemo: [
           'Today is Sunday, 18/10/2026—your seventh day and the Final Corporate Inspection.',
           'All cinema rules are active today: age classifications ([G], [12], [16]) and ID checks, Planet X moved to Screen 1, Love in Paris cancelled, Happy Penguins 19:15 extra show, 10-minute late limit, used serials, and official VIP/Staff lists.',
-          'Every choice you have made this week—with Leo, Mr Morris, Sofia, Maya, Mr Blackwood, and the Inspector—comes to a head tonight!'
+          'Every choice you have made this week—with Leo, Mr Morris, Sofia, Maya, Mrs Blackwood, and the Inspector—comes to a head tonight!'
         ].join('\n'),
         languageFocus: "Complete cinema inspection mastery—evaluating every rule, character, and clue.",
         policies: {
@@ -1677,7 +1678,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             managerRefuseRepDelta: 5,
             expectedAction: 'REFUSE',
             revealsNameInOpening: true,
-            introducedName: 'Mr Blackwood',
+            introducedName: 'Mrs Blackwood',
             extraQuestions: [
               ['challenge_vip', "Why isn't this VIP pass on the authorised list?"]
             ],
@@ -1704,8 +1705,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
                 REFUSE: { blackwood_day7_outcome: 'refused' }
               },
               dilemmaNoteByAction: {
-                ADMIT: 'You stamped Mr Blackwood’s final unlisted pass (VIP-000-AUDIT) to cover his tracks.',
-                REFUSE: 'You refused Mr Blackwood’s VIP-000-AUDIT cover-up pass right in front of the audit!'
+                ADMIT: 'You stamped Mrs Blackwood’s final unlisted pass (VIP-000-AUDIT) to cover her tracks.',
+                REFUSE: 'You refused Mrs Blackwood’s VIP-000-AUDIT cover-up pass right in front of the audit!'
               }
             }
           },
@@ -1725,7 +1726,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
             questionEffects: {
               report_vip: {
                 condition: { anyOf: [{ key: 'sofia_evidence', value: 'yes' }, { key: 'blackwood_questioned', value: 'yes' }] },
-                revealStatement: "Thank you. I'll record your evidence and check Mr Blackwood's ledger.",
+                revealStatement: "Thank you. I'll record your evidence and check Mrs Blackwood's ledger.",
                 evidence: ['vip_reported'], setStory: { vip_reported: 'yes' }
               }
             },
@@ -1857,7 +1858,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         id: 'the_whistleblower',
         title: 'The Whistleblower',
         badge: 'ENDING 4 OF 5 · CORRUPTION EXPOSED',
-        summary: 'You refused Mr Blackwood’s unlisted VIP passes, investigated the scheme and reported your evidence directly to the Corporate Inspector. Head Office removed him from his post and appointed you Senior Box Office Supervisor.',
+        summary: 'You refused Mrs Blackwood’s unlisted VIP passes, investigated the scheme and reported your evidence directly to the Corporate Inspector. Head Office removed her from her post and appointed you Senior Box Office Supervisor.',
         managerQuote: '"You—you reported my VIP-000 passes to Head Office?! Wait until my lawyers hear about this!"',
         inspectorQuote: '"Your integrity in refusing unauthorised manager passes and documenting the fraud saved The Grand Cinema from a major scandal. Exemplary work."',
         conditions: {
@@ -1875,7 +1876,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         id: 'management_material',
         title: 'Management Material',
         badge: 'ENDING 3 OF 5 · THE MANAGER’S PROTEGE',
-        summary: 'Repeatedly, when Mr Blackwood demanded "special treatment" for his off-the-books VIP-000 guests, you stamped ADMIT without flinching. While the Corporate Inspector raised an eyebrow at the ledger, Mr Blackwood took full credit for the week’s profits and promoted you to his right-hand Assistant Manager.',
+        summary: 'Repeatedly, when Mrs Blackwood demanded "special treatment" for her off-the-books VIP-000 guests, you stamped ADMIT without flinching. While the Corporate Inspector raised an eyebrow at the ledger, Mrs Blackwood took full credit for the week’s profits and promoted you to her right-hand Assistant Manager.',
         managerQuote: '"Splendid loyalty! You understand how business really works at The Grand Cinema. Welcome to management!"',
         inspectorQuote: '"Your booth stayed profitable, though several unlisted VIP admissions remain under Head Office review."',
         conditions: {
@@ -2005,7 +2006,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         characterName: 'Maya',
         role: 'Junior Employee',
         conditions: { storyEquals: { maya_relationship: 'blamed' } },
-        text: 'Was placed on probation by Mr Blackwood after Wednesday’s misprinted ticket was not corrected.'
+        text: 'Was placed on probation by Mrs Blackwood after Wednesday’s misprinted ticket was not corrected.'
       },
       {
         characterName: 'Sofia',

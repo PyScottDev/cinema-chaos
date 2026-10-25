@@ -2,10 +2,8 @@
  * Stage 2A: visual assets live independently of any campaign or language pack.
  * These are relative URLs; they work offline via a local server or on a static host.
  * Generic roster age groups guide illustration casting, NEVER age verification.
- * Stage 2C temporarily casts Maya and Mr Blackwood using distinct existing
- * visitor illustrations. Their images are reserved from ordinary customer
- * casting to avoid duplicates; the unrelated manager.webp is NOT Mr Blackwood.
- * Their paths can later point to bespoke artwork without touching the engine.
+ * Recurring-character portraits live in the recurring folder and can be
+ * swapped without touching the engine or campaign logic.
  */
 const PORTRAIT_REGISTRY = Object.freeze({
   recurring: Object.freeze({
@@ -13,8 +11,8 @@ const PORTRAIT_REGISTRY = Object.freeze({
     sofia: 'assets/characters/recurring/sofia.webp',
     leo: 'assets/characters/recurring/leo/leo_neutral.webp',
     mystery: 'assets/characters/recurring/mystery_customer.webp',
-    maya: 'assets/characters/customers/women/woman-08.webp',
-    mr_blackwood: 'assets/characters/customers/men/man-08.webp'
+    maya: 'assets/characters/recurring/maya.webp',
+    mr_blackwood: 'assets/characters/recurring/manager.webp'
   }),
   // Campaign character IDs live here, not inside the generic character renderer.
   costumeProfiles: Object.freeze({
@@ -40,11 +38,9 @@ const PORTRAIT_REGISTRY = Object.freeze({
         { whenAny: ['sunglasses'], variant: 'neutral', overlay: 'sunglasses' }
       ])
     }),
-    maya: Object.freeze({
-      overlayWhen: 'staffBadge', overlay: 'staffBadge', unless: ['fakeBeard','staffHat']
-    })
+    maya: Object.freeze({})
   }),
-  reservedVisitorIds: Object.freeze(['woman-08', 'man-08']),
+  reservedVisitorIds: Object.freeze([]),
   visitors: Object.freeze([
   {
     "id": "man-01",
