@@ -17,9 +17,15 @@ level**. Those values determine gameplay, not reading level. The legacy
 `languagePack` schema still includes factual film data; separating those shared
 facts from the linguistic overlays is a follow-on architectural task.
 
-The Elementary extraction does not enable Intermediate or Advanced. The game also
-still has common interface and rules-engine feedback strings, which are **not**
-level-specific speech. Educational hint overlays, the glossary card and textbook
+`intermediate.js` and `advanced.js` are loaded after Elementary and before
+`the-first-week.js`. Intermediate introduces everyday B1–B2 conversation.
+Advanced inherits Intermediate wherever a simple question or phrase is already
+natural, and provides C1–C2-style nuance in notices, difficult conversations,
+excuses and management pressure. Level switching happens at customer boundaries
+and never changes ticket validation or story outcomes.
+
+The game still has common interface and rules-engine feedback strings, which
+are **not** level-specific speech. Educational hint overlays, the glossary card and textbook
 references were removed in Patch 002; game mechanics are unchanged.
 
 Tests from project root:

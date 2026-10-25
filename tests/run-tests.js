@@ -82,6 +82,7 @@ function createHarness(seed = 12345, customScripts = null, savedStorage = null) 
     "js/campaigns/registry.js",
     "js/language/elementary.js",
     "js/language/intermediate.js",
+    "js/language/advanced.js",
     "js/campaigns/the-first-week.js",
     "js/sound.js",
     "js/portrait-registry.js",
@@ -2089,7 +2090,7 @@ test("45. Borrowed portraits respect explicit asset mappings and missing-image f
 });
 
 
-console.log(`\nAll ${passed} test suites passed!`);
+
 
 
 test("37. No modal or comparison toolbar; card has ISO 85.60:53.98 ratio", () => {
@@ -2509,6 +2510,76 @@ test("65. Saved encounters retain their language when a change is pending", () =
   assert.strictEqual(loaded.Game.state.languageMode,'elementary');
   assert.strictEqual(loaded.Game.campaign().activeLanguageMode,'elementary');
   loaded.Game.stopShiftLoop();original.Game.stopShiftLoop();
+});
+
+test("66. Advanced mode presents nuanced dialogue while retaining simple questions", () => {
+  const { Game } = createHarness(6600);
+  const campaign = Game.campaign();
+  assert.strictEqual(campaign.languageModes.advanced.available, true);
+  const expectedQuestion = campaign.languagePacks.intermediate.playerQuestions.find(q => q[0] === 'which_film')[1];
+  Game.setLanguageMode('advanced');
+  assert.strictEqual(Game.state.languageMode, 'advanced');
+  assert.strictEqual(Game.languagePack().unitTitle, 'The First Week — Advanced');
+  assert.strictEqual(Game.campaign().activeLanguageMode, 'advanced');
+  assert.strictEqual(Game.campaign().playerQuestions.find(q => q[0] === 'which_film')[1], expectedQuestion,
+    'Routine questions must not be artificially inflated in Advanced');
+  assert.ok(Game.campaign().days[5].briefingMemo.includes('personal assurance'));
+  assert.ok(Game.campaign().days[7].scriptedEncounters.find(c => c.id === 'blackwood_day7')
+    .qaOverrides.challenge_vip.includes('Lower your voice'));
+  assert.strictEqual(Game.say('wrongFilm', {request:'a thriller'}),
+    "I think something's gone wrong with my booking. I asked for a thriller, not this.");
+  assert.notStrictEqual(Game.languagePack().films.find(f => f.id === 'planet_x').descriptions[0],
+    Game.campaign().languagePacks.elementary.films.find(f => f.id === 'planet_x').descriptions[0]);
+});
+
+test("67. Advanced, Intermediate and Elementary produce identical seven-day decisions", () => {
+  const modes = ['elementary', 'intermediate', 'advanced'];
+  const traces = modes.map(mode => {
+    const h = createHarness(6700);
+    h.Game.setLanguageMode(mode);
+    const events = [];
+    for (let day=1; day<=7; day++) {
+      h.sandbox.CinemaDebug.setSeed(6700+day*10);
+      h.sandbox.document.getElementById('settingsDaySelect').value=String(day);
+      h.Game.jumpToDay();h.Game.startShift();
+      for (let i=0;i<7&&h.Game.state.shiftActive;i++) {
+        const c=h.Game.state.currentCustomer;
+        const ev=answerRequiredQuestions(h.Game);
+        events.push(JSON.stringify({day,caseType:c.caseType,scriptedId:c.scriptedId,
+          filmId:c.ticket.filmId,seatCount:c.ticket.seats,group:c.groupSize,
+          intent:c.intent,validActions:ev.validActions,
+          optionIds:ev.options.map(o=>o?.id||o),issues:ev.issues.map(i=>i.code)}));
+        h.Game.makeDecision(ev.validActions[0],ev.options[0]);h.Game.nextCustomerFromQueue();
+      }
+      h.Game.stopShiftLoop();
+    }
+    return events;
+  });
+  assert.deepStrictEqual(traces[0],traces[1]);
+  assert.deepStrictEqual(traces[1],traces[2]);
+});
+
+test("68. Advanced language switching is deferred and survives save/restore", () => {
+  const first = createHarness(6800);
+  first.Game.setLanguageMode('advanced');first.Game.startShift();
+  const original = first.Game.state.currentCustomer.statement;
+  first.Game.setLanguageMode('intermediate');first.Game.saveProgress();
+  const restored = createHarness(6800,null,structuredClone(first.storage._s));
+  restored.Game.startShift();
+  assert.strictEqual(restored.Game.state.languageMode,'advanced');
+  assert.strictEqual(restored.Game.state.pendingLanguageMode,'intermediate');
+  assert.strictEqual(restored.Game.state.currentCustomer.statement,original);
+  const ev=answerRequiredQuestions(restored.Game);
+  restored.Game.makeDecision(ev.validActions[0],ev.options[0]);
+  restored.Game.nextCustomerFromQueue();
+  assert.strictEqual(restored.Game.state.languageMode,'intermediate');
+  assert.strictEqual(restored.Game.campaign().activeLanguageMode,'intermediate');
+  restored.Game.setLanguageMode('advanced');
+  const after=answerRequiredQuestions(restored.Game);
+  restored.Game.makeDecision(after.validActions[0],after.options[0]);
+  restored.Game.nextCustomerFromQueue();
+  assert.strictEqual(restored.Game.state.languageMode,'advanced');
+  first.Game.stopShiftLoop();restored.Game.stopShiftLoop();
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

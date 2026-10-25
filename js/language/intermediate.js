@@ -24,7 +24,7 @@ const FIRST_WEEK_INTERMEDIATE = {
     "lateRuleText": "Customers arriving more than ten minutes after their screening begins must be refused. Check the recorded arrival time, not the time spent at the desk.",
     "vipRuleText": "A VIP pass is valid only if its number appears on the authorised list. All standard booking details and age restrictions still apply.",
     "ageRuleText": "The schedule shows three classifications: [G] for all ages, [12] for customers aged twelve and over, and [16] for those aged sixteen and over. Request ID if you consider it necessary, and check the holder's name, photograph and birth date.",
-    "languageModes/elementary/description": "Clear, accessible cinema dialogue practising plans (\"be going to\"), purpose (\"to + verb\"), age checks, and ticket queries.",
+    "languageModes/elementary/description": "Clear, direct customer conversations and straightforward cinema instructions.",
     "days/1/scriptedEncounters/@morris_day1/statementTemplate": "Good evening. Could I have a ticket for {title}, please?",
     "days/1/scriptedEncounters/@morris_day1/qaOverrides/which_film": "I'm booked for Happy Penguins in Screen 2.",
     "days/1/scriptedEncounters/@morris_day1/qaOverrides/why_see": "I love wildlife documentaries, especially ones about penguins.",

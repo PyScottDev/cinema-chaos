@@ -28,9 +28,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       advanced: {
         id: 'advanced',
         label: 'Advanced',
-        available: false,
-        comingSoon: true,
-        description: 'Coming Soon — Fast-paced natural speech and subtle persuasion.'
+        available: true,
+        description: 'Natural dialogue with nuance, persuasive language and detailed workplace communication.'
       }
     },
 

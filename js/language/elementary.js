@@ -236,7 +236,7 @@ const FIRST_WEEK_ELEMENTARY = {
   "title": "The First Week",
   "subtitle": "7 Days · Learn the Job",
   "description": "Step into the box office of The Grand Cinema for a full seven-day week (Monday to Sunday). Inspect tickets, verify age classifications and ID cards, handle a broken projector, catch a persistent teen in absurd disguises, navigate your manager’s shady VIP demands, and face the Sunday Corporate Inspection.",
-  "languageModes/elementary/description": "Clear, accessible cinema dialogue practising plans (\"be going to\"), purpose (\"to + verb\"), age checks, and ticket queries.",
+  "languageModes/elementary/description": "Clear, direct customer conversations and straightforward cinema instructions.",
   "printerClosedMessage": "The ticket printer is closed until Wednesday. Today, refuse tickets with errors.",
   "lateRuleText": "No entry more than 10 minutes after the start. Use the arrival time on the booking record.",
   "vipRuleText": "VIP numbers must be on the official VIP list. A VIP still needs the right day, film, room, time, age rating and booking.",
@@ -546,6 +546,7 @@ const FIRST_WEEK_ELEMENTARY = {
 function applyFirstWeekElementary(campaign) {
   const base = FIRST_WEEK_ELEMENTARY;
   const intermediate = FIRST_WEEK_INTERMEDIATE;
+  const advanced = FIRST_WEEK_ADVANCED;
   const elemPack = {
     ...base.languagePack,
     procedural: base.procedural,
@@ -570,19 +571,45 @@ function applyFirstWeekElementary(campaign) {
     dilemmaMessage: intermediate.dilemmaMessage,
     inspectorNotes: intermediate.inspectorNotes
   };
-  // Retain the original Elementary reference, including for older save games.
+  const advPack = {
+    ...intPack,
+    unitTitle: 'The First Week — Advanced',
+    // Screening facts remain the same; only film descriptions are replaced.
+    films: intPack.films.map(f => ({
+      ...f,
+      ...(advanced.filmPhrases[f.id] || {})
+    })),
+    procedural: {
+      ...intPack.procedural,
+      ...advanced.proceduralOverrides,
+      answers: { ...intPack.procedural.answers, ...advanced.proceduralOverrides.answers },
+      questionLabels: { ...intPack.procedural.questionLabels, ...advanced.proceduralOverrides.questionLabels }
+    },
+    // Simple questions stay simple, even in Advanced mode.
+    playerQuestions: intermediate.playerQuestions,
+    dilemmaMessage: { ...intermediate.dilemmaMessage, ...advanced.dilemmaMessage },
+    inspectorNotes: { ...intermediate.inspectorNotes, ...advanced.inspectorNotes }
+  };
+  // Preserve the legacy Elementary reference for older save games.
   base.languagePack = elemPack;
-  campaign.languagePacks = { elementary: elemPack, intermediate: intPack };
-
+  campaign.languagePacks = {
+    elementary: elemPack,
+    intermediate: intPack,
+    advanced: advPack
+  };
   return applyFirstWeekLanguage(campaign, 'elementary');
 }
 
 function applyFirstWeekLanguage(campaign, mode) {
     const base = FIRST_WEEK_ELEMENTARY;
-    const intermediate = FIRST_WEEK_INTERMEDIATE;
-    const active = mode === 'intermediate' ? 'intermediate' : 'elementary';
+    const active = campaign.languagePacks[mode] ? mode : 'elementary';
     const pack = campaign.languagePacks[active];
-    const override = active === 'intermediate' ? intermediate.textOverrides : {};
+    // Advanced inherits natural Intermediate wording where complexity adds no
+    // value, overriding it only where the conversation genuinely warrants it.
+    const overrides = active === 'elementary' ? {} : {
+      ...FIRST_WEEK_INTERMEDIATE.textOverrides,
+      ...(active === 'advanced' ? FIRST_WEEK_ADVANCED.textOverrides : {})
+    };
     for (const [path, original] of Object.entries(base.text)) {
       const parts = path.split('/');
       let target = campaign;
@@ -597,7 +624,7 @@ function applyFirstWeekLanguage(campaign, mode) {
       }
       const field = parts[parts.length - 1];
       if (!(field in target)) throw new Error(`Unknown language field: ${path}`);
-      target[field] = Object.prototype.hasOwnProperty.call(override, path) ? override[path] : original;
+      target[field] = Object.prototype.hasOwnProperty.call(overrides, path) ? overrides[path] : original;
     }
     campaign.playerQuestions = pack.playerQuestions;
     campaign.dilemmaMessage = pack.dilemmaMessage;

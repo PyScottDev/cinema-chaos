@@ -98,7 +98,7 @@
 
       languagePack() {
         // Legacy imported packs are Elementary-only. They must not silently
-        // override a selected Intermediate (or future Advanced) experience.
+        // override a selected Intermediate or Advanced experience.
         if (this.state.customLanguagePack && this.state.languageMode === 'elementary') return this.state.customLanguagePack;
         const camp = this.campaign();
         const mode = this.state.languageMode || "elementary";
@@ -114,7 +114,7 @@
         const camp = this.campaign();
         const mode = this.state.languageMode || 'elementary';
         if (typeof camp.applyLanguageMode !== 'function') return;
-        if (camp.activeLanguageMode !== mode && !(mode === 'advanced' && camp.activeLanguageMode === 'elementary')) {
+        if (camp.activeLanguageMode !== mode) {
           camp.applyLanguageMode(mode);
         }
         // Existing schedule objects are detached copies of the language-pack
