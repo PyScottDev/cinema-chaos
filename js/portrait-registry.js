@@ -26,12 +26,13 @@ const PORTRAIT_REGISTRY = Object.freeze({
         cap: 'assets/characters/recurring/leo/leo_cap.webp',
         glasses: 'assets/characters/recurring/leo/leo_glasses.webp',
         suit: 'assets/characters/recurring/leo/leo_suit.webp',
-        moustache: 'assets/characters/recurring/leo/leo_moustache.webp'
+        moustache: 'assets/characters/recurring/leo/leo_moustache.webp',
+        beard: 'assets/characters/recurring/leo/leo_beard.webp'
       }),
       defaultVariant: 'neutral',
       // Highest-priority visual cue first; special variants use existing WebP art.
       rules: Object.freeze([
-        { whenAny: ['fakeBeard'], variant: 'neutral', overlay: 'fakeBeard' },
+        { whenAny: ['fakeBeard'], variant: 'beard' },
         { whenAny: ['staffHat','staffBadge'], variant: 'cap', overlay: 'staffUniform' },
         { whenAny: ['oversizedSuit'], variant: 'suit', overlay: 'sunglasses', overlayIf: 'sunglasses' },
         { whenAny: ['editedMoustache'], variant: 'moustache' },
