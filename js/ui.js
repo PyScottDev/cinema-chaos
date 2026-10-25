@@ -9,7 +9,9 @@
         document.getElementById('mobileCustomerSummary').textContent=c?`${knownName||'Customer'}: ${c.dialogue.at(-1)?.reply||c.statement}`:'';
       },
       renderCustomer(c) {
-        document.getElementById('customerPortraitBox').innerHTML=CHARACTERS.renderPortraitSVG(c.person,'neutral');
+        // Also supports customers restored from older saves without portraitId.
+        CHARACTERS.assignPortrait(c.person, c.trueAge ?? null);
+        document.getElementById('customerPortraitBox').innerHTML=CHARACTERS.renderPortrait(c.person,'neutral');
         const knownName = Game.getKnownCustomerName ? Game.getKnownCustomerName(c) : null;
         const groupLabel = `${c.groupSize} ${c.groupSize===1?'person':'people'}`;
         document.getElementById('customerIdentityBar').textContent = knownName ? `${knownName} · ${groupLabel}` : groupLabel;
@@ -147,7 +149,7 @@
         const portraitTarget = idCard.portraitPerson || (idCard.photoMismatch
           ? { ...c.person, isElderly: !c.person.isElderly, hairColor: '#cbd5e1', glasses: !c.person.glasses, hat: false, oversizedSuit: false, sunglasses: false }
           : idCard.photoAltered ? { ...c.person, editedMoustache: !c.person.editedMoustache } : c.person);
-        photoBtn.innerHTML = `<div class="w-24 h-28 overflow-hidden rounded bg-slate-900 border border-slate-700 flex items-center justify-center">${CHARACTERS.renderPortraitSVG(portraitTarget, 'neutral')}</div><span class="text-[10px] font-bold uppercase tracking-wider text-amber-200 mt-1.5">Photograph</span>`;
+        photoBtn.innerHTML = `<div class="w-24 h-28 overflow-hidden rounded bg-slate-900 border border-slate-700 flex items-center justify-center">${CHARACTERS.renderPortrait((idCard.photoMismatch || idCard.photoAltered) ? { ...portraitTarget, forceSvg: true } : portraitTarget, 'neutral')}</div><span class="text-[10px] font-bold uppercase tracking-wider text-amber-200 mt-1.5">Photograph</span>`;
         if (idCard.photoAltered) {
           const detail = document.createElement('span');
           detail.className = 'text-[10px] text-amber-100 mt-1';

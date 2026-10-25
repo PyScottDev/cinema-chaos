@@ -82,6 +82,7 @@ function createHarness(seed = 12345, customScripts = null, savedStorage = null) 
     "js/campaigns/registry.js",
     "js/campaigns/the-first-week.js",
     "js/sound.js",
+    "js/portrait-registry.js",
     "js/characters.js",
     "js/engine.js",
     "js/ui.js"
@@ -1581,7 +1582,7 @@ test("24. Request-only identification, refusal/missing distinction, contextual q
   assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT'], 'Unrestricted honest visit needs no ID');
 });
 
-test("25. ID modal fields, distinct SVG photographs, alteration detail and paused clock/queue", () => {
+test("25. ID modal fields, genuine and suspect photographs, alteration detail and paused clock/queue", () => {
   const h = createHarness(2500), G = h.Game, U = h.UI;
   for (const [type, day] of [['adult_horror_day2',2],['leo_day4',4],['leo_day5',5]]) {
     const c = stageCase(h, type, day);
@@ -1597,9 +1598,14 @@ test("25. ID modal fields, distinct SVG photographs, alteration detail and pause
     assert.strictEqual(G.state.clockMins, clock);
     assert.deepEqual(G.state.queue.map(c => c.patience), patience);
     const photo = findElement(doc, e => e.id === 'idModalPhotoBtn');
-    const actual = vm.runInContext("CHARACTERS.renderPortraitSVG(Game.state.currentCustomer.person, 'neutral')", h.sandbox);
-    if (c.idCard.photoMismatch || c.idCard.photoAltered) assert.ok(!photo.innerHTML.includes(actual));
-    else assert.ok(photo.innerHTML.includes(actual));
+    const actual = vm.runInContext("CHARACTERS.renderPortrait(Game.state.currentCustomer.person, 'neutral')", h.sandbox);
+    if (c.idCard.photoMismatch || c.idCard.photoAltered) {
+      // A suspect document must not reuse the genuine customer's photograph.
+      const ordinarySrc = c.person.portraitId && vm.runInContext('PORTRAIT_REGISTRY.visitors', h.sandbox)
+        .find(p => p.id === c.person.portraitId)?.src;
+      if (ordinarySrc) assert.ok(!photo.innerHTML.includes(`src=\"${ordinarySrc}\"`));
+      assert.ok(!photo.innerHTML.includes(actual));
+    } else assert.ok(photo.innerHTML.includes(actual));
     if (c.idCard.photoAltered) assert.ok(elementText(photo).includes('Tape'));
     U.closeIdCardModal(); assert.strictEqual(G.state.modalDepth, 0);
     G.tick(); assert.strictEqual(G.state.clockMins, clock + 1);
@@ -1963,3 +1969,83 @@ test("37. ID card overlays ticket desk rather than cinema listings, shows addres
 
 console.log(`
 All ${passed} test suites passed!`);
+
+
+test("38. All portrait assets exist; registry is campaign-independent and loaded before characters", () => {
+  const h = createHarness(3800);
+  const reg = vm.runInContext('PORTRAIT_REGISTRY', h.sandbox);
+  assert.strictEqual(reg.visitors.length, 40);
+  assert.strictEqual(new Set(reg.visitors.map(p => p.id)).size, 40);
+  for (const [id, src] of Object.entries(reg.recurring)) {
+    assert.ok(fs.existsSync(path.join(ROOT, src)), `Recurring ${id} missing: ${src}`);
+  }
+  for (const p of reg.visitors) {
+    assert.ok(fs.existsSync(path.join(ROOT, p.src)), `Visitor ${p.id} missing: ${p.src}`);
+    assert.ok(['under18','youngAdult','adult','olderAdult'].includes(p.ageGroup));
+  }
+  assert.strictEqual(reg.recurring.mr_blackwood, undefined, 'Manager artwork must not be mislabelled as Mr Blackwood');
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.ok(html.indexOf('js/portrait-registry.js') < html.indexOf('js/characters.js'));
+});
+
+test("39. Named characters have fixed images, while unsupported roles and costumes use SVG", () => {
+  const h = createHarness(3900);
+  const html = (person) => vm.runInContext('CHARACTERS.renderPortrait('+ JSON.stringify(person) +')', h.sandbox);
+  const named = h.Game.campaign().characters;
+  for (const [id, basename] of [['mr_morris','mr_morris.webp'],['sofia','sofia.webp'],['leo','leo_neutral.webp'],['mystery','mystery_customer.webp']]) {
+    const markup = html({...named[id], characterId:id});
+    assert.ok(markup.includes(basename), id);
+  }
+  assert.match(html({...named.maya, characterId:'maya'}), /<svg/);
+  assert.match(html({...named.mr_blackwood, characterId:'mr_blackwood'}), /<svg/);
+  for (const key of ['fakeBeard','oversizedSuit','sunglasses','staffHat','staffBadge','editedMoustache']) {
+    const person = {...named.leo, characterId:'leo', [key]:true};
+    assert.match(html(person), /<svg/, `Visible ${key} must not disappear`);
+  }
+});
+
+test("40. Ordinary portraits are stable and respect red-clothing and broad age casting", () => {
+  const h = createHarness(4000);
+  const select = (p, age) => vm.runInContext(`CHARACTERS.assignPortrait(${JSON.stringify(p)}, ${age})`, h.sandbox);
+  const roster = vm.runInContext('PORTRAIT_REGISTRY.visitors', h.sandbox);
+  for (const age of [14, 20, 35, 72]) {
+    for (const red of [false, true]) {
+      const person = { id: `test-${age}-${red}`, name:'Visitor', wearingRed:red, glasses:false, hat:false };
+      const a = select(person, age), b = select(person, age);
+      assert.strictEqual(a.portraitId, b.portraitId);
+      const meta = roster.find(x => x.id === a.portraitId);
+      assert.strictEqual(meta.wearingRed, red);
+      assert.strictEqual(meta.ageGroup, age<18?'under18':age<27?'youngAdult':age<60?'adult':'olderAdult');
+    }
+  }
+  const g = h.Game;
+  for (const [name, expectedGender] of [['Anna','female'],['David','male'],['Elena','female'],['Marcus','male']]) {
+    const p = select({ id:`gender-${name}`, name, wearingRed:false, glasses:false }, 24);
+    assert.strictEqual(roster.find(x => x.id === p.portraitId).genderPresentation, expectedGender);
+  }
+  const person = g.generateCustomerScenario('age_valid').person;
+  const markup = vm.runInContext('CHARACTERS.renderPortrait('+JSON.stringify(person)+')',h.sandbox);
+  assert.match(markup, /<img/);
+  assert.ok(roster.some(p => markup.includes(p.src)));
+});
+
+test("41. Genuine IDs reuse the customer's portrait; forged photos and failed assets use SVG", () => {
+  const h = createHarness(4100), G = h.Game;
+  const c = stageCase(h, 'adult_horror_day2', 2);
+  const customerMarkup = vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)', h.sandbox);
+  assert.ok(customerMarkup.includes('<img'), 'Ordinary customers should show portraits');
+  requestId(G,c);
+  h.UI.renderIdCardModal(c);
+  const root = h.elements.get('idCardModalDocument');
+  const photo = findElement(root, e => e.id === 'idModalPhotoBtn');
+  assert.ok(photo.innerHTML.includes(customerMarkup), 'Genuine photo must be identical to customer portrait');
+  const forged = stageCase(h, 'leo_day4', 4);
+  requestId(G,forged); h.UI.renderIdCardModal(forged);
+  const falsePhoto = findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
+  assert.ok(falsePhoto.innerHTML.includes('<svg'), 'Existing bogus-ID visuals preserved until 2B');
+  const markup=vm.runInContext('CHARACTERS.renderPortrait({id:"ghost",portraitId:"not-on-disk"})', h.sandbox);
+  assert.ok(markup.includes('<svg'), 'Unregistered assets fall back');
+  assert.ok(customerMarkup.includes('onerror="CHARACTERS.handlePortraitImageError(this)"'));
+});
+
+console.log(`\nAll ${passed} test suites passed!`);

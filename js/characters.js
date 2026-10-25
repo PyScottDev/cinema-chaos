@@ -35,6 +35,79 @@
         };
       },
 
+
+      // Portrait casting uses the already-generated person ID, not game RNG.
+      // This preserves seeded scenario logic, retry behaviour and save files.
+      stablePortraitHash(value) {
+        let hash = 2166136261;
+        for (const char of String(value)) {
+          hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+        }
+        return hash >>> 0;
+      },
+
+      // Assign once to the finished customer. Do not infer legal age from artwork.
+      assignPortrait(person, ageHint = null) {
+        if (!person || person.characterId || Object.prototype.hasOwnProperty.call(PORTRAIT_REGISTRY.recurring, person.id)) return person;
+        if (person.portraitId && PORTRAIT_REGISTRY.visitors.some(p => p.id === person.portraitId)) return person;
+        const group = typeof ageHint !== 'number' || !Number.isFinite(ageHint) ? null
+          : ageHint < 18 ? 'under18' : ageHint < 27 ? 'youngAdult'
+          : ageHint < 60 ? 'adult' : 'olderAdult';
+        const red = Boolean(person.wearingRed);
+        // Curated procedural name pool: don't pair e.g. "Anna" with a male portrait.
+        // Unknown and gender-neutral names can use the full visual roster.
+        const first = String(person.name || '').trim().split(/\s+/)[0].toLowerCase();
+        const feminine = new Set(['anna','elena','clara','nora','lucia','hannah','eva','mei']);
+        const masculine = new Set(['david','marcus','samir','tom','ben','omar','daniel','victor']);
+        const gender = feminine.has(first) ? 'female' : masculine.has(first) ? 'male' : null;
+        let candidates = PORTRAIT_REGISTRY.visitors.filter(p => p.wearingRed === red && (!group || p.ageGroup === group) && (!gender || p.genderPresentation === gender));
+        if (!candidates.length) candidates = PORTRAIT_REGISTRY.visitors.filter(p => p.wearingRed === red && (!gender || p.genderPresentation === gender));
+        // Prefer consistent accessories if possible without compromising red clothing or casting age.
+        const withGlasses = candidates.filter(p => p.glasses === Boolean(person.glasses));
+        if (withGlasses.length) candidates = withGlasses;
+        const hasHat = Boolean(person.hat) && person.hat !== 'none';
+        const withHat = candidates.filter(p => p.hat === hasHat);
+        if (withHat.length) candidates = withHat;
+        const chosen = candidates[this.stablePortraitHash(`${person.id}|${person.name}`) % candidates.length];
+        if (chosen) person.portraitId = chosen.id;
+        return person;
+      },
+
+      portraitAsset(person) {
+        if (!person || person.forceSvg || person.disablePortraitAsset) return null;
+        // Stage 2C will map individual Leo encounters. Until then, preserve all
+        // scripted costume cues using the existing SVG renderer instead of hiding them.
+        if (['fakeBeard','oversizedSuit','sunglasses','editedMoustache','staffHat','staffBadge'].some(k => person[k])) return null;
+        const knownId = person.characterId || person.id;
+        if (Object.prototype.hasOwnProperty.call(PORTRAIT_REGISTRY.recurring, knownId)) {
+          return { id: knownId, src: PORTRAIT_REGISTRY.recurring[knownId] };
+        }
+        return PORTRAIT_REGISTRY.visitors.find(p => p.id === person.portraitId) || null;
+      },
+
+      // A single renderer is used by the booth and by genuine identity cards.
+      renderPortrait(person, mood = 'neutral') {
+        const asset = this.portraitAsset(person);
+        if (!asset) return this.renderPortraitSVG(person, mood);
+        const fallbackData = encodeURIComponent(JSON.stringify(person));
+        return `<img class="portrait-image w-full h-full object-cover rounded-lg customer-enter"`
+          + ` src="${asset.src}" data-portrait-id="${asset.id}" alt=""`
+          + ` data-fallback-person="${fallbackData}" data-fallback-mood="${mood}"`
+          + ` draggable="false" decoding="async" onerror="CHARACTERS.handlePortraitImageError(this)">`;
+      },
+
+      handlePortraitImageError(img) {
+        // Broken/missing assets degrade to the original SVG, without broken-image icons.
+        if (!img) return;
+        try {
+          const person = JSON.parse(decodeURIComponent(img.getAttribute('data-fallback-person')));
+          const mood = img.getAttribute('data-fallback-mood') || 'neutral';
+          img.outerHTML = this.renderPortraitSVG(person, mood);
+        } catch (_) {
+          img.style.display = 'none';
+        }
+      },
+
       renderPortraitSVG(person, mood = "neutral") {
         const mouthPath = mood === "happy"
           ? "M 42 66 Q 50 74 58 66"

@@ -1324,6 +1324,9 @@
             : Boolean(!scripted.dilemma && !scripted.wrongFilmTicket && !nonAdmitCases.includes(type));
         }
 
+        // Stage 2A: cast ordinary visitors only after case/age metadata is known.
+        // No RNG is consumed; named campaign characters resolve by their stable IDs.
+        CHARACTERS.assignPortrait(c.person, c.trueAge ?? null);
         c.statementSummary = c.statement;
         const requiresPlanConfirmation = ['incomplete', 'wrong_film', 'promo', 'change'].includes(type) || Boolean(scripted?.wrongFilmTicket);
         const calcIdAge = (c.idCard?.exists && this.isValidCalendarDate(c.idCard.dob))
