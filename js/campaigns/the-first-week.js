@@ -42,7 +42,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
     printerClosedMessage: 'The ticket printer is closed until Wednesday. Today, refuse tickets with errors.',
     lateRuleText: 'No entry more than 10 minutes after the start. Use the arrival time on the booking record.',
     vipRuleText: 'VIP numbers must be on the official VIP list. A VIP still needs the right day, film, room, time, age rating and booking.',
-    ageRuleText: 'Check film age ratings in the schedule: [G] all ages, [12] minimum age 12, [16] minimum age 16. Customers for 12 or 16 films must present a valid ID card matching their name, photo and birth date.',
+    ageRuleText: 'Check film age ratings in the schedule: [G] all ages, [12] minimum age 12, [16] minimum age 16. Use the portraits to decide whether to ask for ID. Admit those old enough; refuse those underage. If you request ID, check the name, photo and birth date.',
 
     dilemmaMessage: {
       exceptionFeedback: 'Mr Morris is admitted late as a compassionate exception. +€6.',
@@ -305,7 +305,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         briefingMemo: [
           'Today is Tuesday, 13/10/2026. The town council is enforcing Film Age Classifications.',
           'Check the age rating next to every film in the schedule: [G] Suitable for all ages, [12] Minimum age 12, [16] Minimum age 16.',
-          'Customers for [12] or [16] films must present a valid ID card when asked. Check their date of birth against today’s date (13/10/2026). The printer is still closed—refuse underage customers or anyone without valid ID.'
+          'You decide who looks young enough to check. Ask for ID if you are unsure, and examine its birth date and photo. The printer is still closed—refuse underage customers.'
         ].join('\n'),
         languageFocus: "Age verification ('How old are you?', 'Can I see your ID?') and date-of-birth checks.",
         policies: {
@@ -314,7 +314,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
           allowCorrections: false,
           checkAgeRestrictions: true,
           ageRuleTitle: 'Age ratings & ID (13/10/2026)',
-          ageRuleText: 'Ratings: [G] all ages, [12] min age 12 (born on or before 13/10/2014), [16] min age 16 (born on or before 13/10/2010). Request ID for [12] or [16] films and refuse underage customers or anyone without valid ID.',
+          ageRuleText: 'Ratings: [G] all ages, [12] min age 12 (born on or before 13/10/2014), [16] min age 16 (born on or before 13/10/2010). You decide whether to request ID based on appearance. Refuse customers who are below the minimum age.',
           lateToleranceMins: null,
           checkDuplicates: false,
           allowPromoChanges: false,
@@ -329,7 +329,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
           {
             id: 'day2_age_notice',
             atMins: 1092,
-            text: 'Box Office Reminder: Request ID when checking [12] and [16] screenings. Admit guests whose ID card and ticket are valid, and refuse anyone underage or without ID.'
+            text: 'Box Office Reminder: Look at each customer. Request ID when you think age may be an issue; check the photo and birth date. Refuse underage customers.'
           }
         ],
         scriptedEncounters: [
@@ -464,7 +464,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
           allowCorrections: true,
           checkAgeRestrictions: true,
           ageRuleTitle: 'Age ratings & ID (14/10/2026)',
-          ageRuleText: 'Check [G], [12] and [16] ratings. Customers for [12] or [16] films need valid ID with real calendar dates and must not wear disguises.',
+          ageRuleText: 'Check [G], [12] and [16] ratings. Judge appearance before deciding whether to ask for ID. An ID you inspect must have real calendar dates and a matching photograph.',
           lateToleranceMins: null,
           checkDuplicates: false,
           allowPromoChanges: true,

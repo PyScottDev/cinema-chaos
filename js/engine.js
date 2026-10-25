@@ -590,11 +590,11 @@
         return null;
       },
       needsIdFor(c, f = this.screening(c.ticket?.filmId)) {
-        return Boolean(c.requiresIdentityCheck || (this.policies().checkAgeRestrictions && (f?.minAge || 0) > 0));
+        return Boolean(c.requiresIdentityCheck); // Only special scripted credentials, never the film rating.
       },
       identityQuestionsRelevant(c) {
         const alternatives = (c.intent?.genres ? this.allScreenings().filter(f => c.intent.genres.includes(f.genre) && f.status !== 'CANCELLED') : []);
-        return this.needsIdFor(c) || Boolean(c.requiresAgeCheck) ||
+        return Boolean(this.policies().checkAgeRestrictions) || this.needsIdFor(c) || Boolean(c.requiresAgeCheck) ||
           alternatives.some(f => this.needsIdFor(c, f)) ||
           (c.intent?.ids || []).some(id => this.needsIdFor(c, this.screening(id)));
       },
@@ -603,7 +603,7 @@
         const pol = this.policies();
         const defaults = [['which_film','Which film are you going to see?'],['are_you_sure','Are you going to watch this film?'],['why_see','Why are you going to see it?'],['how_many','How many people are there?'],['alternative','Is another film OK?'],['other_ticket','Do you have another ticket?'],['ask_age','How old are you?'],['ask_id','Can I see your ID, please?']];
         const base = Array.isArray(this.campaign()?.playerQuestions) ? this.campaign().playerQuestions : defaults;
-        // Age and ID questions are only offered while age restrictions apply. Neither is a prerequisite for the other.
+        // Available throughout age-restricted shifts; only the player decides whether to ask.
         const qs = base.filter(([key]) => key === 'ask_age' ? this.identityQuestionsRelevant(c) && (pol.checkAgeRestrictions || c.requiresAgeCheck)
           : key === 'ask_id' ? this.identityQuestionsRelevant(c) : true).map(q => [q[0], q[1]]);
         const addAll = (list) => {
@@ -656,9 +656,9 @@
             }
           }
         }
-        if (this.needsIdFor(c, f) && !ignoreIdentity) {
+        if ((f.minAge || 0) > 0 && Number.isFinite(c.trueAge) && c.trueAge < f.minAge) return false;
+        if (!ignoreIdentity && (f.minAge || 0) > 0 && c.idCard?.exists && c.idCard.presented) {
           if (c.person?.obviousDisguise) return false;
-          if (!c.idCard?.exists || !c.idCard.presented) return false;
           if (!this.isValidCalendarDate(c.idCard.dob)) return false;
           if (c.idCard.issueDate && !this.isValidCalendarDate(c.idCard.issueDate)) return false;
           if (c.idCard.expiryDate && !this.isValidCalendarDate(c.idCard.expiryDate)) return false;
@@ -670,7 +670,7 @@
           if (c.ticket?.holderName && c.idCard.holderName && c.ticket.holderName !== c.idCard.holderName) return false;
           if (c.introducedName && c.idCard.holderName && c.idCard.holderName !== c.introducedName && !c.identityTitle) return false;
           const age = this.calculateAge(c.idCard.dob, pol.currentDate);
-          if (age === null || age < f.minAge) return false;
+          if (age === null || age < (f.minAge || 0)) return false;
           if (c.claimedAge !== undefined && c.claimedAge !== null && c.claimedAge !== age && (c.statedAgeInOpening || c.ageRequested)) return false;
         }
         return true;
@@ -717,7 +717,8 @@
               if (c.person?.obviousDisguise) {
                 add('disguise', c.person.disguiseIssueText || 'Customer is wearing an obvious disguise.', true);
               }
-              if (this.needsIdFor(c, f) && c.idCard?.exists && c.idCard.presented) {
+              // The ID is evidence only after the player requests it.
+              if (c.idCard?.exists && c.idCard.presented && ((f.minAge || 0) > 0 || c.requiresIdentityCheck)) {
                 if (!this.isValidCalendarDate(c.idCard.dob)) {
                   add('id_forged', `The birth date on the ID card (${this.formatDateDMY(c.idCard.dob)}) is not a real calendar date.`, true);
                 } else {
@@ -750,8 +751,18 @@
                     add('underage', `Customer is ${idAge} years old (DOB ${this.formatDateDMY(c.idCard.dob)}). ${f.title} requires minimum age ${f.minAge} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
                   }
                 }
-              } else if (this.needsIdFor(c, f) && c.idRequested) {
-                add(c.idRefused ? 'id_refused' : 'missing_id', c.idRefused ? 'Customer declined to provide identification.' : `No ID card provided for ${f.title} (rated ${f.ageRating || f.minAge}).`, !c.allowAgeCorrection);
+              } else if (c.idRequested && (c.idRefused || !c.idCard?.exists) && (f.minAge || 0) > 0) {
+                // A declined request is actionable evidence, but never an automatic prerequisite.
+                // Only an actually underage customer is incorrectly admitted.
+                if (Number.isFinite(c.trueAge) && c.trueAge < f.minAge) {
+                  add(c.idRefused ? 'id_refused' : 'missing_id', c.idRefused ? 'Customer declined to show ID.' : 'The customer cannot establish their age.', true);
+                }
+              }
+              if ((f.minAge || 0) > 0 && Number.isFinite(c.trueAge) && c.trueAge < f.minAge
+                  && !issues.some(i => i.code === 'underage' || i.code === 'id_refused' || i.code === 'missing_id')) {
+                // The real age controls scoring, whether or not the player asks for ID.
+                // Do not expose this detail on the ticket or before a decision.
+                add('underage', 'The customer is below the minimum age for this screening.', !c.allowAgeCorrection);
               }
             }
             if(b && (b.screeningId!==f.id || b.seats!==t.seats || t.seats<c.groupSize)) add('seats',`Booking: ${b.seats} seat(s). People: ${c.groupSize}.`);
@@ -761,20 +772,18 @@
         }
         const hard=issues.some(i=>i.hard);
         const options=hard ? [] : this.correctionOptions(c);
-        const identityUnknown = this.identityQuestionsRelevant(c) && !c.idRequested && !c.idCard?.presented;
-        // A visible, unfixable ticket error already justifies refusal. A correction to
-        // an unrestricted film also needs no ID. Do not demand unrelated evidence.
-        const visibleRefusal = issues.length > 0 && (!c.requiredQuestion || c.known.preference) &&
-          (hard || (identityUnknown && this.correctionOptions(c, { ignoreIdentity: true }).length === 0));
-        const needsIdentification = !hard && !visibleRefusal && identityUnknown && (issues.length ? !options.length : this.needsIdFor(c));
-        const needsQuestion=!!(c.requiredTicketQuestion&&!t?.exists)||(!hard && !!c.requiredQuestion && !c.known.preference)||needsIdentification;
-        let validActions=[];
-        if(needsQuestion) validActions=['QUESTION'];
-        else if(!issues.length) validActions=['ADMIT'];
-        else validActions=options.length ? ['CORRECT'] : ['REFUSE'];
-        // Discretionary dilemma customers may decline an alternative. A compassionate admission is recorded separately, not scored as compliant.
-        if(c.dilemma && !needsQuestion && issues.length && !hard && !validActions.includes('REFUSE')) validActions.push('REFUSE');
-        const discretionary=Boolean(c.dilemma && !identityUnknown && !hard && issues.length===1 && (!c.discretionaryIssueCode || issues[0].code===c.discretionaryIssueCode));
+        // Never block a decision merely because the player did not request ID.
+        // Rule violations are scored from actual case facts; investigation is a player choice.
+        const needsIdentification = false;
+        const needsQuestion = !!(c.requiredTicketQuestion && !t?.exists) ||
+          (!hard && !!c.requiredQuestion && !c.known.preference);
+        let validActions = [];
+        if (needsQuestion) validActions = ['QUESTION'];
+        else if (!issues.length) validActions = ['ADMIT'];
+        else validActions = options.length ? ['CORRECT'] : ['REFUSE'];
+        if (c.dilemma && !needsQuestion && issues.length && !hard && !validActions.includes('REFUSE')) validActions.push('REFUSE');
+        const discretionary = Boolean(c.dilemma && !hard && issues.length === 1 &&
+          (!c.discretionaryIssueCode || issues[0].code === c.discretionaryIssueCode));
         return {validActions,issues,options,needsQuestion,needsIdentification,discretionary,reason:issues.map(i=>i.text).join(' ') || 'The booking and ticket match.'};
       },
       parseTime(t) { if(!/^\d{2}:\d{2}$/.test(t||'')) return NaN; const [h,m]=t.split(':').map(Number); return h<24 && m<60 ? h*60+m:NaN; },
@@ -887,7 +896,7 @@
       generateCustomerScenario(forcedType=null, person=null, arrivalTime=null) {
         const s=this.state, camp=this.campaign(), dayCfg=this.dayConfig(), pol=this.policies();
         let now=arrivalTime ?? s.clockMins;
-        const adultDobs=['1984-03-15','1991-07-22','1979-11-04','1996-01-29','2001-08-12','1988-05-19'];
+        const adultDobs=['1984-03-15','1991-07-22','1979-11-04','1996-01-29','2001-08-12','1988-05-19','2005-11-06','2007-03-25','2009-07-18','2010-02-10'];
         const shellPerson=person||CHARACTERS.createRandomPerson(()=>this.rng());
         const defaultDob=pol.checkAgeRestrictions ? (this.pick(adultDobs)||'1988-05-19') : '1988-05-19';
         const defaultAge=pol.checkAgeRestrictions ? this.calculateAge(defaultDob,pol.currentDate) : 25;
@@ -946,7 +955,7 @@
           if (scripted) {
             type = scripted.caseType;
           } else if (this.rng() < 0.40) {
-            type = this.pick(pol.checkAgeRestrictions ? ['valid', 'valid', 'age_valid', 'subjective'] : ['valid', 'valid', 'subjective']);
+            type = this.pick(pol.checkAgeRestrictions ? ['valid', 'age_valid', 'age_valid', 'subjective'] : ['valid', 'valid', 'subjective']);
           } else {
             const basePool = dayCfg.casePool || ['wrong_film', 'screen', 'time', 'date', 'missing'];
             const types = [];
@@ -1137,7 +1146,7 @@
 
         if (!scripted) {
           if (type === 'age_valid') {
-            const validDob = '1995-06-15';
+            const validDob = (f.minAge || 0) >= 16 ? '2007-06-15' : '2010-06-15';
             const validAge = this.calculateAge(validDob, pol.currentDate);
             c.claimedAge = validAge;
             c.trueAge = validAge;
@@ -1161,6 +1170,8 @@
             c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'refused_id') {
+            c.trueAge = Math.max(9, (f.minAge || 16) - 2);
+            c.claimedAge = (f.minAge || 16) + 2;
             c.idCard.refusesToShow = true;
             c.idCard.refusalText = "I'd rather not show my ID.";
             c.allowAgeCorrection = false;
@@ -1197,6 +1208,9 @@
             c.statement = `One for ${f.title}, please.`;
             c.known.publicPlan = true;
           } else if (type === 'false_identity') {
+            // Young customer borrowing an older person's ID; visible casting invites inspection.
+            c.trueAge = Math.max(10, (f.minAge || 16) - 1);
+            c.claimedAge = 20;
             c.ticket.holderName = c.person.name;
             c.allowAgeCorrection = false;
             c.idCard = this.normalizeIdCard({

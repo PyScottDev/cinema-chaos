@@ -69,179 +69,139 @@
         area.append(card);
         }
 
-        if (Game.policies().checkAgeRestrictions || c.idCard) {
-          if (c.idCard?.exists && c.idCard.presented === true) {
-            const inspectIdBtn = document.createElement('button');
-            inspectIdBtn.type = 'button';
-            inspectIdBtn.id = 'openIdCardModalBtn';
-            inspectIdBtn.className = 'mt-2.5 w-full bg-amber-900 hover:bg-amber-800 text-amber-100 border-2 border-[#e2b857] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-extrabold shadow-lg flex items-center justify-between transition cursor-pointer';
-            inspectIdBtn.innerHTML = '<span>🪪 ID Card Provided — Inspect ID</span><span class="bg-[#e2b857] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded">Open Pop-up</span>';
-            inspectIdBtn.onclick = () => this.openIdCardModal();
-            area.append(inspectIdBtn);
-            if (this.modalStack.has('idCardModal')) {
-              this.renderIdCardModal(c);
-            }
-          } else if ((!c.idCard?.exists || c.idRefused) && (c.idRequested || c.asked?.includes('ask_id'))) {
-            const noId = document.createElement('div');
-            noId.className = 'mt-2 bg-rose-950/90 border border-rose-400 rounded-lg px-3 py-2 text-xs text-rose-100 font-ticket';
-            noId.textContent = c.idRefused ? '🪪 The customer declined to show identification.' : `🪪 No ID Card: ${c.idCard?.reason || 'Customer has no identification with them.'}`;
-            area.append(noId);
+        // The customer hands over an ID only after the player asks for it.
+        // The physical card lies ON the ticket and never replaces its DOM.
+        if (c.idCard?.exists && c.idCard.presented === true) {
+          if (!c.idPutAway) this.renderIdOnDesk(c, area);
+          else {
+            const restore = document.createElement('button');
+            restore.type = 'button';
+            restore.className = 'id-restore-button';
+            restore.textContent = '🪪 Show ID';
+            restore.onclick = () => { c.idPutAway = false; this.renderTicketOnDesk(c); };
+            area.append(restore);
           }
+        } else if ((c.idRequested || c.asked?.includes('ask_id')) && (!c.idCard?.exists || c.idRefused)) {
+          const noId = document.createElement('div');
+          noId.className = 'mt-2 bg-rose-950/90 border border-rose-400 rounded-lg px-3 py-2 text-xs text-rose-100 font-ticket';
+          noId.textContent = c.idRefused ? 'The customer declined to show identification.' : 'The customer has no ID to show.';
+          area.append(noId);
         }
       },
+      // Kept as an alias for saved UI callbacks; does not display a blocking modal.
       openIdCardModal() {
         const c = Game.state.currentCustomer;
-        if (!c || !c.idCard?.exists || !c.idCard?.presented) return;
-        if (this.modalStack.has('compareModal')) this.closeCompare();
-        if (this.modalStack.size) return;
-        this.idReturnFocus = document.activeElement;
-        Game.clearInspectSelection();
-        this.renderIdCardModal(c);
-        this.showModal('idCardModal');
-        document.getElementById('closeIdCardModalBtn')?.focus?.();
+        if (c?.idCard?.exists && c.idCard.presented) {
+          c.idPutAway = false;
+          this.renderTicketOnDesk(c);
+        }
       },
       closeIdCardModal() {
-        const modal = document.getElementById('idCardModal');
-        if (modal) modal.classList.add('hidden');
-        if (this.modalStack.has('idCardModal')) {
-          this.hideModal('idCardModal');
-          Game.clearInspectSelection();
-          this.idReturnFocus?.focus?.();
-        }
+        document.getElementById('idCardDeskOverlay')?.remove?.();
+        this.idDrag = null;
       },
-      renderIdCardModal(c) {
-        const docContainer = document.getElementById('idCardModalDocument');
-        const refContainer = document.getElementById('idCardModalCompareRefs');
-        if (!docContainer || !c || !c.idCard?.exists) return;
-        docContainer.replaceChildren();
-        if (refContainer) refContainer.replaceChildren();
+      renderIdOnDesk(c, area) {
+        const idCard = Game.normalizeIdCard(c.idCard, c.person?.name, Game.state.day);
+        const cardLayer = document.createElement('section');
+        cardLayer.id = 'idCardDeskOverlay';
+        cardLayer.className = 'id-desk-layer';
+        cardLayer.setAttribute('aria-label', 'Customer identity card');
+        cardLayer.style.transform = `translate(${c.idPosition?.x || 0}px, ${c.idPosition?.y || 0}px)`;
+        const card = document.createElement('div');
+        card.id = 'idCardDocument';
+        card.className = 'id-landscape-card font-ticket';
 
-        const idCard = Game.normalizeIdCard ? Game.normalizeIdCard(c.idCard, c.person?.name, Game.state.day) : c.idCard;
-        const holderName = idCard.holderName || c.person?.name || 'Visitor';
-        const dobDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.dob) : idCard.dob;
-        const issueDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.issueDate || '15/06/2024') : (idCard.issueDate || '15/06/2024');
-        const expiryDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.expiryDate || '15/06/2029') : (idCard.expiryDate || '15/06/2029');
-        const docNum = idCard.docNumber || 'CID-402918';
-        const authority = idCard.issuingAuthority || 'City Civil Registry';
-        const address = idCard.address || '';
+        const top = document.createElement('div');
+        top.className = 'id-card-heading';
+        const title = document.createElement('div');
+        title.innerHTML = '<span class="id-card-authority">CITY CIVIL REGISTRY</span><strong>IDENTITY CARD</strong>';
+        const controls = document.createElement('div');
+        controls.className = 'id-card-controls';
+        const handle = document.createElement('button');
+        handle.type = 'button';
+        handle.className = 'id-drag-handle';
+        handle.textContent = '⠿ Move';
+        handle.setAttribute('aria-label', 'Move identity card');
+        handle.onpointerdown = (event) => this.beginIdDrag(event, cardLayer, area, c);
+        const putAway = document.createElement('button');
+        putAway.type = 'button';
+        putAway.className = 'id-card-put-away';
+        putAway.textContent = '×';
+        putAway.setAttribute('aria-label', 'Put identity card aside');
+        putAway.onclick = () => { c.idPutAway = true; this.renderTicketOnDesk(c); };
+        controls.append(handle, putAway);
+        top.append(title, controls);
+        card.append(top);
 
-        const cardWrap = document.createElement('div');
-        cardWrap.className = 'space-y-3';
-
-        const banner = document.createElement('div');
-        banner.className = 'flex items-center justify-between border-b-2 border-slate-700 pb-2';
-        banner.innerHTML = `
-          <div>
-            <div class="text-[10px] font-bold uppercase tracking-widest text-slate-600">${this.escapeHTML(authority)}</div>
-            <div class="font-marquee text-base sm:text-lg text-slate-900 tracking-wide">IDENTITY CARD</div>
-          </div>
-          <div class="text-right font-ticket text-xs font-bold text-slate-700">DOC NO. ${this.escapeHTML(docNum)}</div>
-        `;
-        cardWrap.append(banner);
-
-        const grid = document.createElement('div');
-        grid.className = 'grid grid-cols-1 sm:grid-cols-3 gap-3 items-stretch';
-
-        const photoBtn = document.createElement('button');
-        photoBtn.type = 'button';
-        photoBtn.id = 'idModalPhotoBtn';
-        photoBtn.className = 'inspectable bg-slate-800 border-2 border-slate-600 rounded-xl p-2.5 flex flex-col items-center justify-center shadow-inner cursor-pointer';
-        const photoMarkup = CHARACTERS.renderIdentityPhoto(c.person, idCard);
-        const alteredClass = idCard.photoAltered ? ' id-photo-frame--altered' : '';
-        photoBtn.innerHTML = `<div class="id-photo-frame${alteredClass} w-24 h-28 overflow-hidden rounded bg-slate-900 border border-slate-700 flex items-center justify-center">${photoMarkup}${idCard.photoAltered ? '<span class="id-photo-stamp" aria-hidden="true">CIVIL</span><span class="id-photo-tape" aria-hidden="true"></span>' : ''}</div><span class="text-[10px] font-bold uppercase tracking-wider text-amber-200 mt-1.5">Photograph</span>`;
-        if (idCard.photoAltered) {
-          const detail = document.createElement('span');
-          detail.className = 'text-[10px] text-amber-100 mt-1';
-          detail.textContent = idCard.alterationDescription || 'Tape crosses the photograph border; the stamp stops at its edge.';
-          photoBtn.append(detail);
-        }
-        photoBtn.onclick = () => {
+        const content = document.createElement('div');
+        content.className = 'id-card-content';
+        const photo = document.createElement('button');
+        photo.id = 'idModalPhotoBtn';
+        photo.type = 'button';
+        photo.className = 'id-card-photo inspectable';
+        const altered = idCard.photoAltered ? ' id-photo-frame--altered' : '';
+        photo.innerHTML = `<span class="id-photo-frame${altered}">${CHARACTERS.renderIdentityPhoto(c.person,idCard)}${idCard.photoAltered ? '<span class="id-photo-stamp" aria-hidden="true">CIVIL</span><span class="id-photo-tape" aria-hidden="true"></span>' : ''}</span><span class="id-photo-label">Photograph</span>`;
+        photo.onclick = () => {
           if (!Game.state.inspectMode) Game.toggleInspectMode();
-          Game.handleInspectClick('id_photo', (idCard.photoMismatch || idCard.photoAltered) ? 'ALTERED' : (c.person.id || c.person.name), 'ID Card Photograph', photoBtn);
+          Game.handleInspectClick('id_photo', (idCard.photoMismatch || idCard.photoAltered) ? 'ALTERED' : (c.person.id || c.person.name), 'ID Card Photograph', photo);
         };
-        grid.append(photoBtn);
+        content.append(photo);
 
-        const fieldsGrid = document.createElement('div');
-        fieldsGrid.className = 'sm:col-span-2 grid grid-cols-2 gap-2';
-
-        const addFieldBtn = (kind, val, label, display, span2 = false) => {
+        const fields = document.createElement('div');
+        fields.className = 'id-card-fields';
+        const addField = (kind, label, value, display, extraClass = '') => {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'inspectable text-left bg-white border border-slate-400 p-2 rounded-lg shadow-sm cursor-pointer ' + (span2 ? 'col-span-2' : '');
-          const lbl = document.createElement('span');
-          lbl.className = 'text-[10px] uppercase text-slate-500 block font-sans font-bold';
-          lbl.textContent = label;
-          const txt = document.createElement('span');
-          txt.className = 'font-ticket font-bold text-xs sm:text-sm text-slate-950';
-          txt.textContent = display;
-          btn.append(lbl, txt);
+          btn.className = 'id-card-field inspectable ' + extraClass;
+          const lbl = document.createElement('span'); lbl.className = 'id-field-label'; lbl.textContent = label;
+          const val = document.createElement('strong'); val.className = 'id-field-value'; val.textContent = display;
+          btn.append(lbl, val);
           btn.onclick = () => {
             if (!Game.state.inspectMode) Game.toggleInspectMode();
-            Game.handleInspectClick(kind, val, `${label}: ${display}`, btn);
+            Game.handleInspectClick(kind, value, `${label}: ${display}`, btn);
           };
-          fieldsGrid.append(btn);
+          fields.append(btn);
         };
-
-        addFieldBtn('id_name', holderName, 'Full Name', holderName, true);
-        if (address) addFieldBtn('id_address', address, 'Address', address, true);
-        addFieldBtn('id_dob', dobDmy, 'Date of Birth', dobDmy, true);
-        addFieldBtn('id_issue', issueDmy, 'Issue Date', issueDmy, false);
-        addFieldBtn('id_expiry', expiryDmy, 'Expiry Date', expiryDmy, false);
-        addFieldBtn('id_number', docNum, 'Document Number', docNum, false);
-        addFieldBtn('id_authority', authority, 'Issuing Authority', authority, false);
-
-        grid.append(fieldsGrid);
-        cardWrap.append(grid);
-        docContainer.append(cardWrap);
-
-        if (refContainer) {
-          const addRefBtn = (cat, val, label, text, onClickCustom = null) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'inspectable text-left bg-slate-900 hover:bg-slate-800 border border-amber-700/70 rounded-lg px-2.5 py-1.5 text-xs text-amber-100 cursor-pointer';
-            btn.textContent = text;
-            btn.onclick = onClickCustom || (() => Game.handleInspectClick(cat, val, label, btn));
-            refContainer.append(btn);
+        const dob = Game.formatDateDMY(idCard.dob);
+        const issue = Game.formatDateDMY(idCard.issueDate);
+        const expiry = Game.formatDateDMY(idCard.expiryDate);
+        addField('id_name', 'Full Name', idCard.holderName, idCard.holderName, 'id-field-wide');
+        addField('id_dob', 'Date of Birth', dob, dob, 'id-field-wide');
+        addField('id_issue', 'Issue Date', issue, issue);
+        addField('id_expiry', 'Expiry Date', expiry, expiry);
+        addField('id_number', 'Document Number', idCard.docNumber, idCard.docNumber);
+        addField('id_authority', 'Issuing Authority', idCard.issuingAuthority, idCard.issuingAuthority);
+        content.append(fields);
+        card.append(content);
+        cardLayer.append(card);
+        area.append(cardLayer);
+      },
+      beginIdDrag(event, overlay, area, customer) {
+        if (event.button !== undefined && event.button !== 0) return;
+        event.preventDefault?.();
+        const handle = event.currentTarget;
+        const origin = customer.idPosition || { x: 0, y: 0 };
+        const startX = event.clientX, startY = event.clientY;
+        handle?.setPointerCapture?.(event.pointerId);
+        // Bounds are captured at drag start so they do not shift during a drag.
+        const host = area.getBoundingClientRect?.();
+        const rect = overlay.getBoundingClientRect?.();
+        const minX = host && rect ? origin.x + host.left - rect.left : -130;
+        const maxX = host && rect ? origin.x + host.right - rect.right : 130;
+        const minY = host && rect ? origin.y + host.top - rect.top : -100;
+        const maxY = host && rect ? origin.y + host.bottom - rect.bottom : 250;
+        handle.onpointermove = e => {
+          const proposedX = origin.x + e.clientX - startX;
+          const proposedY = origin.y + e.clientY - startY;
+          customer.idPosition = {
+            x: Math.max(minX, Math.min(maxX, proposedX)),
+            y: Math.max(minY, Math.min(maxY, proposedY))
           };
-
-          addRefBtn('portrait', c.person.id || c.person.name, 'Customer Appearance', '👤 Compare with Customer Appearance', (e) => {
-            if (!Game.state.inspectMode) Game.toggleInspectMode();
-            Game.handleCustomerPortraitInspect(e.currentTarget);
-          });
-
-          const lastSpeech = c.dialogue.at(-1)?.reply || c.statement;
-          addRefBtn('statement', c.statement, 'Customer Statement', `💬 Statement: "${lastSpeech.slice(0, 42)}${lastSpeech.length > 42 ? '…' : ''}"`, (e) => {
-            if (!Game.state.inspectMode) Game.toggleInspectMode();
-            Game.handleInspectClick('statement', c.statement, 'Customer Statement', e.currentTarget);
-          });
-
-          if (c.ticket?.exists) {
-            const f = Game.screening(c.ticket.filmId);
-            const ratingLabel = f?.ageRating ? ` [${f.ageRating}]` : '';
-            addRefBtn('ticket_film', c.ticket.filmId, `Ticket Film: ${c.ticket.filmTitle}`, `🎟️ Ticket Film: ${c.ticket.filmTitle}${ratingLabel}`, (e) => {
-              if (!Game.state.inspectMode) Game.toggleInspectMode();
-              Game.handleInspectClick('ticket_film', c.ticket.filmId, `Ticket Film: ${c.ticket.filmTitle}`, e.currentTarget);
-            });
-            if (c.ticket.holderName) {
-              addRefBtn('ticket_holder', c.ticket.holderName, `Ticket Holder: ${c.ticket.holderName}`, `🏷️ Ticket Holder: ${c.ticket.holderName}`, (e) => {
-                if (!Game.state.inspectMode) Game.toggleInspectMode();
-                Game.handleInspectClick('ticket_holder', c.ticket.holderName, `Ticket Holder: ${c.ticket.holderName}`, e.currentTarget);
-              });
-            }
-          }
-          for (const film of Game.allScreenings().filter(f => c.known.publicPlan && c.known.preference && f.id !== c.ticket?.filmId && Game.accepts(c, f, c.known.preference))) {
-            addRefBtn('schedule_row', film.id, film.title, `🎬 Alternative: ${film.title}${film.ageRating ? ' [' + film.ageRating + ']' : ''}`, e => {
-              if (!Game.state.inspectMode) Game.toggleInspectMode();
-              Game.handleInspectClick('schedule_row', film.id, film.title, e.currentTarget);
-            });
-          }
-
-          const todayRef = Game.formatDateDMY ? Game.formatDateDMY(Game.policies().dateDisplay || Game.currentDateISO()) : Game.today();
-          addRefBtn('today', Game.today(), `Schedule Date (${todayRef})`, `📅 Schedule Date: ${todayRef}`, (e) => {
-            if (!Game.state.inspectMode) Game.toggleInspectMode();
-            Game.handleInspectClick('today', Game.today(), `Schedule Date (${todayRef})`, e.currentTarget);
-          });
-        }
+          overlay.style.transform = `translate(${customer.idPosition.x}px, ${customer.idPosition.y}px)`;
+        };
+        const stop = () => { handle.onpointermove = null; handle.onpointerup = null; handle.onpointercancel = null; };
+        handle.onpointerup = stop;
+        handle.onpointercancel = stop;
       },
       renderScheduleBinder() {
         const s=Game.state, pol=Game.policies();
@@ -1212,20 +1172,8 @@
     };
 
     document.addEventListener('keydown',e=>{
-      if (e.key === 'Tab' && UI.modalStack.has('idCardModal')) {
-        const modal = document.getElementById('idCardModal');
-        const controls = [...modal.querySelectorAll('button:not([disabled]), [tabindex="0"]')];
-        const first = controls[0], last = controls.at(-1);
-        if (e.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
-          e.preventDefault(); last?.focus();
-        } else if (!e.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
-          e.preventDefault(); first?.focus();
-        }
-        return;
-      }
       if(e.key==='Escape') {
-        if(UI.modalStack.has('idCardModal'))UI.closeIdCardModal();
-        else if(UI.modalStack.has('compareModal'))UI.closeCompare();
+        if(UI.modalStack.has('compareModal'))UI.closeCompare();
         else if(UI.modalStack.has('guideModal'))UI.closeGuideModal();
         else if(UI.modalStack.has('teacherModal'))UI.closeTeacherModal();
         else if(UI.modalStack.has('campaignSelectModal') && Game.state.shiftActive)UI.closeCampaignSelectModal();

@@ -1546,70 +1546,61 @@ function stageCase(h, type, day = 2, story = {}) {
   return c;
 }
 
-test("24. Request-only identification, refusal/missing distinction, contextual questions and independent ticket rendering", () => {
+function deskId(h) {
+  return findElement(h.elements.get('deskDocumentArea'), el => el.id === 'idCardDocument');
+}
+
+test("24. Player chooses ID checks; admission never blocked by unrequested ID", () => {
   const h = createHarness(2400), G = h.Game;
   let c = stageCase(h, 'adult_horror_day2');
   assert.strictEqual(c.idCard.presented, false);
-  assert.ok(!elementText(h.elements.get('deskDocumentArea')).includes(c.idCard.docNumber));
-  assert.strictEqual(G.evaluateCustomerCase(c).needsIdentification, true);
-  const cash = G.state.money;
-  G.makeDecision('ADMIT');
-  assert.strictEqual(G.state.decisionLocked, false);
-  assert.strictEqual(G.state.money, cash);
-  G.askCustomerQuestion('which_film', 'film');
-  assert.strictEqual(c.idCard.presented, false);
-  assert.strictEqual(G.getKnownCustomerName(c), null);
-  requestId(G);
-  assert.strictEqual(c.ageRequested, undefined, 'ID must not depend on asking age');
-  assert.strictEqual(c.idCard.presented, true);
   assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT']);
-  assert.ok(elementText(h.elements.get('deskDocumentArea')).includes('Inspect ID'));
-  for (const [type, evidence, issue] of [['missing_id','id_missing','missing_id'], ['refused_id','id_refused','id_refused']]) {
-    c = stageCase(h, type);
+  assert.strictEqual(G.evaluateCustomerCase(c).needsIdentification, false);
+  assert.ok(G.getCustomerQuestions(c).some(q => q[0] === 'ask_id'));
+  assert.strictEqual(deskId(h), undefined);
+  requestId(G);
+  assert.strictEqual(c.idCard.presented, true);
+  assert.ok(deskId(h), 'Asking for ID places it directly over the ticket');
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT']);
+  for (const [type, evidence] of [['missing_id','id_missing'], ['refused_id','id_refused']]) {
+    c = stageCase(h,type);
+    assert.strictEqual(G.evaluateCustomerCase(c).needsQuestion, false);
+    assert.deepEqual(G.evaluateCustomerCase(c).validActions,['REFUSE']);
     requestId(G);
     assert.ok(c.discoveredEvidence.includes(evidence));
     assert.ok(!c.idCard.presented);
-    assert.ok(G.evaluateCustomerCase(c).issues.some(i => i.code === issue));
-    assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['REFUSE']);
+    assert.strictEqual(deskId(h), undefined);
   }
-  c = stageCase(h, 'hidden_ticket');
-  c.requiresIdentityCheck = true;
+  c = stageCase(h,'hidden_ticket');
   requestId(G);
-  assert.strictEqual(c.ticket.exists, false);
-  assert.ok(elementText(h.elements.get('deskDocumentArea')).includes('Inspect ID'), 'ID is independent of ticket existence');
-  c = stageCase(h, 'leo_day7', 7);
-  assert.ok(!G.getCustomerQuestions(c).some(([key]) => key === 'ask_id' || key === 'ask_age'));
-  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT'], 'Unrestricted honest visit needs no ID');
+  assert.strictEqual(c.ticket.exists,false);
+  assert.ok(deskId(h),'ID may be displayed even when the ticket is missing');
+  c = stageCase(h,'leo_day7',7);
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions,['ADMIT']);
 });
 
-test("25. ID modal fields, genuine and suspect photographs, alteration detail and paused clock/queue", () => {
-  const h = createHarness(2500), G = h.Game, U = h.UI;
-  for (const [type, day] of [['adult_horror_day2',2],['leo_day4',4],['leo_day5',5]]) {
-    const c = stageCase(h, type, day);
-    U.openIdCardModal(); assert.ok(!U.modalStack.has('idCardModal'));
-    requestId(G); U.openIdCardModal();
-    assert.ok(U.modalStack.has('idCardModal'));
-    const doc = h.elements.get('idCardModalDocument'), text = elementText(doc);
-    for (const label of ['Photograph','Full Name','Date of Birth','Issue Date','Expiry Date','Document Number','Issuing Authority']) assert.ok(text.includes(label), label);
-    assert.ok(!text.includes('Stated Age'));
+test("25. Horizontal desk ID remains interactive without modal, with faithful photos", () => {
+  const h = createHarness(2500),G=h.Game,U=h.UI;
+  for (const [type,day] of [['adult_horror_day2',2],['leo_day4',4],['leo_day5',5]]) {
+    const c=stageCase(h,type,day);
+    assert.strictEqual(deskId(h),undefined);
+    requestId(G);
+    const doc=deskId(h),text=elementText(doc);
+    assert.ok(doc && doc.className.includes('id-landscape-card'));
+    for(const label of ['Photograph','Full Name','Date of Birth','Issue Date','Expiry Date','Document Number','Issuing Authority']) assert.ok(text.includes(label),label);
     assert.ok(!/FAKE ID|INVALID|UNDERAGE|Schedule Date/.test(text));
-    const clock = G.state.clockMins, patience = G.state.queue.map(c => c.patience);
-    G.tick(); G.updateQueuePatience();
-    assert.strictEqual(G.state.clockMins, clock);
-    assert.deepEqual(G.state.queue.map(c => c.patience), patience);
-    const photo = findElement(doc, e => e.id === 'idModalPhotoBtn');
-    const actual = vm.runInContext("CHARACTERS.renderPortrait(Game.state.currentCustomer.person, 'neutral')", h.sandbox);
-    if (c.idCard.photoMismatch) {
-      const ordinarySrc = c.person.portraitId && vm.runInContext('PORTRAIT_REGISTRY.visitors', h.sandbox)
-        .find(p => p.id === c.person.portraitId)?.src;
-      if (ordinarySrc) assert.ok(!photo.innerHTML.includes(`src=\"${ordinarySrc}\"`));
-      assert.ok(!photo.innerHTML.includes(actual), 'Borrowed ID must show another face');
-    } else {
-      assert.ok(photo.innerHTML.includes(actual), 'Genuine and visibly altered cards retain the holder face');
-    }
-    if (c.idCard.photoAltered) assert.ok(elementText(photo).includes('Tape'));
-    U.closeIdCardModal(); assert.strictEqual(G.state.modalDepth, 0);
-    G.tick(); assert.strictEqual(G.state.clockMins, clock + 1);
+    assert.strictEqual(G.state.modalDepth,0,'ID does not block game actions');
+    const photo=findElement(doc,e=>e.id==='idModalPhotoBtn');
+    const actual=vm.runInContext("CHARACTERS.renderPortrait(Game.state.currentCustomer.person,'neutral')",h.sandbox);
+    if(c.idCard.photoMismatch) assert.ok(!photo.innerHTML.includes(actual));
+    else assert.ok(photo.innerHTML.includes(actual));
+    const handle=findElement(h.elements.get('deskDocumentArea'),e=>e.className==='id-drag-handle');
+    assert.ok(handle && typeof handle.onpointerdown==='function','Move handle supports dragging');
+    const close=findElement(h.elements.get('deskDocumentArea'),e=>e.className==='id-card-put-away');
+    close.onclick(); assert.strictEqual(deskId(h),undefined);
+    assert.ok(elementText(h.elements.get('deskDocumentArea')).includes('Show ID'));
+    U.openIdCardModal(); assert.ok(deskId(h));
+    U.closeIdCardModal(); assert.strictEqual(G.state.modalDepth,0);
   }
 });
 
@@ -1634,7 +1625,7 @@ test("26. DMY dates, exact birthdays, leap years, document chronology and expire
   assert.ok(G.evaluateCustomerCase(c).issues.some(i => i.code === 'id_expired'));
   const compare = G.compareTwoInspectedItems({category:'id_expiry',value:c.idCard.expiryDate}, {category:'today',value:G.today()});
   assert.strictEqual(compare.isMatch, false);
-  const text = elementText(h.elements.get('idCardModalDocument'));
+  const text = elementText(deskId(h));
   assert.ok(text.includes(G.formatDateDMY(c.idCard.dob)));
   assert.ok(!/\b\d{4}-\d{2}-\d{2}\b/.test(text));
   assert.ok(!text.includes(G.formatDateDMY(G.currentDateISO())), 'Today is an operational reference, not a document field');
@@ -1698,7 +1689,7 @@ test("28. Every Campaign 1 scripted branch and procedural case has an accessible
       G.finalizeCustomerAtWindow(c); G.state.currentCustomer = c;
       assert.ok(!c.idCard?.presented);
       const before = G.evaluateCustomerCase(c);
-      assert.ok(!before.issues.some(i => ['id_name','id_forged','id_expired','underage'].includes(i.code)), 'Hidden documents cannot determine scoring');
+      assert.ok(!before.issues.some(i => ['id_name','id_forged','id_expired'].includes(i.code)), 'Unpresented document details must not determine scoring');
       const ev = answerRequiredQuestions(G);
       assert.ok(ev.validActions.includes(enc.expectedAction || (enc.dilemma ? 'REFUSE' : ev.validActions[0])), `${enc.id}: ${JSON.stringify(ev)}`);
       assert.ok(c.statement.split(/\s+/).length <= 22, `${enc.id}: opening should be brief`);
@@ -1718,7 +1709,7 @@ test("28. Every Campaign 1 scripted branch and procedural case has an accessible
   const h = createHarness(2899), G = h.Game;
   const c = stageCase(h, 'adult_horror_day2'); requestId(G);
   c.person.name = 'An internal identity never spoken aloud'; c.trueAge = 8;
-  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['ADMIT'], 'Hidden name/trueAge cannot override valid public evidence');
+  assert.deepEqual(G.evaluateCustomerCase(c).validActions, ['REFUSE'], 'True underage visitors must not be admitted even when no ID was needed');
   assert.strictEqual(G.compareTwoInspectedItems({category:'id_name',value:c.idCard.holderName}, {category:'portrait',value:c.person.id}).isMatch, null);
 });
 
@@ -1939,7 +1930,7 @@ test("36. Legacy stated-age metadata never appears on an ID or affects decisions
   const expected = G.evaluateCustomerCase(c).validActions;
   c.idCard.statedAge = 5; // Emulate an older saved/custom campaign document.
   h.UI.openIdCardModal();
-  const text = elementText(h.elements.get('idCardModalDocument'));
+  const text = elementText(deskId(h));
   assert.ok(!text.includes('Stated Age'), 'Cards display DOB, not a fabricated age field');
   assert.ok(!text.includes('id_age'), 'Cards cannot expose a stale age inspection target');
   assert.deepEqual(G.evaluateCustomerCase(c).validActions, expected, 'Legacy metadata must not cause a refusal');
@@ -1953,16 +1944,16 @@ test("42. Borrowed photo visibly differs, uses the older portrait roster, and re
   const c = stageCase(h, 'leo_day4', 4);
   requestId(G, c);
   const before = JSON.stringify(c), rng = G.state.rngState;
-  U.renderIdCardModal(c);
-  const markup = findElement(h.elements.get('idCardModalDocument'), e=>e.id==='idModalPhotoBtn').innerHTML;
+  U.renderTicketOnDesk(c);
+  const markup = findElement(deskId(h), e=>e.id==='idModalPhotoBtn').innerHTML;
   const registry = vm.runInContext('PORTRAIT_REGISTRY.visitors', h.sandbox);
   const olderMale = registry.filter(p=>p.ageGroup==='olderAdult' && p.genderPresentation==='male');
   assert.ok(olderMale.some(p=>markup.includes(p.src)), 'Father’s ID photo must be of an older man');
   assert.ok(!markup.includes('leo_neutral.webp'), 'Leo’s own portrait cannot appear on his father’s ID');
   assert.ok(!markup.includes('accessory-oversized-suit'), 'Document photo should not inherit Leo’s disguise');
   assert.ok(!markup.includes('FAKE') && !markup.includes('INVALID'), 'Document should not disclose the verdict');
-  U.renderIdCardModal(c);
-  assert.strictEqual(findElement(h.elements.get('idCardModalDocument'), e=>e.id==='idModalPhotoBtn').innerHTML,markup);
+  U.renderTicketOnDesk(c);
+  assert.strictEqual(findElement(deskId(h), e=>e.id==='idModalPhotoBtn').innerHTML,markup);
   assert.strictEqual(JSON.stringify(c),before,'ID rendering cannot mutate the encounter or persisted identity');
   assert.strictEqual(G.state.rngState,rng,'Rendering cannot consume gameplay randomness');
   assert.strictEqual(G.compareTwoInspectedItems({category:'id_photo', value:'ALTERED'}, {category:'portrait',value:c.person.id}).isMatch, false);
@@ -1971,13 +1962,13 @@ test("42. Borrowed photo visibly differs, uses the older portrait roster, and re
 test("43. Altered photo has physical tampering, but retains the same face", () => {
   const h=createHarness(4300),G=h.Game,U=h.UI;
   const c=stageCase(h,'leo_day5',5);
-  requestId(G,c);U.renderIdCardModal(c);
-  const photo=findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
+  requestId(G,c);U.renderTicketOnDesk(c);
+  const photo=findElement(deskId(h),e=>e.id==='idModalPhotoBtn');
   const face=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
   assert.ok(photo.innerHTML.includes(face),'Tampered ID still depicts the actual customer');
   assert.match(photo.innerHTML,/id-photo-stamp/);
   assert.match(photo.innerHTML,/id-photo-tape/);
-  assert.ok(elementText(photo).includes('Tape'),'Authored visual clue must remain');
+  assert.ok(photo.innerHTML.includes('id-photo-tape'),'Visible tampering tape must remain');
   const css=fs.readFileSync(path.join(ROOT,'css/styles.css'),'utf8');
   assert.match(css,/\.id-photo-frame--altered \.id-photo-tape/);
   assert.match(css,/\.id-photo-frame--altered \.id-photo-stamp/);
@@ -1988,8 +1979,8 @@ test("44. Other invalid IDs do not acquire artificial photo discrepancies", () =
   const h=createHarness(4400),G=h.Game,U=h.UI;
   for (const [type,day] of [['expired_id',2],['fake_id',2],['underage',2]]) {
     const c=stageCase(h,type,day);
-    requestId(G,c);U.renderIdCardModal(c);
-    const html=findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn').innerHTML;
+    requestId(G,c);U.renderTicketOnDesk(c);
+    const html=findElement(deskId(h),e=>e.id==='idModalPhotoBtn').innerHTML;
     const live=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
     assert.ok(html.includes(live),`${type}: non-photo issues must preserve the real face`);
     assert.ok(!html.includes('id-photo-tape'),`${type}: unaltered photo should not have tape`);
@@ -2018,26 +2009,17 @@ test("45. Borrowed portraits respect explicit asset mappings and missing-image f
 console.log(`\nAll ${passed} test suites passed!`);
 
 
-test("37. ID card overlays ticket desk rather than cinema listings, shows address and Done", () => {
-  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const deskStart = html.indexOf('id="deskDocumentArea"');
-  const modalStart = html.indexOf('id="idCardModal"');
-  const stampStart = html.indexOf('id="stampAnimationOverlay"');
-  assert.ok(deskStart >= 0 && deskStart < modalStart && modalStart < stampStart);
-  const modalTag = html.match(/<div id="idCardModal"[^>]+>/)?.[0] || "";
-  assert.ok(modalTag.includes("absolute inset-0"));
-  assert.ok(!modalTag.includes("fixed inset-0"));
-  assert.ok(html.includes('id="closeIdCardModalBtn"'));
-  assert.match(html.slice(modalStart, stampStart), />\s*Done\s*<\/button>/);
-  const ui = fs.readFileSync(path.join(ROOT, "js/ui.js"), "utf8");
-  assert.ok(ui.includes("addFieldBtn('id_address', address, 'Address', address, true)"));
-  const engine = fs.readFileSync(path.join(ROOT, "js/engine.js"), "utf8");
-  assert.ok(engine.includes("card.address ="));
+test("37. No modal or comparison toolbar; card has ISO 85.60:53.98 ratio", () => {
+  const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+  const css=fs.readFileSync(path.join(ROOT,'css/styles.css'),'utf8');
+  const ui=fs.readFileSync(path.join(ROOT,'js/ui.js'),'utf8');
+  assert.ok(!html.includes('id="idCardModal"'));
+  assert.ok(!html.includes('id="idCardModalCompareRefs"'));
+  assert.match(css,/aspect-ratio:\s*85\.60\s*\/\s*53\.98/);
+  assert.ok(ui.includes('renderIdOnDesk(c, area)'));
+  assert.ok(ui.includes('area.append(cardLayer)'));
+  assert.ok(!ui.includes('Open Pop-up'));
 });
-
-console.log(`
-All ${passed} test suites passed!`);
-
 
 test("38. All portrait assets exist; registry is campaign-independent and loaded before characters", () => {
   const h = createHarness(3800);
@@ -2118,13 +2100,13 @@ test("41. Genuine IDs reuse the customer's portrait; borrowed IDs use different 
   const customerMarkup = vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)', h.sandbox);
   assert.ok(customerMarkup.includes('<img'), 'Ordinary customers should show portraits');
   requestId(G,c);
-  h.UI.renderIdCardModal(c);
-  const root = h.elements.get('idCardModalDocument');
+  h.UI.renderTicketOnDesk(c);
+  const root = deskId(h);
   const photo = findElement(root, e => e.id === 'idModalPhotoBtn');
   assert.ok(photo.innerHTML.includes(customerMarkup), 'Genuine photo must be identical to customer portrait');
   const forged = stageCase(h, 'leo_day4', 4);
-  requestId(G,forged); h.UI.renderIdCardModal(forged);
-  const falsePhoto = findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
+  requestId(G,forged); h.UI.renderTicketOnDesk(forged);
+  const falsePhoto = findElement(deskId(h),e=>e.id==='idModalPhotoBtn');
   assert.ok(falsePhoto.innerHTML.includes('assets/characters/customers/'), 'Borrowed ID must use an actual different portrait');
   const markup=vm.runInContext('CHARACTERS.renderPortrait({id:"ghost",portraitId:"not-on-disk"})', h.sandbox);
   assert.ok(markup.includes('<svg'), 'Unregistered assets fall back');
@@ -2169,8 +2151,8 @@ test("48. Document portraits match Leo's current costume unless photo mismatch i
     const h=createHarness(4800+day),G=h.Game,c=stageCase(h,id,day);
     if (!c.idCard?.exists) continue;
     requestId(G,c);
-    h.UI.renderIdCardModal(c);
-    const photo=findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
+    h.UI.renderTicketOnDesk(c);
+    const photo=findElement(deskId(h),e=>e.id==='idModalPhotoBtn');
     const face=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
     if(c.idCard.photoMismatch) {
       assert.ok(!photo.innerHTML.includes(face),`${id}: borrowed ID must differ from Leo`);
@@ -2220,6 +2202,30 @@ test("51. Character renderer remains campaign-independent; profiles are data-dri
   assert.deepEqual(prof.maya, {});
   const image=vm.runInContext(`CHARACTERS.renderPortrait({id:'leo',characterId:'leo',fakeBeard:true,skinColor:'#a86',hairColor:'#999',coatColor:'#222',shirtColor:'#fff'})`,h.sandbox);
   assert.ok(image.includes('leo_neutral.webp') && image.includes('fakeBeard'));
+});
+
+test("52. Both eligible and underage young visitors appear, with no compulsory ID prompt", () => {
+  const h=createHarness(5200), G=h.Game;
+  G.state.day=2; G.startShift();
+  const adult=G.generateCustomerScenario('adult_horror_day2');
+  G.finalizeCustomerAtWindow(adult);
+  assert.strictEqual(adult.idCard.presented,false);
+  assert.deepEqual(G.evaluateCustomerCase(adult).validActions,['ADMIT']);
+  const eligible=G.generateCustomerScenario('age_valid');
+  G.finalizeCustomerAtWindow(eligible);
+  assert.ok(eligible.trueAge>=12 && eligible.trueAge<27);
+  assert.strictEqual(eligible.idCard.presented,false);
+  assert.deepEqual(G.evaluateCustomerCase(eligible).validActions,['ADMIT']);
+  const juvenile=G.generateCustomerScenario('underage');
+  G.finalizeCustomerAtWindow(juvenile);
+  assert.ok(juvenile.trueAge<G.screening(juvenile.ticket.filmId).minAge);
+  assert.strictEqual(juvenile.idCard.presented,false);
+  assert.strictEqual(G.evaluateCustomerCase(juvenile).needsIdentification,false);
+  assert.deepEqual(G.evaluateCustomerCase(juvenile).validActions,['REFUSE']);
+  for(const c of [eligible,juvenile]) {
+    const art=vm.runInContext('PORTRAIT_REGISTRY.visitors',h.sandbox).find(v=>v.id===c.person.portraitId);
+    assert.ok(art && ['youngAdult','under18'].includes(art.ageGroup),'Young visitors have age-appropriate portraits');
+  }
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

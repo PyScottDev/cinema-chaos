@@ -283,3 +283,44 @@
 .portrait-stage { position:relative; isolation:isolate; overflow:hidden; }
 .portrait-stage > .portrait-image { display:block; }
 .portrait-costume { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+
+/* A physical ISO ID-1-style card laid over the cinema ticket. No modal or extra toolbar. */
+#deskDocumentArea { position: relative; min-height: 220px; }
+#deskDocumentArea:has(.id-desk-layer) { min-height: 330px; }
+.id-desk-layer {
+  position: absolute; top: 72px; left: 4%; z-index: 18;
+  width: 92%; max-width: 410px; filter: drop-shadow(0 12px 13px rgba(0,0,0,.6));
+}
+.id-landscape-card {
+  aspect-ratio: 85.60 / 53.98;
+  border: 2px solid #8796a8; border-radius: 12px; padding: 11px 12px;
+  background: linear-gradient(130deg,#f8fafc,#e8eff8 60%,#d9e7f0);
+  color: #1b2735; overflow: hidden; display:flex; flex-direction:column;
+}
+.id-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 7px; border-bottom: 1px solid #708298; padding-bottom: 6px; margin-bottom: 7px; }
+.id-card-heading strong { display:block; font-size: clamp(11px,1.2vw,15px); letter-spacing:.04em; }
+.id-card-authority { display:block; font: bold 8px sans-serif; letter-spacing:.12em; color:#617084; }
+.id-card-controls { display:flex; gap:5px; align-items:center; }
+.id-drag-handle, .id-card-put-away { color:#334155; border:1px solid #a5b4c5; background:#eef3f9; border-radius:5px; font: bold 10px sans-serif; padding:4px 6px; touch-action:none; }
+.id-drag-handle { cursor:grab; }
+.id-drag-handle:active { cursor:grabbing; }
+.id-card-put-away { font-size:15px; line-height:11px; }
+.id-card-content { display: grid; grid-template-columns: 29% minmax(0,1fr); gap:9px; flex:1; min-height:0; }
+.id-card-photo { background:#243247; color:#fef3c7; border:1px solid #75869c; border-radius:7px; padding:5px; display:flex; flex-direction:column; justify-content:center; gap:4px; align-items:center; min-width:0; }
+.id-card-photo .id-photo-frame { width:100%; max-height: 126px; aspect-ratio: 4 / 5; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; background:#1e293b; border-radius:4px; }
+.id-card-photo .id-photo-frame > img,.id-card-photo .id-photo-frame > svg,.id-card-photo .id-photo-frame > div { width:100%; height:100%; object-fit:cover; }
+.id-photo-label { font-size:8px; text-transform:uppercase; font-weight:bold; letter-spacing:.08em; }
+.id-card-fields { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: repeat(4,minmax(0,1fr)); gap:3px 5px; min-height:0; }
+.id-card-field { text-align:left; min-width:0; background:rgba(255,255,255,.75); border:1px solid #bfccda; border-radius:5px; padding: 2px 5px; overflow:hidden; }
+.id-field-wide { grid-column:span 2; }
+.id-field-label { display:block; color:#65768c; text-transform:uppercase; font: bold 8px sans-serif; }
+.id-field-value { font: bold clamp(10px,1vw,13px) 'Courier Prime',monospace; display:block; overflow-wrap:anywhere; line-height:1.25; }
+.id-restore-button { display:block; margin:10px auto 0; border:1px solid #e2b857; background:#3d0d13; color:#f7d983; border-radius:5px; padding:5px 12px; font-size:12px; }
+@media(max-width:500px) {
+  .id-landscape-card { padding:8px; }
+  .id-card-heading { padding-bottom:4px; margin-bottom:5px; }
+  .id-card-content { gap:5px; }
+  .id-field-label { font-size:7px; }
+  .id-field-value { font-size:10px; }
+  .id-card-fields { gap:2px; }
+}
