@@ -164,8 +164,8 @@ test("1. Deterministic simulation trace across Days 1-7 and Endless Mode Day 8 (
     const trace = [];
     for (let day = 1; day <= 8; day++) {
       sandbox.CinemaDebug.setSeed(12345 + day * 100);
-      sandbox.document.getElementById("teacherDaySelect").value = String(day);
-      Game.teacherJumpToDay();
+      sandbox.document.getElementById("settingsDaySelect").value = String(day);
+      Game.jumpToDay();
       const rules = h.UI.getActiveRules ? h.UI.getActiveRules() : [];
       const briefingHtml = sandbox.document.getElementById("briefingRulesChecklist").innerHTML;
       const memoText = sandbox.document.getElementById("briefingMemoText").textContent;
@@ -2117,7 +2117,7 @@ test("38. All portrait assets exist; registry is campaign-independent and loaded
   }
   assert.ok(reg.recurring.maya.endsWith('/recurring/maya.webp'));
   assert.ok(reg.recurring.mr_blackwood.endsWith('/recurring/manager.webp'));
-  assert.strictEqual(Object.keys(reg.costumeProfiles.leo.variants).length, 9);
+  assert.strictEqual(Object.keys(reg.costumeProfiles.leo.variants).length, 10);
   for (const src of Object.values(reg.costumeProfiles.leo.variants)) assert.ok(fs.existsSync(path.join(ROOT, src)), `Missing Leo variant: ${src}`);
   assert.deepEqual(reg.reservedVisitorIds, []);
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -2133,7 +2133,7 @@ test("39. Recurring characters use stable artwork and Leo's costume cues are vis
     assert.ok(markup.includes(basename), id);
   }
   const variants = [
-    [{fakeBeard:true},'leo_neutral.webp','fakeBeard'],
+    [{fakeBeard:true},'leo_beard.webp',null],
     [{oversizedSuit:true,sunglasses:true},'leo_suit.webp','sunglasses'],
     [{editedMoustache:true},'leo_moustache.webp',null],
     [{staffHat:true,staffBadge:true},'leo_cap.webp','staffUniform']
@@ -2198,7 +2198,7 @@ test("41. Genuine IDs reuse the customer's portrait; borrowed IDs use different 
 test("46. Every scripted Leo encounter receives its intended illustration", () => {
   const expectations = [
     [2,'leo_day2','leo_neutral.webp',null],
-    [3,'leo_day3','leo_neutral.webp','fakeBeard'],
+    [3,'leo_day3','leo_beard.webp',null],
     [4,'leo_day4','leo_suit.webp','sunglasses'],
     [5,'leo_day5','leo_moustache.webp',null],
     [6,'leo_day6','leo_cap.webp','staffUniform'],
@@ -2245,21 +2245,21 @@ test("48. Document portraits match Leo's current costume unless photo mismatch i
   }
 });
 
-test("49. New image overlays fall back to full costume SVG and cannot affect RNG", () => {
+test("49. Costume image fallback preserves SVG disguise details and RNG", () => {
   const h=createHarness(4900),G=h.Game;
   const c=stageCase(h,'leo_day3',3);
   const before=JSON.stringify(c),seed=G.state.rngState;
   const markup=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
-  assert.ok(markup.includes('portrait-stage') && markup.includes('data-costume="fakeBeard"'));
+  assert.ok(markup.includes('portrait-image') && markup.includes('leo_beard.webp'));
+  assert.ok(!markup.includes('data-costume="fakeBeard"'), 'Dedicated beard image needs no overlay');
   const encoded=markup.match(/data-fallback-person="([^"]+)"/)?.[1];
   assert.ok(encoded);
-  const wrapper={outerHTML:''};
-  const img={getAttribute:(k)=>k==='data-fallback-person'?encoded:k==='data-fallback-mood'?'neutral':null,closest:()=>wrapper};
+  const img={outerHTML:'',getAttribute:(k)=>k==='data-fallback-person'?encoded:k==='data-fallback-mood'?'neutral':null,closest:()=>null};
   h.sandbox.__testBrokenPortrait = img;
   vm.runInContext('CHARACTERS.handlePortraitImageError(__testBrokenPortrait)',h.sandbox);
-  assert.match(wrapper.outerHTML,/<svg/);
-  assert.match(wrapper.outerHTML,/accessory-fake-beard/);
-  assert.ok(!wrapper.outerHTML.includes('portrait-stage'),'Do not leave a separate beard overlay on the SVG fallback');
+  assert.match(img.outerHTML,/<svg/);
+  assert.match(img.outerHTML,/accessory-fake-beard/);
+  assert.ok(!img.outerHTML.includes('portrait-stage'),'Do not leave a separate beard overlay on the SVG fallback');
   assert.strictEqual(JSON.stringify(c),before);
   assert.strictEqual(G.state.rngState,seed);
 });
@@ -2280,10 +2280,10 @@ test("51. Character renderer remains campaign-independent; profiles are data-dri
   assert.ok(!src.includes("knownId === 'leo'") && !src.includes("knownId === 'maya'"));
   const h=createHarness(5100);
   const prof=vm.runInContext('PORTRAIT_REGISTRY.costumeProfiles',h.sandbox);
-  assert.ok(prof.leo.rules.some(r=>r.overlay==='fakeBeard'));
+  assert.ok(prof.leo.rules.some(r=>r.whenAny.includes('fakeBeard') && r.variant==='beard'));
   assert.deepEqual(prof.maya, {});
   const image=vm.runInContext(`CHARACTERS.renderPortrait({id:'leo',characterId:'leo',fakeBeard:true,skinColor:'#a86',hairColor:'#999',coatColor:'#222',shirtColor:'#fff'})`,h.sandbox);
-  assert.ok(image.includes('leo_neutral.webp') && image.includes('fakeBeard'));
+  assert.ok(image.includes('leo_beard.webp') && !image.includes('data-costume="fakeBeard"'));
 });
 
 test("52. Both eligible and underage young visitors appear, with no compulsory ID prompt", () => {
@@ -2422,6 +2422,25 @@ test("58. Portrait allocation favours unused compatible faces without changing a
   vm.runInContext('CHARACTERS.assignPortrait(__person,22,__recent)',h.sandbox);
   assert.notStrictEqual(second.portraitId,first,'Once assigned, the portrait remains stable');
   assert.strictEqual(G.policies().lateToleranceMins,null);
+});
+
+test("62. Game Settings contains no classroom-era hints, textbook labels, or education-only save flags", () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const lang = fs.readFileSync(path.join(ROOT, 'js/language/elementary.js'), 'utf8');
+  const { Game, UI, storage } = createHarness(6200);
+  for (const legacy of ['teacherModal', 'teacherToggleHints', 'languageHintBar', 'briefingLanguageFocus', 'Unit 9', 'Word help']) {
+    assert.ok(!html.includes(legacy), `Legacy UI remains: ${legacy}`);
+  }
+  assert.ok(!lang.includes('vocabularyHints') && !lang.includes('/languageFocus'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(Game.state, 'showLanguageHints'));
+  UI.openSettingsModal();
+  assert.ok(UI.modalStack.has('settingsModal'));
+  UI.closeSettingsModal();
+  assert.ok(!UI.modalStack.has('settingsModal'));
+  Game.saveProgress();
+  const save = JSON.parse(storage.getItem('cinema_chaos_campaigns_v3'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(save, 'showLanguageHints'));
+  assert.ok(!Object.prototype.hasOwnProperty.call(save.campaigns['the-first-week'], 'showLanguageHints'));
 });
 
 console.log(`\nAll ${passed} test suites passed!`);

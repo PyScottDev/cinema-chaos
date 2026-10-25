@@ -23,8 +23,7 @@
         highScore: 0,
         totalCustomersLost: 0,
 
-        // Teacher Settings
-        showLanguageHints: false,
+        // Game settings
         enableTVContent: true,
         disableQueueWalkouts: false,
 
@@ -356,20 +355,18 @@
         UI.renderCampaignMenuShiftBanner();
       },
 
-      updateTeacherSettings() {
-        this.state.showLanguageHints=document.getElementById('teacherToggleHints').checked;
-        this.state.enableTVContent=document.getElementById('teacherToggleTV').checked;
-        this.state.disableQueueWalkouts=document.getElementById('teacherToggleTimer').checked;
-        if(this.state.currentCustomer) UI.renderCustomer(this.state.currentCustomer);
+      updateGameSettings() {
+        this.state.enableTVContent=document.getElementById('settingsToggleTV').checked;
+        this.state.disableQueueWalkouts=document.getElementById('settingsToggleTimer').checked;
         this.saveProgress();
       },
 
-      teacherJumpToDay() {
+      jumpToDay() {
         this.pendingShift = null; this.dayStartSnapshot = null;
         this.stopShiftLoop();this.state.shiftActive=false;this.state.currentCustomer=null;this.state.decisionLocked=false;
-        this.state.day=Number(document.getElementById('teacherDaySelect').value)||1;
+        this.state.day=Number(document.getElementById('settingsDaySelect').value)||1;
         this.applyPendingLanguageMode();
-        UI.closeTeacherModal();UI.closeShiftReportModal();UI.closeCampaignSelectModal();this.prepareDaySchedule(this.state.day);
+        UI.closeSettingsModal();UI.closeShiftReportModal();UI.closeCampaignSelectModal();this.prepareDaySchedule(this.state.day);
         UI.renderHeader();UI.renderScheduleBinder();UI.renderRulesBinder();UI.renderSerialsBinder();UI.openBriefingModal(this.state.day);this.saveProgress();
       },
 
@@ -1219,9 +1216,6 @@
             ticketType: f.screen === 'TV Lounge' ? 'TV LOUNGE PASS' : 'STANDARD'
           }
         };
-
-        const vocabulary = this.languagePack()?.vocabularyHints || camp.vocabularyHints || {};
-        c.languageHint = vocabulary[f.adjective] || vocabulary.default || '';
 
         if (['wrong_film', 'promo', 'change'].includes(type) || scripted?.wrongFilmTicket) {
           c.intent = c.known.preference = { genres: scripted?.intentGenres ? [...scripted.intentGenres] : [desired.genre] };
@@ -2423,7 +2417,6 @@
           v3.activeCampaignId = campId;
           v3.difficulty = s.difficulty;
           v3.languageMode = s.selectedLanguageMode || s.languageMode || 'elementary';
-          v3.showLanguageHints = s.showLanguageHints;
           v3.enableTVContent = s.enableTVContent;
           v3.disableQueueWalkouts = s.disableQueueWalkouts;
           v3.muted = SoundFX.muted;
@@ -2432,7 +2425,7 @@
 
           if (campId === 'the-first-week') {
             const payload = { version: 2 };
-            ['day','difficulty','money','reputation','ownedUpgrades','completedDays','highScore','totalCustomersLost','showLanguageHints','enableTVContent','disableQueueWalkouts','story'].forEach(k => payload[k] = s[k]);
+            ['day','difficulty','money','reputation','ownedUpgrades','completedDays','highScore','totalCustomersLost','enableTVContent','disableQueueWalkouts','story'].forEach(k => payload[k] = s[k]);
             payload.languageMode = v3.languageMode;
             payload.muted = SoundFX.muted;
             payload.activeShift = campData.activeShift;
@@ -2451,7 +2444,7 @@
         try {
           const pack=localStorage.getItem('cinema_chaos_pack_v2');
           if(pack) this.state.customLanguagePack=this.validateLanguagePack(JSON.parse(pack));
-        }catch(e){this.startupMessage='The saved language pack could not be loaded. The Unit 9 pack is ready.';}
+        }catch(e){this.startupMessage='The saved language pack could not be loaded. The default pack is ready.';}
 
         const s = this.state;
         try {
@@ -2508,7 +2501,7 @@
               s.languageMode = savedLang;
               s.selectedLanguageMode = savedLang;
             }
-            for (const k of ['showLanguageHints','enableTVContent','disableQueueWalkouts']) {
+            for (const k of ['enableTVContent','disableQueueWalkouts']) {
               if (typeof globalSource[k] === 'boolean') s[k] = globalSource[k];
               else if (v3 && typeof v3[k] === 'boolean') s[k] = v3[k];
             }

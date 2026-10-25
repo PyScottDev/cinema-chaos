@@ -7,7 +7,7 @@
 const FIRST_WEEK_ELEMENTARY = {
   languagePack: {
       version: 2,
-      unitTitle: "Unit 9: Entertainment — Future Plans ('be going to') & Infinitive of Purpose",
+      unitTitle: "The First Week — Elementary",
       filmGenres: ['comedy', 'horror', 'scifi', 'documentary', 'romance', 'thriller'],
       tvProgrammes: [],
       adjectives: ['funny', 'scary', 'exciting', 'romantic', 'interesting'],
@@ -154,14 +154,6 @@ const FIRST_WEEK_ELEMENTARY = {
       refusedNote: 'Mr Morris arrived more than 10 minutes late and was refused in accordance with the rules.',
       correctedNote: 'Mr Morris accepted an alternative screening.'
     },
-  vocabularyHints: {
-      funny: '“Funny” means it makes you laugh. “To laugh” tells us why.',
-      scary: '“Scary” means it makes you afraid. Check the [16] age rating!',
-      exciting: '“Exciting” means full of action and interest.',
-      romantic: '“Romantic” is about love.',
-      interesting: '“Interesting” means you want to know more about it.',
-      default: '“To learn” tells us why someone does something.'
-    },
   inspectorNotes: {
       highRep: 'The Corporate Inspector praised your thoroughness and professional conduct at the window.',
       lowRep: 'The Corporate Inspector noted several irregularities in box-office procedure this week.'
@@ -268,7 +260,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/1/dayName": "MONDAY",
   "days/1/title": "Day 1 — The New Employee",
   "days/1/briefingMemo": "Welcome to The Grand Cinema. I am Mrs Blackwood, your manager.\nYour job is simple: read the programme, check every ticket field (film, screen, time, day and seats), and listen to the customer’s plan.\nThe correction printer is closed until Wednesday. Today, ADMIT valid tickets and REFUSE any ticket with an error.",
-  "days/1/languageFocus": "Plans with 'be going to' + infinitive of purpose ('to laugh', 'to relax').",
   "days/1/midShiftNotices/@day1_blackwood_memo/text": "Manager’s Memo (Mrs Blackwood): Keep the queue moving! Tomorrow we introduce official Film Age Classifications ([G], [12], [16]). Do not embarrass my cinema.",
   "days/1/scriptedEncounters/@morris_day1/statementTemplate": "One for {title}, please.",
   "days/1/scriptedEncounters/@morris_day1/qaOverrides/which_film": "I'm going to see Happy Penguins in Screen 2.",
@@ -285,7 +276,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/2/dayName": "TUESDAY",
   "days/2/title": "Day 2 — Not Old Enough",
   "days/2/briefingMemo": "Today is Tuesday, 13/10/2026. The town council is enforcing Film Age Classifications.\nCheck the age rating next to every film in the schedule: [G] Suitable for all ages, [12] Minimum age 12, [16] Minimum age 16.\nYou decide who looks young enough to check. Ask for ID if you are unsure, and examine its birth date and photo. The printer is still closed—refuse underage customers.",
-  "days/2/languageFocus": "Age verification ('How old are you?', 'Can I see your ID?') and date-of-birth checks.",
   "days/2/policies/ageRuleTitle": "Age ratings & ID (13/10/2026)",
   "days/2/policies/ageRuleText": "Ratings: [G] all ages, [12] min age 12 (born on or before 13/10/2014), [16] min age 16 (born on or before 13/10/2010). You decide whether to request ID based on appearance. Refuse customers who are below the minimum age.",
   "days/2/midShiftNotices/@day2_age_notice/text": "Box Office Reminder: Look at each customer. Request ID when you think age may be an issue; check the photo and birth date. Refuse underage customers.",
@@ -308,7 +298,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/3/dayName": "WEDNESDAY",
   "days/3/title": "Day 3 — The Broken Projector",
   "days/3/briefingMemo": "Disaster in the projection booth! The Screen 3 projector broke down for the 19:00 show.\nPlanet X (19:00) has been relocated from Screen 3 to Screen 1. The Ticket Correction Printer is now OPEN.\nWhen a customer has a fixable mistake—like an old Screen 3 ticket for Planet X—use CORRECT to print a replacement. Keep checking age ratings and IDs!",
-  "days/3/languageFocus": "Ticket corrections, room relocations, and spotting suspicious disguises.",
   "days/3/policies/ageRuleTitle": "Age ratings & ID (14/10/2026)",
   "days/3/policies/ageRuleText": "Check [G], [12] and [16] ratings. Judge appearance before deciding whether to ask for ID. An ID you inspect must have real calendar dates and a matching photograph.",
   "days/3/scheduleChanges/0/statusLabel": "MOVED TO SCR 1",
@@ -338,7 +327,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/4/dayName": "THURSDAY",
   "days/4/title": "Day 4 — Someone Is Cheating",
   "days/4/briefingMemo": "Someone is cheating our box office! Scalpers outside are reselling duplicate ticket serials.\nCheck every ticket number against the Used Serials log in the binder. Also enforce the 10-minute late arrival limit, and remember that PROMO (NO CHANGE) tickets cannot be reprinted if they have an error.\nWatch ID cards carefully: the name, dates, and photo on the ID must match the customer and ticket.",
-  "days/4/languageFocus": "Checking duplicate serial numbers, 10-minute late arrivals, and matching ID names.",
   "days/4/policies/ageRuleTitle": "Age & identity check (15/10/2026)",
   "days/4/policies/ageRuleText": "Check [G], [12] and [16] ratings. The ID card name, dates and photo must match the customer and ticket holder.",
   "days/4/policies/lateRuleTitle": "Ten-minute late rule",
@@ -380,7 +368,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/5/dayName": "FRIDAY",
   "days/5/title": "Day 5 — Special Treatment",
   "days/5/briefingMemo": "Friday night brings VIP guests and schedule changes—and pressure from Mrs Blackwood.\nLove in Paris (20:00) is CANCELLED; ask affected customers about another film and use CORRECT. An extra show of Happy Penguins runs at 19:15 in Screen 2.\nOfficial VIP passes must appear on the Authorised VIP List in the binder. Check ID dates and compare them with what the customer tells you.",
-  "days/5/languageFocus": "Handling cancelled screenings, verifying VIP pass numbers, and spotting forged IDs.",
   "days/5/policies/ageRuleTitle": "Age & forged ID check (16/10/2026)",
   "days/5/policies/ageRuleText": "Verify that the birth date, issue date and expiry date on every ID card are valid and consistent with the customer’s age.",
   "days/5/scheduleChanges/0/statusLabel": "CANCELLED",
@@ -407,7 +394,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/6/dayName": "SATURDAY",
   "days/6/title": "Day 6 — The Big Premiere",
   "days/6/briefingMemo": "It is Saturday night—our biggest premiere shift of the week! Group bookings, VIPs, age checks and late rules all combine tonight.\nScreen 1 is nearly sold out for Planet X (only 2 seats left unless extra balcony seating was unlocked by staff).\nWatch out for fake staff passes: only authorised staff passes are valid, and cinema staff may not enter [16] screenings underage!",
-  "days/6/languageFocus": "Group bookings ('There are three of us'), seat capacity, and combined rule verification.",
   "days/6/policies/ageRuleTitle": "Age, ID & Staff Pass check (17/10/2026)",
   "days/6/policies/ageRuleText": "All [12] and [16] age rules, ID checks, and authorised staff pass rules apply on Premiere Night.",
   "days/6/midShiftNotices/@day6_premiere_notice/text": "Premiere Night Notice: Check group sizes against booked seats carefully! Tomorrow (Sunday) is the Final Corporate Inspection.",
@@ -458,7 +444,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "days/7/dayName": "SUNDAY",
   "days/7/title": "Day 7 — The Final Inspection",
   "days/7/briefingMemo": "Today is Sunday, 18/10/2026—your seventh day and the Final Corporate Inspection.\nAll cinema rules are active today: age classifications ([G], [12], [16]) and ID checks, Planet X moved to Screen 1, Love in Paris cancelled, Happy Penguins 19:15 extra show, 10-minute late limit, used serials, and official VIP/Staff lists.\nEvery choice you have made this week—with Leo, Mr Morris, Sofia, Maya, Mrs Blackwood, and the Inspector—comes to a head tonight!",
-  "days/7/languageFocus": "Complete cinema inspection mastery—evaluating every rule, character, and clue.",
   "days/7/policies/ageRuleTitle": "Final Inspection: Age & ID (18/10/2026)",
   "days/7/policies/ageRuleText": "Enforce [G], [12] and [16] ratings strictly. Admit honest customers whose age and ID satisfy the film’s rating.",
   "days/7/scheduleChanges/0/statusLabel": "MOVED TO SCR 1",
@@ -500,7 +485,6 @@ const FIRST_WEEK_ELEMENTARY = {
   "endlessDay/dayName": "ENDLESS SHIFT",
   "endlessDay/title": "Endless Mode — Box Office Master",
   "endlessDay/briefingMemo": "Welcome to Endless Mode! You have completed your first seven-day week at The Grand Cinema.\nAll cinema rules are active: age classifications ([G], [12], [16]) and ID checks, Planet X moved to Screen 1, Love in Paris cancelled, Happy Penguins 19:15 extra show, 10-minute late limit, used serials, and VIP/Staff lists.\nSee how much cash and reputation you can build!",
-  "endlessDay/languageFocus": "Full mastery of plans ('be going to'), purpose ('to + verb'), age checks, and ticket corrections.",
   "endlessDay/scheduleChanges/0/statusLabel": "MOVED TO SCR 1",
   "endlessDay/scheduleChanges/1/statusLabel": "CANCELLED",
   "endlessDay/scheduleChanges/2/statusLabel": "EXTRA SHOW",
@@ -574,12 +558,11 @@ function applyFirstWeekElementary(campaign) {
     if (!(field in target)) throw new Error(`Unknown Elementary language field: ${path}`);
     target[field] = value;
   }
-  for (const key of ['playerQuestions', 'vocabularyHints', 'dilemmaMessage', 'inspectorNotes']) {
+  for (const key of ['playerQuestions', 'dilemmaMessage', 'inspectorNotes']) {
     campaign[key] = data[key];
   }
   data.languagePack.procedural = data.procedural;
   data.languagePack.playerQuestions = data.playerQuestions;
-  data.languagePack.vocabularyHints = data.vocabularyHints;
   data.languagePack.dilemmaMessage = data.dilemmaMessage;
   data.languagePack.inspectorNotes = data.inspectorNotes;
   campaign.languagePack = data.languagePack;

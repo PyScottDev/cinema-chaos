@@ -84,8 +84,8 @@
         <button onclick="SoundFX.toggleMute()" id="muteBtn" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Toggle Sound">
           <span id="muteBtnIcon">🔊</span>
         </button>
-        <button onclick="UI.openTeacherModal()" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Teacher Configuration & Language Settings">
-          <span>🎓</span> <span class="hidden lg:inline">Teacher Config</span>
+        <button onclick="UI.openSettingsModal()" class="bg-[#3d0d13] hover:bg-[#5c1620] border border-[#e2b857]/60 text-amber-100 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition" title="Game Settings">
+          <span>⚙️</span> <span class="hidden lg:inline">Settings</span>
         </button>
         <button onclick="UI.openGuideModal()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition" title="How to Play">
           <span>❓</span> <span class="hidden sm:inline">Guide</span>
@@ -179,15 +179,11 @@
             <!-- Follow-up Q&A transcript inside bubble -->
             <div id="customerFollowUpBox" class="mt-2 pt-2 border-t border-amber-300/80 text-xs sm:text-sm text-indigo-950 font-medium hidden">
             </div>
-
-            <!-- Helpful A1 Vocabulary / Grammar Tooltip Hint (Optional via Teacher Config) -->
-            <div id="languageHintBar" class="mt-1.5 text-[11px] text-amber-900/80 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-300 hidden">
-            </div>
           </div>
         </div>
       </div>
 
-      <!-- Question Customer Panel (Context-Sensitive A1 Questions) -->
+      <!-- Ask the customer -->
       <div class="bg-black/45 border border-amber-700/60 rounded-xl p-2.5">
         <div class="flex items-center justify-between mb-1.5">
           <span class="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
@@ -390,23 +386,6 @@
           </div>
         </div>
 
-        <!-- Quick Genre & Description Reference Card for A1 Learners -->
-        <div class="bg-black/45 border border-amber-800/60 rounded-xl p-2.5 text-xs">
-          <div class="font-bold text-amber-300 uppercase tracking-wider mb-1 flex items-center justify-between">
-            <span>📖 Word help</span>
-            <span class="text-[10px] text-amber-200/70">Funny ≠ Fun!</span>
-          </div>
-          <div class="grid grid-cols-2 gap-1 text-[11px] text-amber-100/90">
-            <div><strong class="text-amber-300">Comedy:</strong> funny, to laugh</div>
-            <div><strong class="text-amber-300">Horror:</strong> scary, ghosts/monsters</div>
-            <div><strong class="text-amber-300">Sci-fi:</strong> space, future, planets</div>
-            <div><strong class="text-amber-300">Documentary:</strong> real animals/world</div>
-            <div><strong class="text-amber-300">Romantic:</strong> people in love</div>
-            <div><strong class="text-amber-300">Thriller:</strong> exciting, mystery</div>
-            <div><strong class="text-amber-300">Animation:</strong> cartoons, family</div>
-            <div><strong class="text-emerald-300">"To have fun":</strong> enjoy any good film!</div>
-          </div>
-        </div>
       </div>
 
       <!-- TAB 2: MANAGER'S RULEBOOK & DAILY NOTICES -->
@@ -523,12 +502,6 @@
           <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">Today's Inspection Checklist:</h3>
           <ul id="briefingRulesChecklist" class="space-y-1.5 text-xs sm:text-sm font-medium text-slate-800">
           </ul>
-        </div>
-
-        <!-- Language Focus Box -->
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-950">
-          <div class="font-bold uppercase text-indigo-900 mb-1">🗣️ English Focus (Unit 9a & 9b):</div>
-          <p id="briefingLanguageFocus"></p>
         </div>
 
         <p id="saveNotice" class="text-xs text-slate-600"></p>
@@ -678,23 +651,23 @@
   </div>
 
   <!-- =========================================================================
-       MODAL 3: TEACHER CONFIGURATION & VOCABULARY PACK EDITOR
+       MODAL 3: GAME SETTINGS AND LANGUAGE PACK EDITOR
        ========================================================================= -->
-  <div id="teacherModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3">
     <div class="bg-slate-900 text-amber-100 max-w-2xl w-full rounded-2xl border-2 border-[#e2b857] shadow-2xl overflow-hidden">
       <div class="bg-[#3d0d13] px-5 py-3.5 border-b border-amber-700 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="text-xl">🎓</span>
-          <h2 class="font-marquee text-lg text-amber-300">TEACHER CONFIGURATION & SYLLABUS PACK</h2>
+          <span class="text-xl">⚙️</span>
+          <h2 class="font-marquee text-lg text-amber-300">GAME SETTINGS</h2>
         </div>
-        <button onclick="UI.closeTeacherModal()" class="text-xs bg-red-900 hover:bg-red-800 text-white px-3 py-1 rounded-lg">Close</button>
+        <button onclick="UI.closeSettingsModal()" class="text-xs bg-red-900 hover:bg-red-800 text-white px-3 py-1 rounded-lg">Close</button>
       </div>
 
       <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs sm:text-sm">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
             <label class="font-bold text-amber-300 block mb-1">Language Level</label>
-            <select id="teacherLangSelect" onchange="Game.setLanguageMode(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
+            <select id="settingsLangSelect" onchange="Game.setLanguageMode(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
               <option value="elementary">Elementary</option>
               <option value="intermediate">Intermediate (Coming Soon)</option>
               <option value="advanced">Advanced (Coming Soon)</option>
@@ -703,7 +676,7 @@
 
           <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
             <label class="font-bold text-amber-300 block mb-1">Gameplay Difficulty</label>
-            <select id="teacherDiffSelect" onchange="Game.setDifficulty(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
+            <select id="settingsDiffSelect" onchange="Game.setDifficulty(this.value)" class="w-full bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
               <option value="relaxed">Relaxed (Slow Queue)</option>
               <option value="normal">Normal (Standard Pacing)</option>
               <option value="chaos">Chaos (Fast Queue & Strict Rules)</option>
@@ -713,7 +686,7 @@
           <div class="bg-slate-800/90 p-3 rounded-xl border border-slate-700">
             <label class="font-bold text-amber-300 block mb-1">Jump to Campaign Day</label>
             <div class="flex gap-1.5">
-              <select id="teacherDaySelect" class="flex-1 bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
+              <select id="settingsDaySelect" class="flex-1 bg-slate-950 border border-amber-600 rounded-lg p-2 text-white">
                 <option value="1">Day 1: Monday (The New Employee)</option>
                 <option value="2">Day 2: Tuesday (Not Old Enough)</option>
                 <option value="3">Day 3: Wednesday (The Broken Projector)</option>
@@ -723,33 +696,29 @@
                 <option value="7">Day 7: Sunday (The Final Inspection)</option>
                 <option value="8">Endless Mode</option>
               </select>
-              <button onclick="Game.teacherJumpToDay()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 rounded-lg">Go</button>
+              <button onclick="Game.jumpToDay()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 rounded-lg">Go</button>
             </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <label class="bg-slate-800/90 p-3 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="teacherToggleHints" onchange="Game.updateTeacherSettings()" class="w-4 h-4 accent-amber-500">
-            <span>Show short vocabulary help</span>
+            <input type="checkbox" id="settingsToggleTV" onchange="Game.updateGameSettings()" checked class="w-4 h-4 accent-amber-500">
+            <span>Enable TV Lounge (where available)</span>
           </label>
           <label class="bg-slate-800/90 p-3 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="teacherToggleTV" onchange="Game.updateTeacherSettings()" checked class="w-4 h-4 accent-amber-500">
-            <span>Include TV Vocabulary (Day 4+)</span>
-          </label>
-          <label class="bg-slate-800/90 p-3 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="teacherToggleTimer" onchange="Game.updateTeacherSettings()" class="w-4 h-4 accent-amber-500">
+            <input type="checkbox" id="settingsToggleTimer" onchange="Game.updateGameSettings()" class="w-4 h-4 accent-amber-500">
             <span>No Queue Walkouts (Zero Stress)</span>
           </label>
         </div>
 
-        <!-- JSON Vocabulary Pack Import / Export -->
+        <!-- Optional JSON language pack import / export -->
         <div class="bg-slate-800/90 p-3.5 rounded-xl border border-slate-700 space-y-2">
           <div class="flex items-center justify-between">
-            <span class="font-bold text-amber-300">📦 Editable Language Pack (JSON Import / Export)</span>
+            <span class="font-bold text-amber-300">📦 Language Pack (JSON Import / Export)</span>
             <div class="flex gap-1.5">
               <button onclick="Game.exportLanguagePack()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-2.5 py-1 rounded">Export JSON</button>
-              <button onclick="Game.applyCustomLanguagePack()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded">Import JSON</button><button onclick="Game.restoreDefaultPack()" class="bg-slate-600 text-white text-xs px-2 py-1 rounded">Restore Unit 9</button>
+              <button onclick="Game.applyCustomLanguagePack()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded">Import JSON</button><button onclick="Game.restoreDefaultPack()" class="bg-slate-600 text-white text-xs px-2 py-1 rounded">Restore Default</button>
             </div>
           </div>
           <p class="text-[11px] text-slate-300">
@@ -775,7 +744,7 @@
       <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs sm:text-sm leading-relaxed">
         <div class="bg-amber-100 border-l-4 border-amber-700 p-3 rounded-r-xl">
           <h3 class="font-bold text-red-950 uppercase mb-1">1. Your Job at The Grand Cinema</h3>
-          <p>You work at the ticket inspection booth. Read what each customer plans to see (<em>"be going to"</em>) and why (<em>infinitive of purpose: "to laugh", "to learn about animals"</em>), inspect their ticket against the <strong>Cinema Schedule</strong> and <strong>Manager's Rules</strong>, and stamp your decision:</p>
+          <p>You work at the ticket inspection booth. Listen to each customer, inspect their ticket against the <strong>Cinema Schedule</strong> and <strong>Manager's Rules</strong>, and stamp your decision:</p>
           <ul class="list-disc pl-5 mt-1.5 space-y-1">
             <li><strong>✅ ADMIT:</strong> Everything on the ticket matches the schedule, active policies, and the customer's booking.</li>
             <li><strong>🛠️ CORRECT:</strong> The customer has a fixable mistake (wrong film genre for what they asked, moved screen, or wrong time). Click <strong>CORRECT</strong> to open the Ticket Printer, pick the right screening, and print a replacement ticket!</li>

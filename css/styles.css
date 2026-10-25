@@ -253,7 +253,7 @@
       body > header { position:relative !important; }
       body > nav { top:0 !important; }
       #colDesk > div:last-child { position:sticky; bottom:0; z-index:25; }
-      #teacherModal .flex { flex-wrap:wrap; }
+      #settingsModal .flex { flex-wrap:wrap; }
     }
     @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
 

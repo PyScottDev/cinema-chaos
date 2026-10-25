@@ -179,7 +179,6 @@ const MINIMAL_TEST_CAMPAIGN = {
         "Strict 5-minute late entry limit.",
         "Corrections printer is enabled from Day 1."
       ],
-      languageFocus: "Festival genres & schedule changes.",
       rulesSummary: [
         { id: "r_fest_move", title: "Room Change", text: "Cosmic Voyage (18:00) moved to Screen 2." }
       ],
@@ -238,12 +237,12 @@ const MINIMAL_TEST_CAMPAIGN = {
         }
       ]
     },
-    2: { dayNum: 2, dayName: "TUESDAY", playable: false, title: "Reserved", memo: "", checklist: [], languageFocus: "", rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
-    3: { dayNum: 3, dayName: "WEDNESDAY", playable: false, title: "Reserved", memo: "", checklist: [], languageFocus: "", rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
-    4: { dayNum: 4, dayName: "THURSDAY", playable: false, title: "Reserved", memo: "", checklist: [], languageFocus: "", rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
-    5: { dayNum: 5, dayName: "FRIDAY", playable: false, title: "Reserved", memo: "", checklist: [], languageFocus: "", rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
-    6: { dayNum: 6, dayName: "SATURDAY", playable: false, title: "Reserved", memo: "", checklist: [], languageFocus: "", rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
-    7: { dayNum: 7, dayName: "SUNDAY", playable: false, title: "Reserved", memo: "", checklist: [], languageFocus: "", rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] }
+    2: { dayNum: 2, dayName: "TUESDAY", playable: false, title: "Reserved", memo: "", checklist: [], rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
+    3: { dayNum: 3, dayName: "WEDNESDAY", playable: false, title: "Reserved", memo: "", checklist: [], rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
+    4: { dayNum: 4, dayName: "THURSDAY", playable: false, title: "Reserved", memo: "", checklist: [], rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
+    5: { dayNum: 5, dayName: "FRIDAY", playable: false, title: "Reserved", memo: "", checklist: [], rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
+    6: { dayNum: 6, dayName: "SATURDAY", playable: false, title: "Reserved", memo: "", checklist: [], rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] },
+    7: { dayNum: 7, dayName: "SUNDAY", playable: false, title: "Reserved", memo: "", checklist: [], rulesSummary: [], policies: { allowCorrections: true, lateToleranceMins: 5, checkDuplicates: true, allowPromoChanges: false, tvLoungeOpen: false, allowVipPasses: true, initialUsedSerials: [], conditionalScreenRules: [] }, scheduleChanges: [], midShiftNotices: [], casePool: ["missing"], scriptedEncounters: [] }
   },
 
   endlessDay: {
@@ -254,7 +253,6 @@ const MINIMAL_TEST_CAMPAIGN = {
     memo: "Endless festival shift.",
     briefingMemo: "Welcome to the Festival Encore shift.",
     checklist: ["All festival policies apply."],
-    languageFocus: "Festival review.",
     rulesSummary: [{ id: "r_end", title: "Encore Rules", text: "5-minute late limit and Screen 2 relocation." }],
     policies: {
       allowCorrections: true,

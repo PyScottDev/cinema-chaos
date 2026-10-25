@@ -50,7 +50,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
 
     playerQuestions: null,
 
-    vocabularyHints: null,
 
     upgradesCatalog: [
       { id: 'scanner', name: null, cost: 40, icon: '🔍', desc: null },
@@ -162,7 +161,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-12',
           dateDisplay: '12/10/2026',
@@ -277,7 +275,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-13',
           dateDisplay: '13/10/2026',
@@ -424,7 +421,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-14',
           dateDisplay: '14/10/2026',
@@ -613,7 +609,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-15',
           dateDisplay: '15/10/2026',
@@ -912,7 +907,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-16',
           dateDisplay: '16/10/2026',
@@ -1109,7 +1103,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-17',
           dateDisplay: '17/10/2026',
@@ -1473,7 +1466,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
         dayName: null,
         title: null,
         briefingMemo: null,
-        languageFocus: null,
         policies: {
           currentDate: '2026-10-18',
           dateDisplay: '18/10/2026',
@@ -1742,7 +1734,6 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       dayName: null,
       title: null,
       briefingMemo: null,
-      languageFocus: null,
       policies: {
         currentDate: '2026-10-19',
         dateDisplay: '19/10/2026',

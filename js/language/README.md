@@ -8,7 +8,7 @@ procedural customer dialogues extracted from `engine.js`.
 Story encounters, notices and endings use stable `@id` selectors in these paths
 where IDs exist. `applyFirstWeekElementary()` restores the text to those fields
 before the campaign is registered. It also attaches the Elementary procedural
-and vocabulary data to `campaign.languagePacks.elementary`.
+and film data to `campaign.languagePacks.elementary`.
 
 The game still uses the same screening schedule, identity rules, ticket decisions,
 character triggers, story conditions and UI. In particular, **do not change film
@@ -19,8 +19,8 @@ facts from the linguistic overlays is a follow-on architectural task.
 
 The Elementary extraction does not enable Intermediate or Advanced. The game also
 still has common interface and rules-engine feedback strings, which are **not**
-level-specific speech. Removing textbook hints and classroom terminology is a
-separate cleanup change.
+level-specific speech. Educational hint overlays, the glossary card and textbook
+references were removed in Patch 002; game mechanics are unchanged.
 
 Tests from project root:
 
@@ -29,6 +29,5 @@ node tests/language-pack-integrity.js
 node tests/run-tests.js
 ```
 
-The supplied October 25 baseline has an unrelated existing failure in portrait
-asset test 38 (a count of 10 versus an expected 9). Do not adjust the portrait
-assets in a language-only patch.
+Patch 002 updates portrait asset test 38 to accept Leo's tenth, intentionally
+added beard portrait. No portrait assets were changed.

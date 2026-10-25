@@ -20,7 +20,6 @@
         const follow=document.getElementById('customerFollowUpBox');follow.replaceChildren();
         c.dialogue.slice(-3).forEach(t=>{const p=document.createElement('p');p.textContent=`${t.question} — ${t.reply}`;follow.append(p);});
         follow.classList.toggle('hidden',!c.dialogue.length);
-        const hint=document.getElementById('languageHintBar');hint.textContent=c.languageHint;hint.classList.toggle('hidden',!Game.state.showLanguageHints);
         const defaultQuestions=[['film','Which film are you going to see?'],['ticket','Where is your ticket?'],['change','Would another time or film be okay?']];
         const questions=Game.getCustomerQuestions ? Game.getCustomerQuestions(c) : (Game.campaign()?.playerQuestions||defaultQuestions);
         const grid=document.getElementById('questionButtonsGrid');grid.replaceChildren();
@@ -239,11 +238,11 @@
       modalStack: new Set(),
       showModal(id) {this.modalStack.add(id);Game.state.modalDepth=this.modalStack.size;document.getElementById(id).classList.remove('hidden');this.renderPause();},
       hideModal(id) {this.modalStack.delete(id);Game.state.modalDepth=this.modalStack.size;document.getElementById(id).classList.add('hidden');this.renderPause();},
-      openTeacherModal() {
-        const langSelect = document.getElementById('teacherLangSelect');
+      openSettingsModal() {
+        const langSelect = document.getElementById('settingsLangSelect');
         if (langSelect) langSelect.value = Game.state.selectedLanguageMode || Game.state.languageMode || 'elementary';
-        document.getElementById('teacherDiffSelect').value=Game.state.difficulty;
-        const daySelect = document.getElementById('teacherDaySelect');
+        document.getElementById('settingsDiffSelect').value=Game.state.difficulty;
+        const daySelect = document.getElementById('settingsDaySelect');
         const camp = Game.campaign();
         if (daySelect && camp && typeof daySelect.replaceChildren === 'function') {
           const totalDays = camp.playableDaysCount || camp.totalDays || 7;
@@ -267,12 +266,11 @@
           if (opts.length) daySelect.replaceChildren(...opts);
         }
         daySelect.value=String(Game.state.day);
-        document.getElementById('teacherToggleHints').checked=Game.state.showLanguageHints;
-        document.getElementById('teacherToggleTV').checked=Game.state.enableTVContent;
-        document.getElementById('teacherToggleTimer').checked=Game.state.disableQueueWalkouts;
-        document.getElementById('languagePackJsonArea').value=JSON.stringify(Game.languagePack(),null,2);this.showModal('teacherModal');
+        document.getElementById('settingsToggleTV').checked=Game.state.enableTVContent;
+        document.getElementById('settingsToggleTimer').checked=Game.state.disableQueueWalkouts;
+        document.getElementById('languagePackJsonArea').value=JSON.stringify(Game.languagePack(),null,2);this.showModal('settingsModal');
       },
-      closeTeacherModal() {this.hideModal('teacherModal');},
+      closeSettingsModal() {this.hideModal('settingsModal');},
       openGuideModal() {this.showModal('guideModal');},
       closeGuideModal() {this.hideModal('guideModal');},
       openNotice(text) {document.getElementById('noticeText').textContent=text;this.showModal('noticeModal');},
@@ -1001,7 +999,6 @@
         const startButton = document.getElementById('startShiftBtn');
         if (startButton) startButton.textContent = Game.pendingShift ? 'Resume saved shift →' : 'Start shift →';
         document.getElementById('briefingMemoText').textContent = memo;
-        document.getElementById('briefingLanguageFocus').textContent = cfg.languageFocus;
         this.renderBriefingObjective();
 
         const ul = document.getElementById('briefingRulesChecklist');
@@ -1196,7 +1193,7 @@
       if(e.key==='Escape') {
         if(UI.modalStack.has('compareModal'))UI.closeCompare();
         else if(UI.modalStack.has('guideModal'))UI.closeGuideModal();
-        else if(UI.modalStack.has('teacherModal'))UI.closeTeacherModal();
+        else if(UI.modalStack.has('settingsModal'))UI.closeSettingsModal();
         else if(UI.modalStack.has('campaignSelectModal') && Game.state.shiftActive)UI.closeCampaignSelectModal();
         return;
       }
