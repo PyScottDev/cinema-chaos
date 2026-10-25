@@ -27,19 +27,19 @@ const FIRST_WEEK_INTERMEDIATE = {
     "languageModes/elementary/description": "Clear, accessible cinema dialogue practising plans (\"be going to\"), purpose (\"to + verb\"), age checks, and ticket queries.",
     "days/1/scriptedEncounters/@morris_day1/statementTemplate": "Good evening. Could I have a ticket for {title}, please?",
     "days/1/scriptedEncounters/@morris_day1/qaOverrides/which_film": "I'm booked for Happy Penguins in Screen 2.",
-    "days/1/scriptedEncounters/@morris_day1/qaOverrides/why_see": "I rather enjoy wildlife documentaries, especially when they're about penguins.",
+    "days/1/scriptedEncounters/@morris_day1/qaOverrides/why_see": "I love wildlife documentaries, especially ones about penguins.",
     "days/1/scriptedEncounters/@sofia_day1/statementTemplate": "Hello, I'm Sofia. I've got a ticket for {title}.",
     "days/1/scriptedEncounters/@sofia_day1/qaOverrides/which_film": "I'm here for the 20:30 showing of The Last Train.",
-    "days/1/scriptedEncounters/@sofia_day1/qaOverrides/why_see": "I'm studying film, and I've heard this thriller is particularly well made.",
+    "days/1/scriptedEncounters/@sofia_day1/qaOverrides/why_see": "I'm studying film, and I've heard this thriller is really good.",
     "days/1/scriptedEncounters/@blackwood_day1/statementTemplate": "Mrs Blackwood, the manager. I'd like you to examine this ticket.",
     "days/1/scriptedEncounters/@blackwood_day1/qaOverrides/which_film": "It's a test ticket for Laughing Bananas in Screen 1.",
-    "days/1/scriptedEncounters/@blackwood_day1/qaOverrides/are_you_sure": "I'm checking whether you notice an incorrect screen number, particularly while the printer is unavailable.",
+    "days/1/scriptedEncounters/@blackwood_day1/qaOverrides/are_you_sure": "I want to see if you spot the wrong screen number. The printer's still out of order.",
     "days/2/scriptedEncounters/@leo_day2/statementTemplate": "Hi there. I've got a ticket for {title}.",
     "days/2/scriptedEncounters/@leo_day2/qaOverrides/ask_age": "I'm sixteen, obviously. Why would I say otherwise?",
     "days/2/scriptedEncounters/@leo_day2/qaOverrides/ask_id": "My ID? I must have left it in my school locker. You can take my word for it, can't you?",
     "days/2/scriptedEncounters/@leo_day2/qaOverrides/which_film": "I've booked The Dark House in Screen 3.",
     "days/2/scriptedEncounters/@leo_day2/qaOverrides/why_see": "Everyone says it's the scariest horror film of the year, and I don't want to miss it.",
-    "days/2/scriptedEncounters/@adult_horror_day2/statementTemplate": "Good evening. Could you check my ticket for {title}?",
+    "days/2/scriptedEncounters/@adult_horror_day2/statementTemplate": "Hi. Can you check my ticket for {title}?",
     "days/2/scriptedEncounters/@adult_horror_day2/qaOverrides/ask_age": "I actually turn thirty-two today; I was born on 13/10/1994.",
     "days/2/scriptedEncounters/@adult_horror_day2/qaOverrides/ask_id": "Of course. My date of birth is 13/10/1994, as you can see on the card.",
     "days/2/scriptedEncounters/@birthday_teen_day2/statementTemplate": "I've come to see {title}. It's my birthday, by the way!",
@@ -47,7 +47,7 @@ const FIRST_WEEK_INTERMEDIATE = {
     "days/2/scriptedEncounters/@birthday_teen_day2/qaOverrides/ask_id": "Here's my ID. The birth date is 13/10/2014, so I'm twelve today.",
     "days/3/scriptedEncounters/@morris_day3/statementByStory/0/text": "It's Mr Morris again. I heard the screening might have moved. Is my ticket still correct?",
     "days/3/scriptedEncounters/@morris_day3/statementByStory/1/text": "Mr Morris here. Would you mind checking the screen number on this ticket?",
-    "days/3/scriptedEncounters/@morris_day3/statementByStory/2/text": "Good evening, I'm Mr Morris. Could you confirm which screen I should use?",
+    "days/3/scriptedEncounters/@morris_day3/statementByStory/2/text": "Good evening. I'm Mr Morris. Which screen should I go to?",
     "days/3/scriptedEncounters/@morris_day3/qaOverrides/which_film": "I've booked Planet X for seven o'clock this evening.",
     "days/3/scriptedEncounters/@morris_day3/qaOverrides/alternative": "I don't mind moving to Screen 1, provided it's still Planet X.",
     "days/3/scriptedEncounters/@maya_day3/statementTemplate": "I'm Maya, from the morning box office. I'm worried there's a mistake on this ticket.",
@@ -58,16 +58,16 @@ const FIRST_WEEK_INTERMEDIATE = {
     "days/3/scriptedEncounters/@leo_day3/qaOverrides/ask_age": "I'm twenty-four, if you really need to know.",
     "days/3/scriptedEncounters/@leo_day3/qaOverrides/ask_id": "Fine, have a look at this.",
     "days/3/scriptedEncounters/@leo_day3/qaOverrides/which_film": "I've booked The Dark House, the [16] film in Screen 3.",
-    "days/4/scriptedEncounters/@sofia_day4/statementByStory/0/text": "Hello again. I noticed something rather suspicious outside the cinema.",
+    "days/4/scriptedEncounters/@sofia_day4/statementByStory/0/text": "Hello again. I saw something suspicious outside the cinema.",
     "days/4/scriptedEncounters/@sofia_day4/statementByStory/1/text": "It's Sofia. I've come for {title}, but there's something strange going on outside.",
     "days/4/scriptedEncounters/@sofia_day4/qaOverrides/which_film": "I'm booked for Love in Paris at 20:00, in Screen 2.",
     "days/4/scriptedEncounters/@sofia_day4/qaOverrides/why_see": "I fancied something romantic for a change.",
     "days/4/scriptedEncounters/@sofia_day4/qaOverrides/what_did_you_see": "Someone outside was reselling ticket GC-4-109, and I saw Mrs Blackwood accept cash for VIP passes that weren't on the official list!",
     "days/4/scriptedEncounters/@sofia_day4/questionEffects/ask_receipts/revealStatement": "I'll look through the student society's receipts before Saturday and see what I can find.",
-    "days/4/scriptedEncounters/@sofia_day4/questionEffects/what_did_you_see/unlockQuestions/0/1": "Would you be able to check those receipts?",
+    "days/4/scriptedEncounters/@sofia_day4/questionEffects/what_did_you_see/unlockQuestions/0/1": "Can you check those receipts?",
     "days/4/scriptedEncounters/@leo_day4/statementByStory/0/text": "Never mind that beard. My name's Mr Leonardo Smith, and I'd like a ticket.",
     "days/4/scriptedEncounters/@leo_day4/statementByStory/1/text": "Leonardo Smith. I've booked a place for {title}.",
-    "days/4/scriptedEncounters/@leo_day4/qaOverrides/ask_age": "I'm forty. I was born in 1985, actually.",
+    "days/4/scriptedEncounters/@leo_day4/qaOverrides/ask_age": "I'm forty. I was born in 1985.",
     "days/4/scriptedEncounters/@leo_day4/qaOverrides/ask_id": "Certainly. This is my ID: Leonardo Senior, born 20/11/1985.",
     "days/4/scriptedEncounters/@leo_day4/qaOverrides/which_film": "I'm booked for The Dark House, the one rated [16].",
     "days/4/scriptedEncounters/@mystery_day4/statementTemplate": "Good evening. I've brought my ticket for {title}.",
@@ -77,7 +77,7 @@ const FIRST_WEEK_INTERMEDIATE = {
     "days/4/scriptedEncounters/@maya_day4_helped/questionEffects/ask_observer/revealStatement": "I have a feeling the visitor wearing a fedora works for Head Office.",
     "days/4/scriptedEncounters/@maya_day4_helped/qaOverrides/which_film": "It's for the 18:15 screening of Happy Penguins in Screen 2.",
     "days/4/scriptedEncounters/@maya_day4_blamed/statementByStory/0/text": "Hi, it's Maya. Things haven't gone well today. Could you look at this?",
-    "days/4/scriptedEncounters/@maya_day4_blamed/statementByStory/1/text": "I'm Maya from the morning counter. Would you mind checking this ticket?",
+    "days/4/scriptedEncounters/@maya_day4_blamed/statementByStory/1/text": "I'm Maya from the morning counter. Could you check this ticket?",
     "days/4/scriptedEncounters/@maya_day4_blamed/qaOverrides/which_film": "We need the Happy Penguins screening in Screen 2, please.",
     "days/4/scriptedEncounters/@maya_day4_blamed/qaOverrides/alternative": "I'm afraid Happy Penguins is the only one that will do.",
     "days/4/scriptedEncounters/@dilemma_late_day4/statementTemplate": "I'm terribly sorry I'm late. I stopped to help somebody on the way. Is there any chance I could still get in?",
@@ -107,10 +107,10 @@ const FIRST_WEEK_INTERMEDIATE = {
     "days/6/scriptedEncounters/@maya_day6_unhelped/qaOverrides/how_many": "There are three of us, and we've specifically come to see Planet X.",
     "days/6/scriptedEncounters/@maya_day6_unhelped/qaOverrides/alternative": "I'm afraid we wouldn't be interested in a different film; it's the Planet X premiere we came for.",
     "days/6/scriptedEncounters/@leo_day6/statementTemplate": "I'm the new projection assistant. This is my staff pass, so I should be allowed through.",
-    "days/6/scriptedEncounters/@leo_day6/qaOverrides/ask_age": "I'm nineteen, actually.",
+    "days/6/scriptedEncounters/@leo_day6/qaOverrides/ask_age": "I'm nineteen.",
     "days/6/scriptedEncounters/@leo_day6/qaOverrides/ask_id": "I haven't brought a separate ID card. My staff pass is STAFF-99-LEO, and that should be enough.",
     "days/6/scriptedEncounters/@leo_day6/qaOverrides/which_film": "I'm supposed to be inspecting The Dark House [16] in Screen 3.",
-    "days/6/scriptedEncounters/@sofia_day6_ally/statementTemplate": "Hi, it's Sofia. I've managed to find some rather unusual receipts.",
+    "days/6/scriptedEncounters/@sofia_day6_ally/statementTemplate": "Hi, it's Sofia. I've found some strange receipts.",
     "days/6/scriptedEncounters/@sofia_day6_ally/qaOverrides/which_film": "I'm here for The Last Train at 20:30.",
     "days/6/scriptedEncounters/@sofia_day6_ally/qaOverrides/why_see": "I'd like to see the thriller while I'm here.",
     "days/6/scriptedEncounters/@sofia_day6_ally/qaOverrides/what_did_you_see": "Mrs Blackwood has been taking cash for VIP-000 passes that aren't officially registered. Refuse them, and make sure the Inspector hears about it tomorrow.",
@@ -193,7 +193,7 @@ const FIRST_WEEK_INTERMEDIATE = {
     "comedyRequest": "a comedy that will make me laugh",
     "genreRequest": "something in the {genre} genre",
     "hiddenTicket": "I know I had my ticket a moment ago. Let me check my bag.",
-    "noTicket": "I'm afraid I haven't bought a ticket yet.",
+    "noTicket": "I haven't bought a ticket yet.",
     "noTicketOnDesk": "The customer hasn't presented a ticket.",
     "incomplete": "I'm meeting some friends and I need to confirm which screening they've booked.",
     "cancelled": "I've got a booking for {title}. Is there a problem with it?",
@@ -205,21 +205,21 @@ const FIRST_WEEK_INTERMEDIATE = {
     "staffImpostor": "I'm with the staff. Here's my pass for {title}.",
     "refusal": "I'm not comfortable showing my identity card.",
     "missingIdReason": "The customer has not provided an identity document.",
-    "photoMismatch": "The photograph appears to show a considerably older person, and the name differs from the ticket holder's.",
+    "photoMismatch": "The photo shows someone much older, and the name doesn't match the ticket.",
     "obviousDisguise": "The beard appears to be attached with visible adhesive.",
     "fakeStaffBadge": "The visitor is wearing a handmade staff badge, but their pass does not appear on the authorised list.",
     "genericPurpose": "to enjoy a night out",
     "joinGenres": " or ",
     "questionLabels": {
-      "which_film": "Could you tell me which film you booked?",
-      "are_you_sure": "Are you certain that's the film you wanted?",
-      "why_see": "What made you choose that film?",
+      "which_film": "Which film did you book?",
+      "are_you_sure": "Is that the film you wanted?",
+      "why_see": "Why did you choose that film?",
       "how_many": "How many people are in your group?",
-      "alternative": "Would you consider another screening?",
-      "other_ticket": "Do you happen to have another ticket?",
-      "ask_age": "Could I ask how old you are?",
-      "ask_id": "May I see some photo identification, please?",
-      "ask_name": "Could you confirm your full name?"
+      "alternative": "Would you like to see something else?",
+      "other_ticket": "Have you got another ticket?",
+      "ask_age": "How old are you?",
+      "ask_id": "Can I see your photo ID, please?",
+      "ask_name": "Can I have your full name, please?"
     },
     "answers": {
       "whichGenre": "I'm looking for {genres}; either would suit me.",
@@ -231,14 +231,14 @@ const FIRST_WEEK_INTERMEDIATE = {
       "groupOne": "It's just me, so I only need one seat.",
       "groupMany": "There are {count} of us altogether.",
       "friendsYes": "Yes, they're coming too; we're all watching the same screening.",
-      "friendsNo": "No, unfortunately he can't make it today.",
+      "friendsNo": "No, he can't make it today.",
       "foundTicket": "Here we are! I knew it was in my coat somewhere.",
-      "noOtherTicket": "No, I'm afraid this is the only ticket I've got.",
+      "noOtherTicket": "No, this is the only one I've got.",
       "alternativeGenre": "I'd be happy with a {genres}, if you have one available.",
       "alternativeTitle": "I'd rather see {title}; that's what I came for.",
       "age": "I'm {age} years old.",
       "name": "My name is {name}.",
-      "idShown": "Certainly. My date of birth is {dob}, as shown on my ID.",
+      "idShown": "Sure. My date of birth is {dob}. It's on my ID.",
       "noId": "I'm sorry, I haven't brought any ID with me.",
       "fallback": "I've come to see a film this evening."
     }
@@ -246,15 +246,15 @@ const FIRST_WEEK_INTERMEDIATE = {
   "playerQuestions": [
     [
       "which_film",
-      "Could you tell me which film you booked?"
+      "Which film did you book?"
     ],
     [
       "are_you_sure",
-      "Are you certain that's the film you wanted?"
+      "Is that the film you wanted?"
     ],
     [
       "why_see",
-      "What made you choose that film?"
+      "Why did you choose that film?"
     ],
     [
       "how_many",
@@ -262,19 +262,19 @@ const FIRST_WEEK_INTERMEDIATE = {
     ],
     [
       "ask_age",
-      "Could I ask how old you are?"
+      "How old are you?"
     ],
     [
       "ask_id",
-      "May I see some photo identification, please?"
+      "Can I see your photo ID, please?"
     ],
     [
       "alternative",
-      "Would you consider another screening?"
+      "Would you like to see something else?"
     ],
     [
       "other_ticket",
-      "Do you happen to have another ticket?"
+      "Have you got another ticket?"
     ]
   ],
   "filmPhrases": {

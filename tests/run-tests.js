@@ -2484,7 +2484,7 @@ test("64. Language changes are deferred until the next encounter", () => {
   Game.nextCustomerFromQueue();
   assert.strictEqual(Game.state.languageMode,'intermediate');
   assert.notStrictEqual(Game.campaign().days[2].briefingMemo,oldMemo);
-  assert.ok(Game.getCustomerQuestions(Game.state.currentCustomer).some(q=>q[1] === 'Could you tell me which film you booked?'));
+  assert.ok(Game.getCustomerQuestions(Game.state.currentCustomer).some(q=>q[1] === 'Which film did you book?'));
   Game.setLanguageMode('elementary');
   const next=answerRequiredQuestions(Game);Game.makeDecision(next.validActions[0],next.options[0]);
   Game.nextCustomerFromQueue();
