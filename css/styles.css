@@ -256,3 +256,25 @@
       #teacherModal .flex { flex-wrap:wrap; }
     }
     @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
+
+/* Stage 2B: visible tampering on an altered ID photograph, not a verdict badge.
+   The seal sits behind the tape so it is visibly interrupted. */
+.id-photo-frame { position: relative; isolation: isolate; }
+.id-photo-frame--altered .id-photo-stamp {
+  position: absolute; left: 50%; bottom: 7px; z-index: 2;
+  width: 51px; height: 30px; border: 3px double rgba(124,25,30,.85);
+  border-radius: 50%; transform: translateX(-50%) rotate(-16deg);
+  color: rgba(124,25,30,.85); font: bold 9px 'Courier Prime', monospace;
+  letter-spacing: .04em; display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.id-photo-frame--altered .id-photo-tape {
+  position: absolute; left: -12px; bottom: 22px; z-index: 3;
+  width: 125px; height: 14px; transform: rotate(-17deg);
+  border-top: 1px solid rgba(248,240,201,.9);
+  border-bottom: 1px solid rgba(112,96,72,.5);
+  background: repeating-linear-gradient(90deg,
+    rgba(239,223,166,.82) 0 11px, rgba(251,242,202,.66) 11px 15px);
+  box-shadow: 0 1px 3px rgba(30,24,16,.35);
+  pointer-events: none;
+}

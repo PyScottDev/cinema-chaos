@@ -758,7 +758,7 @@ const THE_FIRST_WEEK_CAMPAIGN = {
               docNumber: 'CID-851120',
               issuingAuthority: 'City Civil Registry',
               photoMismatch: true,
-              portraitPerson: { skinColor: '#f1c27d', hairColor: '#cbd5e1', coatColor: '#334155', shirtColor: '#ffffff', isElderly: true, glasses: true },
+              portraitPerson: { skinColor: '#f1c27d', hairColor: '#cbd5e1', coatColor: '#334155', shirtColor: '#ffffff', isElderly: true, glasses: true, genderPresentation: 'male' },
               photoMismatchText: 'The ID card belongs to Leonardo Senior (born 20/11/1985) and does not match the teenager or the ticket holder name Leo.'
             },
             questionEffects: {

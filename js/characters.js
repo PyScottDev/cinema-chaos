@@ -96,6 +96,48 @@
           + ` draggable="false" decoding="async" onerror="CHARACTERS.handlePortraitImageError(this)">`;
       },
 
+      // Stage 2B: resolve document photos from the same image library without
+      // changing the customer's identity, encounter seed, or save data.
+      // Only a declared photo mismatch receives another person's face. A fake
+      // document with incorrect dates but no photo discrepancy keeps its face.
+      renderIdentityPhoto(person, idCard = {}) {
+        if (!idCard.photoMismatch) return this.renderPortrait(person, 'neutral');
+        const actual = this.portraitAsset(person);
+        const supplied = idCard.portraitPerson || {};
+        const requestedId = idCard.photoPortraitId || supplied.portraitId;
+        const different = p => p.src !== actual?.src;
+        let borrowed = PORTRAIT_REGISTRY.visitors.find(p => p.id === requestedId && different(p));
+        if (!borrowed) {
+          let choices = PORTRAIT_REGISTRY.visitors.filter(different);
+          // 'isElderly' describes the document photograph, not the actual
+          // customer's legal age. Campaign packs may specify a portrait age group.
+          const ageGroup = idCard.photoAgeGroup || supplied.ageGroup || (supplied.isElderly ? 'olderAdult' : null);
+          if (ageGroup) {
+            const ageMatches = choices.filter(p => p.ageGroup === ageGroup);
+            if (ageMatches.length) choices = ageMatches;
+          }
+          const gender = idCard.photoGenderPresentation || supplied.genderPresentation;
+          if (gender) {
+            const genderMatches = choices.filter(p => p.genderPresentation === gender);
+            if (genderMatches.length) choices = genderMatches;
+          }
+          borrowed = choices[this.stablePortraitHash(`${person?.id}|${person?.portraitId}|${idCard.docNumber}|${idCard.holderName}`) % choices.length];
+        }
+        // Use the authored description for the SVG if an image fails to load.
+        // Don't inherit the live customer's costume or recurring-character ID.
+        const documentPerson = {
+          skinColor: '#f1c27d', hairColor: '#cbd5e1', coatColor: '#334155',
+          shirtColor: '#f8fafc', isElderly: true, glasses: true, hat: false,
+          ...supplied,
+          id: `id-photo-${borrowed?.id || 'fallback'}`,
+          name: idCard.holderName || 'Document holder',
+          portraitId: borrowed?.id,
+          characterId: null,
+          forceSvg: !borrowed
+        };
+        return this.renderPortrait(documentPerson, 'neutral');
+      },
+
       handlePortraitImageError(img) {
         // Broken/missing assets degrade to the original SVG, without broken-image icons.
         if (!img) return;

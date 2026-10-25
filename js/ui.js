@@ -146,10 +146,9 @@
         photoBtn.type = 'button';
         photoBtn.id = 'idModalPhotoBtn';
         photoBtn.className = 'inspectable bg-slate-800 border-2 border-slate-600 rounded-xl p-2.5 flex flex-col items-center justify-center shadow-inner cursor-pointer';
-        const portraitTarget = idCard.portraitPerson || (idCard.photoMismatch
-          ? { ...c.person, isElderly: !c.person.isElderly, hairColor: '#cbd5e1', glasses: !c.person.glasses, hat: false, oversizedSuit: false, sunglasses: false }
-          : idCard.photoAltered ? { ...c.person, editedMoustache: !c.person.editedMoustache } : c.person);
-        photoBtn.innerHTML = `<div class="w-24 h-28 overflow-hidden rounded bg-slate-900 border border-slate-700 flex items-center justify-center">${CHARACTERS.renderPortrait((idCard.photoMismatch || idCard.photoAltered) ? { ...portraitTarget, forceSvg: true } : portraitTarget, 'neutral')}</div><span class="text-[10px] font-bold uppercase tracking-wider text-amber-200 mt-1.5">Photograph</span>`;
+        const photoMarkup = CHARACTERS.renderIdentityPhoto(c.person, idCard);
+        const alteredClass = idCard.photoAltered ? ' id-photo-frame--altered' : '';
+        photoBtn.innerHTML = `<div class="id-photo-frame${alteredClass} w-24 h-28 overflow-hidden rounded bg-slate-900 border border-slate-700 flex items-center justify-center">${photoMarkup}${idCard.photoAltered ? '<span class="id-photo-stamp" aria-hidden="true">CIVIL</span><span class="id-photo-tape" aria-hidden="true"></span>' : ''}</div><span class="text-[10px] font-bold uppercase tracking-wider text-amber-200 mt-1.5">Photograph</span>`;
         if (idCard.photoAltered) {
           const detail = document.createElement('span');
           detail.className = 'text-[10px] text-amber-100 mt-1';

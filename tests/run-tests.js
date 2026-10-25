@@ -1599,13 +1599,14 @@ test("25. ID modal fields, genuine and suspect photographs, alteration detail an
     assert.deepEqual(G.state.queue.map(c => c.patience), patience);
     const photo = findElement(doc, e => e.id === 'idModalPhotoBtn');
     const actual = vm.runInContext("CHARACTERS.renderPortrait(Game.state.currentCustomer.person, 'neutral')", h.sandbox);
-    if (c.idCard.photoMismatch || c.idCard.photoAltered) {
-      // A suspect document must not reuse the genuine customer's photograph.
+    if (c.idCard.photoMismatch) {
       const ordinarySrc = c.person.portraitId && vm.runInContext('PORTRAIT_REGISTRY.visitors', h.sandbox)
         .find(p => p.id === c.person.portraitId)?.src;
       if (ordinarySrc) assert.ok(!photo.innerHTML.includes(`src=\"${ordinarySrc}\"`));
-      assert.ok(!photo.innerHTML.includes(actual));
-    } else assert.ok(photo.innerHTML.includes(actual));
+      assert.ok(!photo.innerHTML.includes(actual), 'Borrowed ID must show another face');
+    } else {
+      assert.ok(photo.innerHTML.includes(actual), 'Genuine and visibly altered cards retain the holder face');
+    }
     if (c.idCard.photoAltered) assert.ok(elementText(photo).includes('Tape'));
     U.closeIdCardModal(); assert.strictEqual(G.state.modalDepth, 0);
     G.tick(); assert.strictEqual(G.state.clockMins, clock + 1);
@@ -1947,6 +1948,73 @@ test("36. Legacy stated-age metadata never appears on an ID or affects decisions
   h.UI.closeIdCardModal();
 });
 
+test("42. Borrowed photo visibly differs, uses the older portrait roster, and remains deterministic", () => {
+  const h = createHarness(4200), G = h.Game, U = h.UI;
+  const c = stageCase(h, 'leo_day4', 4);
+  requestId(G, c);
+  const before = JSON.stringify(c), rng = G.state.rngState;
+  U.renderIdCardModal(c);
+  const markup = findElement(h.elements.get('idCardModalDocument'), e=>e.id==='idModalPhotoBtn').innerHTML;
+  const registry = vm.runInContext('PORTRAIT_REGISTRY.visitors', h.sandbox);
+  const olderMale = registry.filter(p=>p.ageGroup==='olderAdult' && p.genderPresentation==='male');
+  assert.ok(olderMale.some(p=>markup.includes(p.src)), 'Father’s ID photo must be of an older man');
+  assert.ok(!markup.includes('leo_neutral.webp'), 'Leo’s own portrait cannot appear on his father’s ID');
+  assert.ok(!markup.includes('accessory-oversized-suit'), 'Document photo should not inherit Leo’s disguise');
+  assert.ok(!markup.includes('FAKE') && !markup.includes('INVALID'), 'Document should not disclose the verdict');
+  U.renderIdCardModal(c);
+  assert.strictEqual(findElement(h.elements.get('idCardModalDocument'), e=>e.id==='idModalPhotoBtn').innerHTML,markup);
+  assert.strictEqual(JSON.stringify(c),before,'ID rendering cannot mutate the encounter or persisted identity');
+  assert.strictEqual(G.state.rngState,rng,'Rendering cannot consume gameplay randomness');
+  assert.strictEqual(G.compareTwoInspectedItems({category:'id_photo', value:'ALTERED'}, {category:'portrait',value:c.person.id}).isMatch, false);
+});
+
+test("43. Altered photo has physical tampering, but retains the same face", () => {
+  const h=createHarness(4300),G=h.Game,U=h.UI;
+  const c=stageCase(h,'leo_day5',5);
+  requestId(G,c);U.renderIdCardModal(c);
+  const photo=findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
+  const face=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
+  assert.ok(photo.innerHTML.includes(face),'Tampered ID still depicts the actual customer');
+  assert.match(photo.innerHTML,/id-photo-stamp/);
+  assert.match(photo.innerHTML,/id-photo-tape/);
+  assert.ok(elementText(photo).includes('Tape'),'Authored visual clue must remain');
+  const css=fs.readFileSync(path.join(ROOT,'css/styles.css'),'utf8');
+  assert.match(css,/\.id-photo-frame--altered \.id-photo-tape/);
+  assert.match(css,/\.id-photo-frame--altered \.id-photo-stamp/);
+  assert.strictEqual(G.compareTwoInspectedItems({category:'id_photo', value:'ALTERED'}, {category:'portrait',value:c.person.id}).isMatch,false);
+});
+
+test("44. Other invalid IDs do not acquire artificial photo discrepancies", () => {
+  const h=createHarness(4400),G=h.Game,U=h.UI;
+  for (const [type,day] of [['expired_id',2],['fake_id',2],['underage',2]]) {
+    const c=stageCase(h,type,day);
+    requestId(G,c);U.renderIdCardModal(c);
+    const html=findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn').innerHTML;
+    const live=vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)',h.sandbox);
+    assert.ok(html.includes(live),`${type}: non-photo issues must preserve the real face`);
+    assert.ok(!html.includes('id-photo-tape'),`${type}: unaltered photo should not have tape`);
+  }
+});
+
+test("45. Borrowed portraits respect explicit asset mappings and missing-image fallback", () => {
+  const h=createHarness(4500);
+  const registry=vm.runInContext('PORTRAIT_REGISTRY.visitors',h.sandbox);
+  const source=registry[0], other=registry.find(p=>p.id!==source.id && p.ageGroup==='olderAdult');
+  const person={id:'visitor-source',name:'Visitor',portraitId:source.id};
+  const idCard={photoMismatch:true,photoPortraitId:other.id,holderName:'Other',docNumber:'ID-102'};
+  const render=(card)=>vm.runInContext(`CHARACTERS.renderIdentityPhoto(${JSON.stringify(person)}, ${JSON.stringify(card)})`,h.sandbox);
+  const html=render(idCard);
+  assert.ok(html.includes(other.src));
+  assert.ok(!html.includes(source.src));
+  assert.ok(html.includes('handlePortraitImageError'));
+  // Even an incorrectly authored mapping to the customer must not show the same portrait.
+  assert.ok(!render({...idCard,photoPortraitId:source.id}).includes(source.src));
+  // A missing image in the ID should fall back to the OTHER person's authored SVG.
+  const fallback=vm.runInContext(`CHARACTERS.renderIdentityPhoto(${JSON.stringify(person)}, ${JSON.stringify({photoMismatch:true,portraitPerson:{isElderly:true,glasses:true,coatColor:'#123456'}})})`,h.sandbox);
+  assert.ok(fallback.includes('data-fallback-person'));
+  assert.ok(decodeURIComponent(fallback).includes('isElderly'));
+});
+
 console.log(`\nAll ${passed} test suites passed!`);
 
 
@@ -2029,7 +2097,7 @@ test("40. Ordinary portraits are stable and respect red-clothing and broad age c
   assert.ok(roster.some(p => markup.includes(p.src)));
 });
 
-test("41. Genuine IDs reuse the customer's portrait; forged photos and failed assets use SVG", () => {
+test("41. Genuine IDs reuse the customer's portrait; borrowed IDs use different artwork", () => {
   const h = createHarness(4100), G = h.Game;
   const c = stageCase(h, 'adult_horror_day2', 2);
   const customerMarkup = vm.runInContext('CHARACTERS.renderPortrait(Game.state.currentCustomer.person)', h.sandbox);
@@ -2042,7 +2110,7 @@ test("41. Genuine IDs reuse the customer's portrait; forged photos and failed as
   const forged = stageCase(h, 'leo_day4', 4);
   requestId(G,forged); h.UI.renderIdCardModal(forged);
   const falsePhoto = findElement(h.elements.get('idCardModalDocument'),e=>e.id==='idModalPhotoBtn');
-  assert.ok(falsePhoto.innerHTML.includes('<svg'), 'Existing bogus-ID visuals preserved until 2B');
+  assert.ok(falsePhoto.innerHTML.includes('assets/characters/customers/'), 'Borrowed ID must use an actual different portrait');
   const markup=vm.runInContext('CHARACTERS.renderPortrait({id:"ghost",portraitId:"not-on-disk"})', h.sandbox);
   assert.ok(markup.includes('<svg'), 'Unregistered assets fall back');
   assert.ok(customerMarkup.includes('onerror="CHARACTERS.handlePortraitImageError(this)"'));
