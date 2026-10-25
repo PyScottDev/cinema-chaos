@@ -97,13 +97,37 @@
       },
 
       languagePack() {
-        if (this.state.customLanguagePack) return this.state.customLanguagePack;
+        // Legacy imported packs are Elementary-only. They must not silently
+        // override a selected Intermediate (or future Advanced) experience.
+        if (this.state.customLanguagePack && this.state.languageMode === 'elementary') return this.state.customLanguagePack;
         const camp = this.campaign();
         const mode = this.state.languageMode || "elementary";
         if (camp.languageModes?.[mode]?.available && camp.languagePacks?.[mode]) {
           return camp.languagePacks[mode];
         }
         return camp.languagePack;
+      },
+
+      // Activate the selected language without changing the campaign's factual
+      // screening data, bookings, serials, age rules or existing customer.
+      syncLanguagePresentation() {
+        const camp = this.campaign();
+        const mode = this.state.languageMode || 'elementary';
+        if (typeof camp.applyLanguageMode !== 'function') return;
+        if (camp.activeLanguageMode !== mode && !(mode === 'advanced' && camp.activeLanguageMode === 'elementary')) {
+          camp.applyLanguageMode(mode);
+        }
+        // Existing schedule objects are detached copies of the language-pack
+        // films. Update only linguistic fields; never rebuild a live schedule.
+        const byId = new Map((this.languagePack()?.films || []).map(f => [f.id, f]));
+        for (const film of this.state.schedule || []) {
+          const source = byId.get(film.id);
+          if (source) {
+            for (const key of ['descriptions', 'purposePhrases', 'adjective', 'genreLabel']) {
+              if (source[key] !== undefined) film[key] = source[key];
+            }
+          }
+        }
       },
 
       // Elementary fallback also preserves compatibility with older custom packs.
@@ -121,6 +145,7 @@
 
       init() {
         this.loadProgress();
+        this.syncLanguagePresentation();
         const seed = Number(new URLSearchParams(location.search).get("seed"));
         if(Number.isInteger(seed)&&seed>0) this.rngSeed=seed%2147483647||1;
         this.prepareDaySchedule(this.state.day);
@@ -223,12 +248,17 @@
       setLanguageMode(mode) {
         if (!["elementary", "intermediate", "advanced"].includes(mode)) return;
         this.state.selectedLanguageMode = mode;
-        const inActiveEncounter = Boolean(this.state.shiftActive && this.state.currentCustomer && !this.state.decisionLocked);
+        const inActiveEncounter = Boolean(this.state.shiftActive && this.state.currentCustomer);
         if (inActiveEncounter) {
           this.state.pendingLanguageMode = mode;
         } else {
           this.state.languageMode = mode;
           this.state.pendingLanguageMode = null;
+          this.syncLanguagePresentation();
+          if (!this.state.shiftActive) {
+            UI.renderScheduleBinder();
+            UI.renderRulesBinder();
+          }
         }
         UI.updateLanguageButtons();
         UI.renderHeader();
@@ -239,6 +269,8 @@
         if (this.state.pendingLanguageMode) {
           this.state.languageMode = this.state.pendingLanguageMode;
           this.state.pendingLanguageMode = null;
+          this.syncLanguagePresentation();
+          UI.renderRulesBinder();
           UI.updateLanguageButtons();
           UI.renderHeader();
         }
@@ -263,6 +295,7 @@
         this.state.customLanguagePack = null;
         this.state.campaignId = campaignId;
         this.loadProgress(campaignId);
+        this.syncLanguagePresentation();
         this.applyPendingLanguageMode();
         this.prepareDaySchedule(this.state.day);
         UI.clearDepartureBanner();
@@ -403,6 +436,9 @@
       restoreShift(saved) {
         for (const key of this.shiftSaveKeys) if (saved[key] !== undefined) this.state[key] = structuredClone(saved[key]);
         this.rngSeed = saved.rngSeed;
+        // An interrupted shift can have a pending language change. Restore
+        // its actual active language before showing its existing customer.
+        this.syncLanguagePresentation();
         Object.assign(this.state, { shiftActive: true, paused: false, modalDepth: 0, inspectFirst: null });
         this.pendingShift = null;
         if (!Number.isInteger(saved.shiftDurationSeconds) || !Array.isArray(saved.shiftPlan)) {

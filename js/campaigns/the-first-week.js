@@ -22,9 +22,8 @@ const THE_FIRST_WEEK_CAMPAIGN = {
       intermediate: {
         id: 'intermediate',
         label: 'Intermediate',
-        available: false,
-        comingSoon: true,
-        description: 'Coming Soon — Richer conversational nuances and idiomatic excuses.'
+        available: true,
+        description: 'Natural conversation, explanations and more varied vocabulary.'
       },
       advanced: {
         id: 'advanced',
@@ -1965,6 +1964,12 @@ const THE_FIRST_WEEK_CAMPAIGN = {
   applyFirstWeekElementary(THE_FIRST_WEEK_CAMPAIGN);
 
   if (window.CinemaChaos && window.CinemaChaos.CampaignRegistry) {
-    window.CinemaChaos.CampaignRegistry.register(THE_FIRST_WEEK_CAMPAIGN);
+    const registered = window.CinemaChaos.CampaignRegistry.register(THE_FIRST_WEEK_CAMPAIGN);
+    // Attach the presenter after schema validation. The adapter is not part
+    // of the serialised campaign definition or its gameplay data.
+    Object.defineProperty(registered, 'applyLanguageMode', {
+      value: mode => applyFirstWeekLanguage(registered, mode),
+      enumerable: false
+    });
   }
 

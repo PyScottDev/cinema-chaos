@@ -539,33 +539,70 @@ const FIRST_WEEK_ELEMENTARY = {
   }
 };
 
-/** Restore presentation fields to the campaign without changing its mechanics. */
+/**
+ * Build level-specific resources once; factual screening data is shared by value.
+ * The campaign owns an explicit activation method so the engine remains generic.
+ */
 function applyFirstWeekElementary(campaign) {
-  const data = FIRST_WEEK_ELEMENTARY;
-  for (const [path, value] of Object.entries(data.text)) {
-    const parts = path.split('/');
-    let target = campaign;
-    for (const part of parts.slice(0, -1)) {
-      if (part.startsWith('@')) {
-        if (!Array.isArray(target)) throw new Error(`Invalid Elementary language path: ${path}`);
-        target = target.find(item => item.id === part.slice(1));
-      } else {
-        target = target?.[part];
+  const base = FIRST_WEEK_ELEMENTARY;
+  const intermediate = FIRST_WEEK_INTERMEDIATE;
+  const elemPack = {
+    ...base.languagePack,
+    procedural: base.procedural,
+    playerQuestions: base.playerQuestions,
+    dilemmaMessage: base.dilemmaMessage,
+    inspectorNotes: base.inspectorNotes
+  };
+  const intPack = {
+    ...base.languagePack,
+    unitTitle: 'The First Week — Intermediate',
+    films: base.languagePack.films.map(f => ({
+      ...f,
+      ...(intermediate.filmPhrases[f.id] || {})
+    })),
+    procedural: {
+      ...base.procedural,
+      ...intermediate.proceduralOverrides,
+      answers: { ...base.procedural.answers, ...intermediate.proceduralOverrides.answers },
+      questionLabels: { ...base.procedural.questionLabels, ...intermediate.proceduralOverrides.questionLabels }
+    },
+    playerQuestions: intermediate.playerQuestions,
+    dilemmaMessage: intermediate.dilemmaMessage,
+    inspectorNotes: intermediate.inspectorNotes
+  };
+  // Retain the original Elementary reference, including for older save games.
+  base.languagePack = elemPack;
+  campaign.languagePacks = { elementary: elemPack, intermediate: intPack };
+
+  return applyFirstWeekLanguage(campaign, 'elementary');
+}
+
+function applyFirstWeekLanguage(campaign, mode) {
+    const base = FIRST_WEEK_ELEMENTARY;
+    const intermediate = FIRST_WEEK_INTERMEDIATE;
+    const active = mode === 'intermediate' ? 'intermediate' : 'elementary';
+    const pack = campaign.languagePacks[active];
+    const override = active === 'intermediate' ? intermediate.textOverrides : {};
+    for (const [path, original] of Object.entries(base.text)) {
+      const parts = path.split('/');
+      let target = campaign;
+      for (const part of parts.slice(0, -1)) {
+        if (part.startsWith('@')) {
+          if (!Array.isArray(target)) throw new Error(`Invalid language path: ${path}`);
+          target = target.find(item => item.id === part.slice(1));
+        } else {
+          target = target?.[part];
+        }
+        if (target === undefined) throw new Error(`Unresolved language path: ${path}`);
       }
-      if (target === undefined) throw new Error(`Unresolved Elementary language path: ${path}`);
+      const field = parts[parts.length - 1];
+      if (!(field in target)) throw new Error(`Unknown language field: ${path}`);
+      target[field] = Object.prototype.hasOwnProperty.call(override, path) ? override[path] : original;
     }
-    const field = parts[parts.length - 1];
-    if (!(field in target)) throw new Error(`Unknown Elementary language field: ${path}`);
-    target[field] = value;
-  }
-  for (const key of ['playerQuestions', 'dilemmaMessage', 'inspectorNotes']) {
-    campaign[key] = data[key];
-  }
-  data.languagePack.procedural = data.procedural;
-  data.languagePack.playerQuestions = data.playerQuestions;
-  data.languagePack.dilemmaMessage = data.dilemmaMessage;
-  data.languagePack.inspectorNotes = data.inspectorNotes;
-  campaign.languagePack = data.languagePack;
-  campaign.languagePacks = { elementary: data.languagePack };
-  return campaign;
+    campaign.playerQuestions = pack.playerQuestions;
+    campaign.dilemmaMessage = pack.dilemmaMessage;
+    campaign.inspectorNotes = pack.inspectorNotes;
+    campaign.languagePack = pack;
+    campaign.activeLanguageMode = active;
+    return campaign;
 }

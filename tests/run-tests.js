@@ -81,6 +81,7 @@ function createHarness(seed = 12345, customScripts = null, savedStorage = null) 
   const scripts = customScripts || [
     "js/campaigns/registry.js",
     "js/language/elementary.js",
+    "js/language/intermediate.js",
     "js/campaigns/the-first-week.js",
     "js/sound.js",
     "js/portrait-registry.js",
@@ -2441,6 +2442,73 @@ test("62. Game Settings contains no classroom-era hints, textbook labels, or edu
   const save = JSON.parse(storage.getItem('cinema_chaos_campaigns_v3'));
   assert.ok(!Object.prototype.hasOwnProperty.call(save, 'showLanguageHints'));
   assert.ok(!Object.prototype.hasOwnProperty.call(save.campaigns['the-first-week'], 'showLanguageHints'));
+});
+
+test("63. Intermediate pack covers seven days without changing case decisions", () => {
+  const primary = createHarness(6300), middle = createHarness(6300);
+  middle.Game.setLanguageMode('intermediate');
+  assert.strictEqual(middle.Game.campaign().activeLanguageMode, 'intermediate');
+  assert.notStrictEqual(primary.Game.campaign().days[1].briefingMemo, middle.Game.campaign().days[1].briefingMemo);
+  const trace = h => {
+    const out = [];
+    for (let day = 1; day <= 7; day++) {
+      h.sandbox.CinemaDebug.setSeed(6300 + day * 10);
+      h.sandbox.document.getElementById('settingsDaySelect').value = String(day);
+      h.Game.jumpToDay();h.Game.startShift();
+      for (let n = 0; n < 7 && h.Game.state.shiftActive; n++) {
+        const c = h.Game.state.currentCustomer;
+        const ev = answerRequiredQuestions(h.Game);
+        out.push(JSON.stringify({day,n,scriptedId:c.scriptedId,caseType:c.caseType,
+          filmId:c.ticket.filmId,seatCount:c.ticket.seats,group:c.groupSize,
+          intent:c.intent,validActions:ev.validActions,
+          optionIds:ev.options.map(o => o?.id || o),issues:ev.issues.map(i => i.code)}));
+        h.Game.makeDecision(ev.validActions[0],ev.options[0]);h.Game.nextCustomerFromQueue();
+      }
+      h.Game.stopShiftLoop();
+    }
+    return out;
+  };
+  assert.deepStrictEqual(trace(primary),trace(middle),'Level changes cannot alter decisions');
+});
+
+test("64. Language changes are deferred until the next encounter", () => {
+  const {Game} = createHarness(6400);
+  Game.startShift();
+  const statement = Game.state.currentCustomer.statement;
+  const oldMemo = Game.campaign().days[2].briefingMemo;
+  Game.setLanguageMode('intermediate');
+  assert.strictEqual(Game.state.languageMode,'elementary');
+  assert.strictEqual(Game.state.currentCustomer.statement,statement);
+  assert.strictEqual(Game.campaign().days[2].briefingMemo,oldMemo);
+  const ev=answerRequiredQuestions(Game);Game.makeDecision(ev.validActions[0],ev.options[0]);
+  Game.nextCustomerFromQueue();
+  assert.strictEqual(Game.state.languageMode,'intermediate');
+  assert.notStrictEqual(Game.campaign().days[2].briefingMemo,oldMemo);
+  assert.ok(Game.getCustomerQuestions(Game.state.currentCustomer).some(q=>q[1] === 'Could you tell me which film you booked?'));
+  Game.setLanguageMode('elementary');
+  const next=answerRequiredQuestions(Game);Game.makeDecision(next.validActions[0],next.options[0]);
+  Game.nextCustomerFromQueue();
+  assert.strictEqual(Game.state.languageMode,'elementary');
+  assert.strictEqual(Game.campaign().days[2].briefingMemo,oldMemo);
+  Game.stopShiftLoop();
+});
+
+test("65. Saved encounters retain their language when a change is pending", () => {
+  const original = createHarness(6500);
+  original.Game.setLanguageMode('intermediate');original.Game.startShift();
+  const statement=original.Game.state.currentCustomer.statement;
+  original.Game.setLanguageMode('elementary');original.Game.saveProgress();
+  const loaded=createHarness(6500,null,structuredClone(original.storage._s));
+  loaded.Game.startShift();
+  assert.strictEqual(loaded.Game.state.languageMode,'intermediate');
+  assert.strictEqual(loaded.Game.state.pendingLanguageMode,'elementary');
+  assert.strictEqual(loaded.Game.campaign().activeLanguageMode,'intermediate');
+  assert.strictEqual(loaded.Game.state.currentCustomer.statement,statement);
+  const ev=answerRequiredQuestions(loaded.Game);loaded.Game.makeDecision(ev.validActions[0],ev.options[0]);
+  loaded.Game.nextCustomerFromQueue();
+  assert.strictEqual(loaded.Game.state.languageMode,'elementary');
+  assert.strictEqual(loaded.Game.campaign().activeLanguageMode,'elementary');
+  loaded.Game.stopShiftLoop();original.Game.stopShiftLoop();
 });
 
 console.log(`\nAll ${passed} test suites passed!`);
