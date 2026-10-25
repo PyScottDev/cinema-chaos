@@ -121,6 +121,7 @@
         const expiryDmy = Game.formatDateDMY ? Game.formatDateDMY(idCard.expiryDate || '15/06/2029') : (idCard.expiryDate || '15/06/2029');
         const docNum = idCard.docNumber || 'CID-402918';
         const authority = idCard.issuingAuthority || 'City Civil Registry';
+        const address = idCard.address || '';
 
         const cardWrap = document.createElement('div');
         cardWrap.className = 'space-y-3';
@@ -181,6 +182,7 @@
         };
 
         addFieldBtn('id_name', holderName, 'Full Name', holderName, true);
+        if (address) addFieldBtn('id_address', address, 'Address', address, true);
         addFieldBtn('id_dob', dobDmy, 'Date of Birth', dobDmy, true);
         addFieldBtn('id_issue', issueDmy, 'Issue Date', issueDmy, false);
         addFieldBtn('id_expiry', expiryDmy, 'Expiry Date', expiryDmy, false);

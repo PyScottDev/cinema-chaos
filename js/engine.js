@@ -569,6 +569,11 @@
         if (!card.issuingAuthority) {
           card.issuingAuthority = 'City Civil Registry';
         }
+        if (!card.address) {
+          // Fictional, stable address for procedural cards; campaigns may supply their own.
+          const number = 1 + (Number(card.docNumber.replace(/\D/g, '').slice(-3)) || 0) % 120;
+          card.address = `${number} Market Street, City Centre`;
+        }
         return card;
       },
       getKnownCustomerName(c) {

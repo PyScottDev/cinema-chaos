@@ -1942,3 +1942,24 @@ test("36. Legacy stated-age metadata never appears on an ID or affects decisions
 });
 
 console.log(`\nAll ${passed} test suites passed!`);
+
+
+test("37. ID card overlays ticket desk rather than cinema listings, shows address and Done", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const deskStart = html.indexOf('id="deskDocumentArea"');
+  const modalStart = html.indexOf('id="idCardModal"');
+  const stampStart = html.indexOf('id="stampAnimationOverlay"');
+  assert.ok(deskStart >= 0 && deskStart < modalStart && modalStart < stampStart);
+  const modalTag = html.match(/<div id="idCardModal"[^>]+>/)?.[0] || "";
+  assert.ok(modalTag.includes("absolute inset-0"));
+  assert.ok(!modalTag.includes("fixed inset-0"));
+  assert.ok(html.includes('id="closeIdCardModalBtn"'));
+  assert.match(html.slice(modalStart, stampStart), />\s*Done\s*<\/button>/);
+  const ui = fs.readFileSync(path.join(ROOT, "js/ui.js"), "utf8");
+  assert.ok(ui.includes("addFieldBtn('id_address', address, 'Address', address, true)"));
+  const engine = fs.readFileSync(path.join(ROOT, "js/engine.js"), "utf8");
+  assert.ok(engine.includes("card.address ="));
+});
+
+console.log(`
+All ${passed} test suites passed!`);
